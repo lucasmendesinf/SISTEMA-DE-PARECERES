@@ -22,27 +22,36 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
 
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS perfil ENUM('master','cliente') NOT NULL DEFAULT 'cliente' AFTER telefone");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes JSON NULL AFTER perfil");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ativo TINYINT(1) NOT NULL DEFAULT 1 AFTER permissoes");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS image_editor_permission ENUM('none','manual','ai','both') NOT NULL DEFAULT 'none' AFTER ativo");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_plan VARCHAR(80) NOT NULL DEFAULT 'Basico' AFTER image_editor_permission");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_cycle ENUM('monthly','annual') NOT NULL DEFAULT 'monthly' AFTER billing_plan");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER billing_cycle");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_payment_method ENUM('pix','card','both','manual') NOT NULL DEFAULT 'both' AFTER billing_amount");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_status ENUM('trial','pending','active','overdue','canceled','exempt') NOT NULL DEFAULT 'pending' AFTER billing_payment_method");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_next_due_date DATE NULL AFTER billing_status");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_notes TEXT NULL AFTER billing_next_due_date");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS mercado_pago_customer_id VARCHAR(120) NULL AFTER billing_notes");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS mercado_pago_subscription_id VARCHAR(120) NULL AFTER mercado_pago_customer_id");
-    $pdo->exec("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS mercado_pago_last_payment_id VARCHAR(120) NULL AFTER mercado_pago_subscription_id");
-    $pdo->exec("ALTER TABLE turmas ADD COLUMN IF NOT EXISTS usuario_id BIGINT UNSIGNED NULL AFTER id");
-    $pdo->exec("ALTER TABLE periodos_avaliativos ADD COLUMN IF NOT EXISTS usuario_id BIGINT UNSIGNED NULL AFTER id");
-    $pdo->exec("ALTER TABLE criancas ADD COLUMN IF NOT EXISTS usuario_id BIGINT UNSIGNED NULL AFTER id");
-    $pdo->exec("ALTER TABLE atividades ADD COLUMN IF NOT EXISTS usuario_id BIGINT UNSIGNED NULL AFTER id");
+    $addColumnIfMissing = function (PDO $pdo, string $table, string $column, string $definition): void {
+        $quotedTable = '`' . str_replace('`', '``', $table) . '`';
+        $stmt = $pdo->prepare("SHOW COLUMNS FROM {$quotedTable} LIKE ?");
+        $stmt->execute([$column]);
+        if (!$stmt->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec("ALTER TABLE {$quotedTable} ADD COLUMN {$definition}");
+        }
+    };
+
+    $addColumnIfMissing($pdo, 'usuarios', 'perfil', "perfil ENUM('master','cliente') NOT NULL DEFAULT 'cliente' AFTER telefone");
+    $addColumnIfMissing($pdo, 'usuarios', 'permissoes', 'permissoes JSON NULL AFTER perfil');
+    $addColumnIfMissing($pdo, 'usuarios', 'ativo', 'ativo TINYINT(1) NOT NULL DEFAULT 1 AFTER permissoes');
+    $addColumnIfMissing($pdo, 'usuarios', 'image_editor_permission', "image_editor_permission ENUM('none','manual','ai','both') NOT NULL DEFAULT 'none' AFTER ativo");
+    $addColumnIfMissing($pdo, 'usuarios', 'billing_plan', "billing_plan VARCHAR(80) NOT NULL DEFAULT 'Basico' AFTER image_editor_permission");
+    $addColumnIfMissing($pdo, 'usuarios', 'billing_cycle', "billing_cycle ENUM('monthly','annual') NOT NULL DEFAULT 'monthly' AFTER billing_plan");
+    $addColumnIfMissing($pdo, 'usuarios', 'billing_amount', 'billing_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER billing_cycle');
+    $addColumnIfMissing($pdo, 'usuarios', 'billing_payment_method', "billing_payment_method ENUM('pix','card','both','manual') NOT NULL DEFAULT 'both' AFTER billing_amount");
+    $addColumnIfMissing($pdo, 'usuarios', 'billing_status', "billing_status ENUM('trial','pending','active','overdue','canceled','exempt') NOT NULL DEFAULT 'pending' AFTER billing_payment_method");
+    $addColumnIfMissing($pdo, 'usuarios', 'billing_next_due_date', 'billing_next_due_date DATE NULL AFTER billing_status');
+    $addColumnIfMissing($pdo, 'usuarios', 'billing_notes', 'billing_notes TEXT NULL AFTER billing_next_due_date');
+    $addColumnIfMissing($pdo, 'usuarios', 'mercado_pago_customer_id', 'mercado_pago_customer_id VARCHAR(120) NULL AFTER billing_notes');
+    $addColumnIfMissing($pdo, 'usuarios', 'mercado_pago_subscription_id', 'mercado_pago_subscription_id VARCHAR(120) NULL AFTER mercado_pago_customer_id');
+    $addColumnIfMissing($pdo, 'usuarios', 'mercado_pago_last_payment_id', 'mercado_pago_last_payment_id VARCHAR(120) NULL AFTER mercado_pago_subscription_id');
+    $addColumnIfMissing($pdo, 'turmas', 'usuario_id', 'usuario_id BIGINT UNSIGNED NULL AFTER id');
+    $addColumnIfMissing($pdo, 'periodos_avaliativos', 'usuario_id', 'usuario_id BIGINT UNSIGNED NULL AFTER id');
+    $addColumnIfMissing($pdo, 'criancas', 'usuario_id', 'usuario_id BIGINT UNSIGNED NULL AFTER id');
+    $addColumnIfMissing($pdo, 'atividades', 'usuario_id', 'usuario_id BIGINT UNSIGNED NULL AFTER id');
     try {
-        $pdo->exec("ALTER TABLE pareceres ADD COLUMN IF NOT EXISTS usar_texto_final TINYINT(1) NOT NULL DEFAULT 0 AFTER texto");
-        $pdo->exec("ALTER TABLE pareceres ADD COLUMN IF NOT EXISTS texto_final MEDIUMTEXT NULL AFTER usar_texto_final");
+        $addColumnIfMissing($pdo, 'pareceres', 'usar_texto_final', 'usar_texto_final TINYINT(1) NOT NULL DEFAULT 0 AFTER texto');
+        $addColumnIfMissing($pdo, 'pareceres', 'texto_final', 'texto_final MEDIUMTEXT NULL AFTER usar_texto_final');
     } catch (Throwable $e) {
         // A tabela pode ainda nao existir em uma instalacao nova; a migracao roda novamente nas proximas requisicoes.
     }

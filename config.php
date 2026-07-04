@@ -15,7 +15,7 @@ $config = [
 ];
 
 $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
-$isLocal = $host === '' || str_starts_with($host, 'localhost') || str_starts_with($host, '127.0.0.1');
+$isLocal = $host === '' || strpos($host, 'localhost') === 0 || strpos($host, '127.0.0.1') === 0;
 $productionConfig = __DIR__ . '/config.production.php';
 
 if (!$isLocal && is_file($productionConfig)) {

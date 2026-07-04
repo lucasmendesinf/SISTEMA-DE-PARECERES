@@ -6,6 +6,13 @@ ini_set('display_errors', '0');
 date_default_timezone_set('America/Sao_Paulo');
 session_start();
 
+if (!function_exists('str_starts_with')) {
+    function str_starts_with(string $haystack, string $needle): bool
+    {
+        return $needle === '' || strpos($haystack, $needle) === 0;
+    }
+}
+
 try {
     $config = require __DIR__ . '/config.php';
     $pdo = new PDO(
@@ -537,7 +544,7 @@ try {
         exit;
     }
     if ($resource === 'billing-public' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+        $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         $email = trim((string) ($input['email'] ?? ''));
         $method = in_array(($input['method'] ?? ''), ['pix', 'card'], true) ? (string) $input['method'] : '';
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $method === '') throw new RuntimeException('Informe o e-mail e a forma de pagamento.');
@@ -557,7 +564,7 @@ try {
         exit;
     }
     if ($resource === 'auth' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+        $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         $action = $input['action'] ?? '';
         if ($action === 'login') {
             $email = trim((string) ($input['email'] ?? ''));
@@ -608,7 +615,7 @@ try {
             throw new RuntimeException($sessionUser['billing_lock']['message'] ?? 'Pagamento do plano pendente.');
         }
         if (empty($_SESSION['user_id'])) { http_response_code(401); throw new RuntimeException('Sessão expirada.'); }
-        $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+        $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         if (($input['action'] ?? '') === 'change_password') {
             $currentPassword = (string) ($input['currentPassword'] ?? '');
             $newPassword = (string) ($input['newPassword'] ?? '');
@@ -644,7 +651,7 @@ try {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
             $method = in_array(($input['method'] ?? ''), ['pix', 'card'], true) ? (string) $input['method'] : '';
             if ($method === '' || !in_array($method, $paymentMethodsAvailable($billing), true)) throw new RuntimeException('Forma de pagamento nao liberada para este plano.');
             if (!$mercadoPagoConfigured()) {
@@ -729,7 +736,7 @@ try {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
             $action = (string) ($input['action'] ?? 'manual-charge');
             if ($action === 'manual-charge') {
                 $userId = (int) ($input['userId'] ?? 0);
@@ -780,7 +787,7 @@ try {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'PUT') {
-            $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
             $userId = (int) ($input['id'] ?? 0);
             $name = trim((string) ($input['name'] ?? ''));
             $email = trim((string) ($input['email'] ?? ''));
@@ -838,7 +845,7 @@ try {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
             $current = $getMercadoPagoSettings();
             $accessToken = trim((string) ($input['accessToken'] ?? ''));
             $publicKey = trim((string) ($input['publicKey'] ?? ''));
@@ -863,7 +870,9 @@ try {
         $noticeKey = 'marketing_notices';
         $legacyNoticeKey = 'marketing_notice';
         $allowedFonts = ['DM Sans', 'Arial', 'Georgia', 'Verdana', 'Times New Roman'];
-        $isList = static fn(array $items): bool => $items === [] || array_keys($items) === range(0, count($items) - 1);
+        $isList = static function (array $items): bool {
+            return $items === [] || array_keys($items) === range(0, count($items) - 1);
+        };
         $loadNotices = static function () use ($pdo, $noticeKey, $legacyNoticeKey, $isList): array {
             $query = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key=? LIMIT 1");
             $query->execute([$noticeKey]);
@@ -923,14 +932,16 @@ try {
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $loggedUser = $loadCurrentUser();
             $notices = $loadNotices();
-            usort($notices, static fn(array $a, array $b): int => strcmp((string) ($b['createdAt'] ?? ''), (string) ($a['createdAt'] ?? '')));
+            usort($notices, static function (array $a, array $b): int {
+                return strcmp((string) ($b['createdAt'] ?? ''), (string) ($a['createdAt'] ?? ''));
+            });
             $notice = $activeNotice($notices);
             echo json_encode(($loggedUser['perfil'] ?? '') === 'master' ? ['notices' => $notices, 'notice' => $notice] : $notice, JSON_UNESCAPED_UNICODE);
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $requireMaster();
-            $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
             $notices = $loadNotices();
             $id = trim((string) ($input['id'] ?? ''));
             $updated = false;
@@ -942,7 +953,9 @@ try {
                 }
             }
             if (!$updated) $notices[] = $sanitizeNotice($input);
-            usort($notices, static fn(array $a, array $b): int => strcmp((string) ($b['createdAt'] ?? ''), (string) ($a['createdAt'] ?? '')));
+            usort($notices, static function (array $a, array $b): int {
+                return strcmp((string) ($b['createdAt'] ?? ''), (string) ($a['createdAt'] ?? ''));
+            });
             $saveNotices($notices);
             echo json_encode(['ok' => true, 'notices' => $notices, 'notice' => $activeNotice($notices)], JSON_UNESCAPED_UNICODE);
             exit;
@@ -951,7 +964,9 @@ try {
             $requireMaster();
             $id = trim((string) ($_GET['id'] ?? ''));
             if ($id === '') throw new RuntimeException('Informe o informativo que deseja excluir.');
-            $notices = array_values(array_filter($loadNotices(), static fn(array $notice): bool => (string) ($notice['id'] ?? '') !== $id));
+            $notices = array_values(array_filter($loadNotices(), static function (array $notice) use ($id): bool {
+                return (string) ($notice['id'] ?? '') !== $id;
+            }));
             $saveNotices($notices);
             echo json_encode(['ok' => true, 'notices' => $notices, 'notice' => $activeNotice($notices)], JSON_UNESCAPED_UNICODE);
             exit;
@@ -970,10 +985,12 @@ try {
         $query=$pdo->prepare('SELECT id,turma_id,nome,data_nascimento,foto,foto_mime FROM criancas WHERE usuario_id=? ORDER BY nome');
         $query->execute([$ownerId]);
         $rows=$query->fetchAll(PDO::FETCH_ASSOC);
-        echo json_encode(array_map(static fn(array $row):array=>['id'=>'db-'.$row['id'],'databaseId'=>(int)$row['id'],'name'=>$row['nome'],'birthDate'=>$row['data_nascimento'],'classId'=>(int)$row['turma_id'],'photo'=>$row['foto']?'data:'.$row['foto_mime'].';base64,'.base64_encode($row['foto']):''], $rows),JSON_UNESCAPED_UNICODE);exit;
+        echo json_encode(array_map(static function (array $row): array {
+            return ['id'=>'db-'.$row['id'],'databaseId'=>(int)$row['id'],'name'=>$row['nome'],'birthDate'=>$row['data_nascimento'],'classId'=>(int)$row['turma_id'],'photo'=>$row['foto']?'data:'.$row['foto_mime'].';base64,'.base64_encode($row['foto']):''];
+        }, $rows),JSON_UNESCAPED_UNICODE);exit;
     }
     if ($resource === 'children' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $input=json_decode(file_get_contents('php://input'),true,flags:JSON_THROW_ON_ERROR);$name=trim((string)($input['name']??''));$classId=(int)($input['classId']??1);if($name==='')throw new RuntimeException('Nome do aluno é obrigatório.');
+        $input=json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);$name=trim((string)($input['name']??''));$classId=(int)($input['classId']??1);if($name==='')throw new RuntimeException('Nome do aluno é obrigatório.');
         $photo=null;$mime=null;if(!empty($input['photo'])&&preg_match('#^data:([\w/+.-]+);base64,(.+)$#',$input['photo'],$m)){$photo=base64_decode($m[2],true);$mime=$m[1];}
         $classCheck=$pdo->prepare('SELECT id FROM turmas WHERE id=? AND usuario_id=?');$classCheck->execute([$classId,$ownerId]);if(!$classCheck->fetchColumn())throw new RuntimeException('Turma nao encontrada para este login.');
         $id=(int)($input['databaseId']??0);if($id){$ownerCheck=$pdo->prepare('SELECT id FROM criancas WHERE id=? AND usuario_id=?');$ownerCheck->execute([$id,$ownerId]);if(!$ownerCheck->fetchColumn())throw new RuntimeException('Aluno nao encontrado para este login.');}if(!$id){$find=$pdo->prepare('SELECT id FROM criancas WHERE nome=? AND turma_id=? AND usuario_id=? LIMIT 1');$find->execute([$name,$classId,$ownerId]);$id=(int)$find->fetchColumn();}
@@ -984,14 +1001,16 @@ try {
         $query = $pdo->prepare('SELECT id, nome, etapa, turno FROM turmas WHERE usuario_id=? ORDER BY nome');
         $query->execute([$ownerId]);
         $classes = $query->fetchAll(PDO::FETCH_ASSOC);
-        echo json_encode(array_map(static fn(array $class): array => [
-            'id' => (int) $class['id'], 'name' => $class['nome'],
-            'stage' => $class['etapa'], 'shift' => $class['turno']
-        ], $classes), JSON_UNESCAPED_UNICODE);
+        echo json_encode(array_map(static function (array $class): array {
+            return [
+                'id' => (int) $class['id'], 'name' => $class['nome'],
+                'stage' => $class['etapa'], 'shift' => $class['turno']
+            ];
+        }, $classes), JSON_UNESCAPED_UNICODE);
         exit;
     }
     if ($resource === 'classes' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+        $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         $name = trim((string) ($input['name'] ?? ''));
         $stage = trim((string) ($input['stage'] ?? 'Educação Infantil'));
         $shift = trim((string) ($input['shift'] ?? 'Manhã'));
@@ -1017,16 +1036,18 @@ try {
         $query = $pdo->prepare("SELECT id,nome,DATE_FORMAT(data_inicio, '%d/%m/%Y') AS data_inicio,DATE_FORMAT(data_fim, '%d/%m/%Y') AS data_fim,ativo FROM periodos_avaliativos WHERE usuario_id=? ORDER BY ativo DESC, data_inicio DESC, id DESC");
         $query->execute([$ownerId]);
         $periods = $query->fetchAll(PDO::FETCH_ASSOC);
-        echo json_encode(array_map(static fn(array $period): array => [
-            'id' => (int) $period['id'], 'name' => $period['nome'],
-            'start' => $period['data_inicio'] ?: 'Data não informada',
-            'end' => $period['data_fim'] ?: 'Data não informada',
-            'active' => (bool) $period['ativo']
-        ], $periods), JSON_UNESCAPED_UNICODE);
+        echo json_encode(array_map(static function (array $period): array {
+            return [
+                'id' => (int) $period['id'], 'name' => $period['nome'],
+                'start' => $period['data_inicio'] ?: 'Data não informada',
+                'end' => $period['data_fim'] ?: 'Data não informada',
+                'active' => (bool) $period['ativo']
+            ];
+        }, $periods), JSON_UNESCAPED_UNICODE);
         exit;
     }
     if ($resource === 'periods' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+        $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         $name = trim((string) ($input['name'] ?? ''));
         if ($name === '') throw new RuntimeException('Nome do período é obrigatório.');
         $pdo->beginTransaction();
@@ -1066,7 +1087,9 @@ try {
     }
     if ($resource === 'experience-fields' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         $fields = $pdo->query('SELECT id,nome FROM campos_experiencia ORDER BY nome')->fetchAll(PDO::FETCH_ASSOC);
-        echo json_encode(array_map(static fn(array $field): array => ['id' => (int) $field['id'], 'name' => $field['nome']], $fields), JSON_UNESCAPED_UNICODE);
+        echo json_encode(array_map(static function (array $field): array {
+            return ['id' => (int) $field['id'], 'name' => $field['nome']];
+        }, $fields), JSON_UNESCAPED_UNICODE);
         exit;
     }
     if ($resource === 'header-settings') {
@@ -1079,7 +1102,7 @@ try {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
             $settings = [
                 'network' => trim((string) ($input['network'] ?? '')),
                 'school' => trim((string) ($input['school'] ?? '')),
@@ -1101,7 +1124,7 @@ try {
         throw new RuntimeException('Metodo nao permitido.');
     }
     if ($resource === 'experience-fields' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+        $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         $name = trim((string) ($input['name'] ?? ''));
         if ($name === '') throw new RuntimeException('Informe o nome do campo de experiência.');
         $fieldId = (int) ($input['id'] ?? 0);
@@ -1164,7 +1187,7 @@ try {
         exit;
     }
     if ($resource === 'send-report-email' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+        $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         $reportId = (int) ($input['reportId'] ?? 0);
         if ($reportId <= 0) throw new RuntimeException('Documento invalido para envio.');
         $settingsQuery = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key=? LIMIT 1");
@@ -1187,7 +1210,9 @@ try {
         $attachmentQuery = $pdo->prepare('SELECT ordem,arquivo,mime_type FROM parecer_anexos WHERE parecer_id=? ORDER BY ordem,id');
         $attachmentQuery->execute([$reportId]);
         $attachments = $attachmentQuery->fetchAll(PDO::FETCH_ASSOC);
-        $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $escape = static function (string $value): string {
+            return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        };
         $documentLabel = ($report['tipo_documento'] ?? '') === 'portfolio' ? 'Portfolio' : 'Parecer pedagogico';
         $studentName = (string) ($report['nome'] ?? '');
         $periodName = (string) ($report['periodo_nome'] ?? 'periodo avaliativo');
@@ -1240,7 +1265,7 @@ try {
         exit;
     }
     if ($resource === 'reports' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+        $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         if (!empty($input['deliverId'])) { $update=$pdo->prepare("UPDATE pareceres p JOIN criancas c ON c.id=p.crianca_id SET p.status='concluido' WHERE p.id=? AND c.usuario_id=?");$update->execute([(int)$input['deliverId'],$ownerId]);if($update->rowCount()===0)throw new RuntimeException('Parecer não encontrado para entrega.');echo json_encode(['ok'=>true,'id'=>(int)$input['deliverId']]);exit; }
         if (!empty($input['reopenId'])) { $update=$pdo->prepare("UPDATE pareceres p JOIN criancas c ON c.id=p.crianca_id SET p.status='rascunho' WHERE p.id=? AND c.usuario_id=?");$update->execute([(int)$input['reopenId'],$ownerId]);if($update->rowCount()===0)throw new RuntimeException('Parecer não encontrado para reabertura.');echo json_encode(['ok'=>true,'id'=>(int)$input['reopenId']]);exit; }
         $editorMode = (string) ($input['imageEditorMode'] ?? 'none');
@@ -1292,7 +1317,9 @@ try {
         foreach ($rows as &$activity) {
             $photoQuery->execute([$activity['id']]);
             $activity['photos'] = array_map(
-                static fn(array $photo): string => 'data:' . $photo['mime_type'] . ';base64,' . base64_encode($photo['arquivo']),
+                static function (array $photo): string {
+                    return 'data:' . $photo['mime_type'] . ';base64,' . base64_encode($photo['arquivo']);
+                },
                 $photoQuery->fetchAll(PDO::FETCH_ASSOC)
             );
             $activity = [
@@ -1347,7 +1374,7 @@ try {
         throw new RuntimeException('Método não permitido.');
     }
 
-    $input = json_decode(file_get_contents('php://input'), true, flags: JSON_THROW_ON_ERROR);
+    $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
     $editorMode = (string) ($input['imageEditorMode'] ?? 'none');
     if (!in_array($editorMode, ['none', 'manual', 'ai'], true) || !$canUseEditor($editorMode, $loadCurrentUser())) {
         http_response_code(403);
@@ -1397,7 +1424,7 @@ try {
         if (isset($pdo) && $pdo->inTransaction()) {
             $pdo->rollBack();
         }
-    } catch (Throwable) {
+    } catch (Throwable $ignored) {
         // A conexão pode cair em uma falha do servidor; a API ainda deve devolver JSON.
     }
     if (http_response_code() === 200) {

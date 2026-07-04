@@ -2,3 +2,5 @@
 .docx_inspect/
 .inspect-*/
 backups/
+config.production.php
+config.local.php

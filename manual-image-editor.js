@@ -83,8 +83,26 @@
       const close = result => { shell.remove(); resolve(result); };
       shell.querySelector('.image-editor-close').onclick = () => close(null);
 
+      function fitCropStage() {
+        if (!cropper) return;
+        const stage = shell.querySelector('.image-editor-stage');
+        if (!stage || stage.hidden) return;
+        const canvasData = cropper.getCanvasData();
+        const imageHeight = Math.ceil(canvasData.height || shell.querySelector('#manualCropImage').getBoundingClientRect().height);
+        if (imageHeight > 0) {
+          stage.style.height = `${imageHeight}px`;
+        }
+      }
+
       if (window.Cropper) {
-        cropper = new Cropper(shell.querySelector('#manualCropImage'), {viewMode: 1, autoCropArea: 1, responsive: true});
+        cropper = new Cropper(shell.querySelector('#manualCropImage'), {
+          viewMode: 1,
+          autoCropArea: 1,
+          responsive: true,
+          ready: fitCropStage,
+          zoom: fitCropStage
+        });
+        window.setTimeout(fitCropStage, 80);
       }
 
       function pushState() {

@@ -3,4 +3,4 @@ deployment:
   tasks:
     - export DEPLOYPATH=$HOME/public_html/pareceres/
     - /bin/mkdir -p $DEPLOYPATH
-    - /usr/bin/rsync -a --delete --exclude='.git' --exclude='.cpanel.yml' --exclude='.gitignore' --exclude='.agents' --exclude='.docx_inspect' --exclude='.inspect-*' ./ $DEPLOYPATH
+    - /usr/bin/rsync -a --delete --exclude='.git' --exclude='.cpanel.yml' --exclude='.gitignore' --exclude='.agents' --exclude='.docx_inspect' --exclude='.inspect-*' --exclude='config.production.php' ./ $DEPLOYPATH

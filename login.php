@@ -51,6 +51,15 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
       "'": '&#39;',
       '"': '&quot;'
     }[char]));
+    async function readJson(response) {
+      const text = await response.text();
+      if (!text.trim()) throw new Error('O servidor nao retornou resposta. Verifique a configuracao do banco em producao.');
+      try {
+        return JSON.parse(text);
+      } catch (_) {
+        throw new Error('O servidor retornou uma resposta invalida. Verifique os logs PHP da hospedagem.');
+      }
+    }
 
     async function confirmPaymentReturn() {
       const params = new URLSearchParams(location.search);
@@ -60,7 +69,7 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
       billingActions.innerHTML = '';
       try {
         const response = await fetch(`api.php?resource=billing-return&${params.toString()}`);
-        const data = await response.json();
+        const data = await readJson(response);
         if (!response.ok) throw new Error(data.error || 'Nao foi possivel confirmar o pagamento.');
         billingMessage.textContent = data.message || 'Pagamento confirmado. Acesse com seu login.';
       } catch (error) {
@@ -93,7 +102,7 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({email: document.querySelector('#email').value, method})
         });
-        const data = await response.json();
+        const data = await readJson(response);
         if (!response.ok) throw new Error(data.error || 'Nao foi possivel iniciar o pagamento.');
         renderPaymentResult(data);
       } catch (error) {
@@ -181,7 +190,7 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
       billingMessage.textContent = '';
       try {
         const response = await fetch(`api.php?resource=billing-return&payment_id=${encodeURIComponent(paymentId)}`);
-        const data = await response.json();
+        const data = await readJson(response);
         if (!response.ok) throw new Error(data.error || 'Pagamento ainda nao confirmado.');
         billingMessage.textContent = data.message || 'Pagamento confirmado. Entre com seu login.';
         button.textContent = 'Pagamento confirmado';
@@ -208,7 +217,7 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({action: 'login', email: document.querySelector('#email').value, password: document.querySelector('#password').value})
         });
-        const data = await response.json();
+        const data = await readJson(response);
         if (response.status === 402 && data.billingRequired) {
           showBilling(data);
           throw new Error(data.error || 'Pagamento do plano pendente.');

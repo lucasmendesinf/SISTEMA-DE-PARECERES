@@ -97,8 +97,7 @@ function downloadReport(id){
 
 async function pdfJpeg(dataUrl){
   if(!dataUrl) return '';
-  if(/^data:image\/(?:jpeg|jpg);base64,/i.test(dataUrl)) return dataUrl;
-  try{return await new Promise(resolve=>{const image=new Image();image.onload=()=>{const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;canvas.getContext('2d').drawImage(image,0,0);resolve(canvas.toDataURL('image/jpeg',.9));};image.onerror=()=>resolve('');image.src=dataUrl;});}catch{return ''}
+  try{return await new Promise(resolve=>{const image=new Image();image.onload=()=>{let max=1200,scale=Math.min(1,max/image.naturalWidth,max/image.naturalHeight),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));let context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/jpeg',.78));};image.onerror=()=>resolve(/^data:image\/(?:jpeg|jpg);base64,/i.test(dataUrl)?dataUrl:'');image.src=dataUrl;});}catch{return /^data:image\/(?:jpeg|jpg);base64,/i.test(dataUrl)?dataUrl:''}
 }
 
 async function downloadPdf(id){

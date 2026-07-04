@@ -73,7 +73,7 @@ if (empty($_SESSION['user_id'])) {
 
   <dialog id="modal"><form method="dialog" id="modalForm" novalidate><button class="close" type="button" formnovalidate aria-label="Fechar" onclick="event.preventDefault();event.stopPropagation();this.closest('dialog').close();return false;">×</button><div id="modalContent"></div></form></dialog>
   <script src="app.js?v=20260703-final-text-1"></script>
-  <script src="document-type.js?v=20260702-image-flow-fix-1"></script>
+  <script src="document-type.js?v=20260704-pdf-image-compress-1"></script>
   <script src="mobile-menu.js"></script>
   <script src="draft-delete.js"></script>
   <script src="periods.js"></script>

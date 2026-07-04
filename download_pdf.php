@@ -1,6 +1,27 @@
 <?php
 declare(strict_types=1);
 
+function iniBytes(string $value): int {
+    $value = trim($value);
+    if ($value === '') return 0;
+    $unit = strtolower($value[strlen($value) - 1]);
+    $number = (float) $value;
+    if ($unit === 'g') return (int) ($number * 1024 * 1024 * 1024);
+    if ($unit === 'm') return (int) ($number * 1024 * 1024);
+    if ($unit === 'k') return (int) ($number * 1024);
+    return (int) $number;
+}
+
+function rejectIncompletePdfPost(): void {
+    $maxPost = iniBytes((string) ini_get('post_max_size'));
+    $contentLength = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $maxPost > 0 && $contentLength > $maxPost) {
+        http_response_code(413);
+        header('Content-Type: text/plain; charset=utf-8');
+        exit('O PDF ficou muito grande para gerar. Reduza a quantidade de imagens ou tente novamente.');
+    }
+}
+
 function pdfEscape(string $value): string {
     $value = iconv('UTF-8', 'Windows-1252//TRANSLIT', $value) ?: $value;
     return str_replace(['\\', '(', ')', "\r", "\n"], ['\\\\', '\\(', '\\)', '', ''], $value);
@@ -94,17 +115,43 @@ final class PdfLayout {
 }
 
 function registerJpegImage(string $dataUrl, array &$images): ?array {
-    if (!preg_match('#^data:image/(?:jpeg|jpg);base64,(.+)$#', $dataUrl, $matches)) return null;
+    if (!preg_match('#^data:image/(?:jpeg|jpg|png|webp);base64,(.+)$#', $dataUrl, $matches)) return null;
     $binary = base64_decode($matches[1], true);
     if ($binary === false || strlen($binary) > 6 * 1024 * 1024) return null;
     $size = @getimagesizefromstring($binary);
-    if (!$size || ($size['mime'] ?? '') !== 'image/jpeg') return null;
+    if (!$size) return null;
+    if (($size['mime'] ?? '') !== 'image/jpeg') {
+        if (!function_exists('imagecreatefromstring') || !function_exists('imagejpeg')) return null;
+        $source = @imagecreatefromstring($binary);
+        if (!$source) return null;
+        $width = imagesx($source);
+        $height = imagesy($source);
+        $canvas = imagecreatetruecolor($width, $height);
+        if (!$canvas) {
+            imagedestroy($source);
+            return null;
+        }
+        $white = imagecolorallocate($canvas, 255, 255, 255);
+        imagefilledrectangle($canvas, 0, 0, $width, $height, $white);
+        imagecopy($canvas, $source, 0, 0, 0, 0, $width, $height);
+        ob_start();
+        imagejpeg($canvas, null, 82);
+        $converted = ob_get_clean();
+        imagedestroy($source);
+        imagedestroy($canvas);
+        if (!is_string($converted) || $converted === '') return null;
+        $binary = $converted;
+        $size = @getimagesizefromstring($binary);
+        if (!$size || ($size['mime'] ?? '') !== 'image/jpeg') return null;
+    }
     $name = 'Im' . (count($images) + 1);
     $images[$name] = ['name' => $name, 'binary' => $binary, 'width' => (int) $size[0], 'height' => (int) $size[1]];
     return $images[$name];
 }
 
 function addObject(array &$objects, string $value): int { $objects[] = $value; return count($objects); }
+
+rejectIncompletePdfPost();
 
 $name = trim((string) ($_POST['name'] ?? 'Aluno'));
 $birthDate = trim((string) ($_POST['birthDate'] ?? ''));
@@ -124,6 +171,12 @@ $pdfFonts = sanitizePdfFont($documentFont);
 $images = [];
 $headerLogo = registerJpegImage((string) ($_POST['headerLogo'] ?? ''), $images);
 $studentPhoto = registerJpegImage((string) ($_POST['studentPhoto'] ?? ''), $images);
+
+if ($name === 'Aluno' && $text === '' && empty($entries)) {
+    http_response_code(422);
+    header('Content-Type: text/plain; charset=utf-8');
+    exit('Dados insuficientes para gerar o PDF.');
+}
 
 $entryBlocks = [];
 foreach ($entries as $entry) {

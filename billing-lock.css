@@ -1,0 +1,14 @@
+.billing-lock-backdrop{position:fixed;inset:0;z-index:120;display:grid;place-items:center;background:rgba(20,31,25,.78);padding:18px}
+.billing-lock-modal{width:min(520px,100%);max-height:calc(100vh - 36px);overflow:auto;background:#fff;border:1px solid #e0d0cc;border-radius:10px;padding:28px;box-shadow:0 26px 70px rgba(20,31,25,.32);color:#33463b}
+.billing-lock-modal h2{margin:0 0 8px;color:#81241c;font:700 26px Georgia,serif}
+.billing-lock-modal p{margin:0 0 16px;line-height:1.45}
+.billing-lock-modal .billing-summary{margin:18px 0}
+.billing-lock-modal .billing-actions .primary{min-width:150px}
+.billing-lock-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;padding-top:16px;border-top:1px solid #eadeda}
+.billing-support-link{display:inline-flex;align-items:center;gap:8px;color:#167b4a;font-weight:800;text-decoration:none}
+.billing-support-link svg{width:22px;height:22px;fill:currentColor;flex:0 0 auto}
+.billing-support-link:hover{text-decoration:underline}
+body.billing-locked{overflow:hidden}
+body.billing-locked .billing-lock-backdrop{pointer-events:auto}
+body.billing-locked .billing-modal-backdrop{z-index:130}
+@media(max-width:650px){.billing-lock-modal{padding:22px}.billing-lock-modal .billing-actions{display:grid}.billing-lock-modal .billing-actions .primary{width:100%}.billing-lock-footer{align-items:stretch;display:grid}.billing-lock-footer .secondary{width:100%}}

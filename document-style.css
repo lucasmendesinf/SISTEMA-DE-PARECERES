@@ -1,0 +1,5 @@
+.review-box{font-family:var(--document-font-family, Arial, sans-serif)!important;font-size:var(--document-font-size, 12pt)!important}
+.review-box h3{color:var(--document-detail-color, #253c31)!important;font-family:var(--document-font-family, Arial, sans-serif)!important;font-size:var(--document-font-size, 12pt)!important}
+.document-header{color:var(--document-detail-color, #3980d4)!important}
+.document-student{color:var(--document-detail-color, #253c31)!important}
+.document-student b{color:var(--document-detail-color, #253c31)!important}

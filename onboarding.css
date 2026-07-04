@@ -1,0 +1,112 @@
+.mercado-pago-panel {
+  display: none !important;
+}
+
+body[data-role="master"] .mercado-pago-panel {
+  display: block !important;
+}
+
+.onboarding-dialog {
+  width: min(760px, calc(100% - 28px));
+  border-radius: 14px;
+}
+
+.onboarding-dialog::backdrop {
+  background: rgba(24, 39, 33, .78);
+}
+
+.onboarding-shell {
+  padding: 30px;
+}
+
+.onboarding-progress {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.onboarding-progress span {
+  height: 5px;
+  border-radius: 999px;
+  background: #dfe8e2;
+}
+
+.onboarding-progress span.active {
+  background: var(--green);
+}
+
+.onboarding-step {
+  animation: onboardingSlide .22s ease;
+}
+
+.onboarding-step .modal-title {
+  margin-bottom: 6px;
+}
+
+.onboarding-step .form-grid {
+  margin-top: 20px;
+}
+
+.onboarding-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-top: 24px;
+}
+
+.onboarding-footer .form-actions {
+  margin-top: 0;
+}
+
+.onboarding-footer .muted {
+  margin: 0;
+}
+
+.onboarding-student-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  max-height: 150px;
+  overflow: auto;
+}
+
+.onboarding-student-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 10px;
+  background: #fbfdfb;
+}
+
+.onboarding-dialog button[disabled] {
+  opacity: .58;
+  cursor: not-allowed;
+}
+
+body.onboarding-locked {
+  overflow: hidden;
+}
+
+body.onboarding-locked > :not(.onboarding-dialog) {
+  pointer-events: none;
+}
+
+body.onboarding-locked .onboarding-dialog,
+body.onboarding-locked .onboarding-dialog * {
+  pointer-events: auto;
+}
+
+@keyframes onboardingSlide {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

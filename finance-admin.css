@@ -1,0 +1,22 @@
+.finance-layout{display:grid;gap:18px}
+.finance-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.finance-summary article{border:1px solid #e2e9e4;border-radius:8px;background:#fff;padding:14px}
+.finance-summary span{display:block;color:#73817b;font-size:11px;font-weight:700;text-transform:uppercase}
+.finance-summary strong{display:block;margin-top:6px;color:#253c31;font:700 20px Georgia,serif}
+.finance-filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:end;margin-bottom:16px}
+.finance-table-wrap{overflow:auto;border:1px solid #e7ebe8;border-radius:8px}
+.finance-table{width:100%;border-collapse:collapse;background:#fff;font-size:13px}
+.finance-table th,.finance-table td{padding:11px 12px;border-bottom:1px solid #edf1ee;text-align:left;white-space:nowrap}
+.finance-table th{background:#f6faf7;color:#53665c;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.finance-table tr:last-child td{border-bottom:0}
+.finance-client-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.finance-client-card{border:1px solid #e7ebe8;border-radius:8px;background:#fff;padding:14px;display:grid;gap:8px}
+.finance-client-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.finance-client-head strong{color:#253c31}
+.finance-client-card p{margin:0;color:#73817b;font-size:12px}
+.finance-status{display:inline-flex;align-items:center;border-radius:999px;padding:5px 8px;background:#edf3ef;color:#3c6654;font-size:11px;font-weight:700}
+.finance-status.pending,.finance-status.overdue{background:#fff0df;color:#8a560d}
+.finance-status.danger{background:#ffe1de;color:#81241c}
+.finance-status.active,.finance-status.approved{background:#e2f3e8;color:#17633f}
+.finance-status.canceled,.finance-status.rejected{background:#f1e4e1;color:#8a2f24}
+@media(max-width:900px){.finance-summary,.finance-filters,.finance-client-grid{grid-template-columns:1fr}.finance-table th,.finance-table td{white-space:normal}}

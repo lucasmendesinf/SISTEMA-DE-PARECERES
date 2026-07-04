@@ -1,0 +1,10 @@
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_plan VARCHAR(80) NOT NULL DEFAULT 'Basico' AFTER image_editor_permission;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_cycle ENUM('monthly','annual') NOT NULL DEFAULT 'monthly' AFTER billing_plan;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER billing_cycle;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_payment_method ENUM('pix','card','both','manual') NOT NULL DEFAULT 'both' AFTER billing_amount;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_status ENUM('trial','pending','active','overdue','canceled','exempt') NOT NULL DEFAULT 'pending' AFTER billing_payment_method;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_next_due_date DATE NULL AFTER billing_status;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS billing_notes TEXT NULL AFTER billing_next_due_date;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS mercado_pago_customer_id VARCHAR(120) NULL AFTER billing_notes;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS mercado_pago_subscription_id VARCHAR(120) NULL AFTER mercado_pago_customer_id;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS mercado_pago_last_payment_id VARCHAR(120) NULL AFTER mercado_pago_subscription_id;

@@ -1,0 +1,328 @@
+(() => {
+  const authApi = 'api.php?resource=auth';
+  const usersApi = 'api.php?resource=users';
+  const labels = {
+    alunos: 'Alunos',
+    turmas: 'Turmas',
+    periodos: 'Periodos',
+    atividades: 'Atividades',
+    pareceres: 'Pareceres',
+    portfolio: 'Portfolio',
+    configuracoes: 'Configuracoes'
+  };
+  const editorLabels = {
+    none: 'Nenhum editor',
+    manual: 'Editor com IA e manual',
+    ai: 'Editor com IA e manual',
+    both: 'Editor com IA e manual'
+  };
+  const cycleLabels = {monthly: 'Mensal', annual: 'Anual'};
+  const paymentLabels = {pix: 'Pix', card: 'Cartao recorrente', both: 'Pix ou cartao', manual: 'Manual'};
+  const billingStatusLabels = {trial: 'Teste', pending: 'Pendente', active: 'Pago', overdue: 'Atrasado', canceled: 'Cancelado', exempt: 'Isento'};
+  const viewPermissions = {
+    criancas: 'alunos',
+    turmas: 'turmas',
+    periodos: 'periodos',
+    atividades: 'atividades',
+    pareceres: 'pareceres',
+    configuracoes: 'configuracoes'
+  };
+  let currentUser = null;
+  let usersState = {users: [], currentUserId: 0, availablePermissions: Object.keys(labels)};
+  const userFilters = {active: '', role: ''};
+
+  const escapeHtml = value => String(value || '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[char]));
+
+  async function request(url, options = {}) {
+    const response = await fetch(url, options);
+    let data = {};
+    try { data = await response.json(); } catch (_) {}
+    if (response.status === 401) {
+      location.href = 'login.php';
+      throw new Error('Sessao expirada.');
+    }
+    if (!response.ok) throw new Error(data.error || 'Nao foi possivel concluir a operacao.');
+    return data;
+  }
+
+  function canAccess(view) {
+    if (!currentUser || currentUser.role === 'master') return true;
+    if (view === 'configuracoes') return true;
+    const permission = viewPermissions[view];
+    if (!permission) return true;
+    if (view === 'pareceres') {
+      return currentUser.permissions.includes('pareceres') || currentUser.permissions.includes('portfolio');
+    }
+    return currentUser.permissions.includes(permission);
+  }
+
+  function activateView(viewId, label) {
+    document.querySelectorAll('.nav-item').forEach(button => button.classList.toggle('active', button.dataset.view === viewId));
+    document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.id === viewId));
+    const title = document.querySelector('#headerTitle');
+    if (title) title.textContent = label;
+    document.querySelector('.sidebar')?.classList.remove('open');
+    document.body.classList.remove('menu-open');
+    window.scrollTo(0, 0);
+  }
+
+  function applyClientPermissions() {
+    if (!currentUser || currentUser.role === 'master') return;
+    document.querySelectorAll('.nav-item[data-view]').forEach(button => {
+      if (!canAccess(button.dataset.view)) button.hidden = true;
+    });
+    document.querySelectorAll('[data-go]').forEach(button => {
+      if (!canAccess(button.dataset.go)) button.hidden = true;
+    });
+    const active = document.querySelector('.nav-item.active');
+    if (active && active.hidden) {
+      const firstAllowed = [...document.querySelectorAll('.nav-item[data-view]')].find(button => !button.hidden);
+      firstAllowed?.click();
+    }
+  }
+
+  function ensureUsersView() {
+    if (document.querySelector('#usuarios')) return;
+    const section = document.createElement('section');
+    section.id = 'usuarios';
+    section.className = 'view';
+    section.innerHTML = `
+      <div class="page-title">
+        <div>
+          <p class="eyebrow">LOGIN MASTER</p>
+          <h1>Usuarios e permissoes</h1>
+          <p>Crie acessos para clientes e defina quais areas do portal cada conta pode usar.</p>
+        </div>
+        <button class="primary" id="addPortalUser" type="button">+ Novo usuario</button>
+      </div>
+      <div class="panel">
+        <div class="toolbar user-admin-toolbar">
+          <span id="portalUsersTotal"></span>
+          <div class="user-admin-filters">
+            <select id="filterUserActive">
+              <option value="">Todos os status</option>
+              <option value="active">Ativos</option>
+              <option value="inactive">Inativos</option>
+            </select>
+            <select id="filterUserRole">
+              <option value="">Todos os tipos</option>
+              <option value="cliente">Clientes</option>
+              <option value="master">Masters</option>
+            </select>
+          </div>
+        </div>
+        <div id="portalUsersList" class="user-admin-list"></div>
+      </div>`;
+    document.querySelector('main').append(section);
+    section.querySelector('#addPortalUser').addEventListener('click', () => openUserForm());
+    section.querySelector('#filterUserActive').addEventListener('change', event => {
+      userFilters.active = event.target.value;
+      renderUsers();
+    });
+    section.querySelector('#filterUserRole').addEventListener('change', event => {
+      userFilters.role = event.target.value;
+      renderUsers();
+    });
+  }
+
+  function ensureUsersNav() {
+    const nav = document.querySelector('.sidebar nav');
+    if (!nav || document.querySelector('.nav-item[data-view="usuarios"]')) return;
+    const button = document.createElement('button');
+    button.className = 'nav-item';
+    button.dataset.view = 'usuarios';
+    button.type = 'button';
+    button.innerHTML = '<span>@</span> Usuarios';
+    nav.append(button);
+    button.addEventListener('click', () => activateView('usuarios', 'Usuarios'));
+  }
+
+  function permissionsText(user) {
+    if (user.role === 'master') return 'Acesso master completo';
+    if (!user.permissions?.length) return 'Sem permissoes liberadas';
+    return user.permissions.map(permission => labels[permission] || permission).join(', ');
+  }
+
+  function money(value) {
+    return Number(value || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+  }
+
+  function billingText(user) {
+    const billing = user.billing || {};
+    return `${billing.plan || 'Basico'} - ${cycleLabels[billing.cycle] || 'Mensal'} - ${money(billing.amount)} - ${paymentLabels[billing.paymentMethod] || 'Pix ou cartao'} - ${billingStatusLabels[billing.status] || 'Pendente'}`;
+  }
+
+  function renderUsers() {
+    ensureUsersView();
+    const list = document.querySelector('#portalUsersList');
+    const total = document.querySelector('#portalUsersTotal');
+    if (!list || !total) return;
+    const filteredUsers = usersState.users.filter(user => {
+      if (userFilters.active === 'active' && !user.active) return false;
+      if (userFilters.active === 'inactive' && user.active) return false;
+      if (userFilters.role && user.role !== userFilters.role) return false;
+      return true;
+    });
+    total.textContent = `${filteredUsers.length} de ${usersState.users.length} usuarios`;
+    list.innerHTML = filteredUsers.map(user => `
+      <article class="user-admin-card">
+        <div class="user-admin-main">
+          <span class="avatar">${escapeHtml((user.name || 'AP').split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase())}</span>
+          <div>
+            <strong>${escapeHtml(user.name)}</strong>
+            <p>${escapeHtml(user.email)}${user.phone ? ` - ${escapeHtml(user.phone)}` : ''}</p>
+            <small>${escapeHtml(permissionsText(user))}</small>
+            <small>Imagem: ${escapeHtml(editorLabels[user.imageEditorPermission || 'none'])}</small>
+            <small>Cobranca: ${escapeHtml(billingText(user))}</small>
+          </div>
+        </div>
+        <span class="status ${user.active ? 'done' : ''}">${user.active ? 'Ativo' : 'Inativo'}</span>
+        <span class="status ${user.role === 'master' ? 'done' : ''}">${user.role === 'master' ? 'Master' : 'Cliente'}</span>
+        <div class="actions">
+          <button class="secondary" type="button" data-edit-user="${user.id}">Editar</button>
+          ${user.id === usersState.currentUserId ? '' : `<button class="secondary danger" type="button" data-delete-user="${user.id}">Excluir</button>`}
+        </div>
+      </article>`).join('') || '<p class="muted">Nenhum usuario cadastrado.</p>';
+    list.querySelectorAll('[data-edit-user]').forEach(button => {
+      button.addEventListener('click', () => openUserForm(usersState.users.find(user => user.id === Number(button.dataset.editUser))));
+    });
+    list.querySelectorAll('[data-delete-user]').forEach(button => {
+      button.addEventListener('click', () => deleteUser(Number(button.dataset.deleteUser)));
+    });
+  }
+
+  async function loadUsers() {
+    usersState = await request(usersApi);
+    renderUsers();
+  }
+
+  function openUserForm(user = null) {
+    const editing = Boolean(user);
+    const permissions = new Set(user?.permissions || []);
+    const billing = user?.billing || {};
+    const modal = document.querySelector('#modal');
+    const content = document.querySelector('#modalContent');
+    if (!modal || !content) return;
+    content.innerHTML = `
+      <h2 class="modal-title">${editing ? 'Editar usuario' : 'Novo usuario'}</h2>
+      <p class="modal-subtitle">Defina o tipo de acesso e as areas liberadas para esta conta.</p>
+      <div id="portalUserForm" class="form-grid">
+        <div class="field"><label>Nome completo</label><input name="name" required value="${escapeHtml(user?.name)}" autofocus></div>
+        <div class="field"><label>E-mail</label><input name="email" type="email" required value="${escapeHtml(user?.email)}"></div>
+        <div class="field"><label>Telefone</label><input name="phone" type="tel" value="${escapeHtml(user?.phone)}"></div>
+        <div class="field"><label>${editing ? 'Nova senha' : 'Senha inicial'}</label><input name="password" type="password" ${editing ? '' : 'required'} minlength="6" placeholder="${editing ? 'Preencha apenas se quiser alterar' : 'Minimo de 6 caracteres'}"></div>
+        <div class="form-grid two-columns">
+          <div class="field"><label>Tipo de login</label><select name="role"><option value="cliente" ${user?.role === 'master' ? '' : 'selected'}>Cliente</option><option value="master" ${user?.role === 'master' ? 'selected' : ''}>Master</option></select></div>
+          <label class="checkline"><input name="active" type="checkbox" ${user?.active === false ? '' : 'checked'}> Usuario ativo</label>
+        </div>
+        <div class="field">
+          <label>Editor de imagem liberado</label>
+          <select name="imageEditorPermission">
+            <option value="none" ${(user?.imageEditorPermission || 'none') === 'none' ? 'selected' : ''}>Nenhum editor</option>
+            <option value="manual" ${['manual', 'ai', 'both'].includes(user?.imageEditorPermission) ? 'selected' : ''}>Editor com IA e manual</option>
+          </select>
+        </div>
+        <div class="billing-box">
+          <div class="profile-subtitle">
+            <h3>Cobranca do cliente</h3>
+            <p>Configure como este plano sera cobrado no login da professora.</p>
+          </div>
+          <div class="form-grid two-columns">
+            <div class="field"><label>Nome do plano</label><input name="billingPlan" value="${escapeHtml(billing.plan || 'Basico')}"></div>
+            <div class="field"><label>Valor</label><input name="billingAmount" type="number" min="0" step="0.01" value="${Number(billing.amount || 0).toFixed(2)}"></div>
+            <div class="field"><label>Ciclo</label><select name="billingCycle"><option value="monthly" ${(billing.cycle || 'monthly') === 'monthly' ? 'selected' : ''}>Mensal</option><option value="annual" ${billing.cycle === 'annual' ? 'selected' : ''}>Anual</option></select></div>
+            <div class="field"><label>Forma de pagamento</label><select name="billingPaymentMethod"><option value="both" ${(billing.paymentMethod || 'both') === 'both' ? 'selected' : ''}>Pix ou cartao</option><option value="pix" ${billing.paymentMethod === 'pix' ? 'selected' : ''}>Somente Pix</option><option value="card" ${billing.paymentMethod === 'card' ? 'selected' : ''}>Somente cartao recorrente</option><option value="manual" ${billing.paymentMethod === 'manual' ? 'selected' : ''}>Cobranca manual</option></select></div>
+            <div class="field"><label>Status</label><select name="billingStatus"><option value="pending" ${(billing.status || 'pending') === 'pending' ? 'selected' : ''}>Pendente</option><option value="active" ${billing.status === 'active' ? 'selected' : ''}>Pago/ativo</option><option value="trial" ${billing.status === 'trial' ? 'selected' : ''}>Teste</option><option value="overdue" ${billing.status === 'overdue' ? 'selected' : ''}>Atrasado</option><option value="canceled" ${billing.status === 'canceled' ? 'selected' : ''}>Cancelado</option><option value="exempt" ${billing.status === 'exempt' ? 'selected' : ''}>Isento</option></select></div>
+            <div class="field"><label>Proximo vencimento</label><input name="billingNextDueDate" type="date" value="${escapeHtml(billing.nextDueDate || '')}"></div>
+          </div>
+          <div class="field"><label>Observacoes internas</label><input name="billingNotes" value="${escapeHtml(billing.notes || '')}" placeholder="Opcional"></div>
+        </div>
+        <div class="field permissions-field">
+          <label>Permissoes do cliente</label>
+          <div class="permissions-grid">
+            ${usersState.availablePermissions.map(permission => `<label><input type="checkbox" name="permissions" value="${permission}" ${permissions.has(permission) ? 'checked' : ''}> ${labels[permission] || permission}</label>`).join('')}
+          </div>
+        </div>
+        <p id="portalUserMessage" class="profile-message"></p>
+        <div class="form-actions">
+          <button class="secondary" type="button" onclick="document.querySelector('#modal').close()">Cancelar</button>
+          <button class="primary" id="savePortalUser" type="button">${editing ? 'Salvar usuario' : 'Criar usuario'}</button>
+        </div>
+      </div>`;
+    const form = content.querySelector('#portalUserForm');
+    const role = form.querySelector('[name="role"]');
+    const permissionsField = content.querySelector('.permissions-field');
+    const syncRole = () => { permissionsField.hidden = role.value === 'master'; };
+    role.addEventListener('change', syncRole);
+    syncRole();
+    content.querySelector('#savePortalUser').addEventListener('click', () => saveUser(form, user?.id));
+    modal.showModal();
+  }
+
+  async function saveUser(form, id) {
+    const message = form.querySelector('#portalUserMessage');
+    const fields = form.querySelectorAll('input, select');
+    const checkedPermissions = [...form.querySelectorAll('input[name="permissions"]:checked')].map(input => input.value);
+    const payload = {
+      id,
+      name: form.querySelector('[name="name"]').value,
+      email: form.querySelector('[name="email"]').value,
+      phone: form.querySelector('[name="phone"]').value,
+      password: form.querySelector('[name="password"]').value,
+      role: form.querySelector('[name="role"]').value,
+      active: form.querySelector('[name="active"]').checked,
+      imageEditorPermission: form.querySelector('[name="imageEditorPermission"]').value,
+      permissions: checkedPermissions,
+      billing: {
+        plan: form.querySelector('[name="billingPlan"]').value,
+        amount: form.querySelector('[name="billingAmount"]').value,
+        cycle: form.querySelector('[name="billingCycle"]').value,
+        paymentMethod: form.querySelector('[name="billingPaymentMethod"]').value,
+        status: form.querySelector('[name="billingStatus"]').value,
+        nextDueDate: form.querySelector('[name="billingNextDueDate"]').value,
+        notes: form.querySelector('[name="billingNotes"]').value
+      }
+    };
+    for (const field of fields) {
+      if (!field.checkValidity()) {
+        field.reportValidity();
+        return;
+      }
+    }
+    message.textContent = '';
+    try {
+      await request(usersApi, {
+        method: id ? 'PUT' : 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      document.querySelector('#modal')?.close();
+      await loadUsers();
+    } catch (error) {
+      message.textContent = error.message;
+    }
+  }
+
+  async function deleteUser(id) {
+    if (!confirm('Excluir este usuario de acesso?')) return;
+    await request(`${usersApi}&id=${id}`, {method: 'DELETE'});
+    await loadUsers();
+  }
+
+  async function init() {
+    try { currentUser = await request(authApi); } catch (_) { return; }
+    applyClientPermissions();
+    if (currentUser.role !== 'master') return;
+    ensureUsersView();
+    ensureUsersNav();
+    await loadUsers();
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+})();

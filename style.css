@@ -22,11 +22,11 @@
   .report-row .actions .secondary{width:100%;min-height:40px;font-size:13px}
   #reportsList.report-list{display:grid!important;gap:12px!important}
   #reportsList .report-row{display:flex!important;position:relative;flex-direction:column!important;align-items:stretch!important;gap:10px!important;min-width:0;width:100%;padding:15px!important;border:1px solid var(--line)!important;border-radius:12px!important;background:#fff!important;overflow:hidden}
-  #reportsList .report-row>.avatar{position:absolute;left:15px;top:18px;width:42px!important;height:42px!important}
-  #reportsList .report-row>div:not(.actions){width:100%;min-width:0;padding:0 82px 0 56px!important}
+  #reportsList .report-row>.avatar{display:none!important}
+  #reportsList .report-row>div:not(.actions){width:100%;min-width:0;padding:0 82px 0 0!important}
   #reportsList .report-row h3{font-size:16px;line-height:1.22;margin:0 0 7px;word-break:normal;overflow-wrap:anywhere}
   #reportsList .report-row p{max-width:100%;font-size:13px;line-height:1.45;margin:0;overflow-wrap:anywhere}
-  #reportsList .report-row>.status{position:absolute!important;right:15px;top:19px;margin:0!important;max-width:74px;text-align:center;white-space:normal}
+  #reportsList .report-row>.status{position:absolute!important;right:15px;top:15px;margin:0!important;max-width:74px;text-align:center;white-space:normal}
   #reportsList .report-row .file-links{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;margin:2px 0 0!important}
   #reportsList .report-row .file-links a{min-width:0;min-height:40px;padding:10px 8px;border:1px solid #d4dfd7;border-radius:8px;background:#f7faf8;text-align:center;font-weight:700}
   #reportsList .report-row .actions{display:grid!important;grid-template-columns:1fr!important;gap:8px!important;width:100%;margin:0!important;padding:0!important}

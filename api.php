@@ -494,8 +494,6 @@ try {
         $hasHeader = is_array($header)
             && trim((string) ($header['network'] ?? '')) !== ''
             && trim((string) ($header['school'] ?? '')) !== ''
-            && trim((string) ($header['directorName'] ?? '')) !== ''
-            && trim((string) ($header['directorEmail'] ?? '')) !== ''
             && trim((string) ($header['contact'] ?? '')) !== '';
         $count = static function (string $table) use ($pdo, $ownerId): int {
             $query = $pdo->prepare("SELECT COUNT(*) FROM {$table} WHERE usuario_id=?");
@@ -1115,15 +1113,10 @@ try {
             $settings = [
                 'network' => trim((string) ($input['network'] ?? '')),
                 'school' => trim((string) ($input['school'] ?? '')),
-                'directorName' => trim((string) ($input['directorName'] ?? '')),
-                'directorEmail' => trim((string) ($input['directorEmail'] ?? '')),
                 'contact' => trim((string) ($input['contact'] ?? '')),
                 'finalText' => trim((string) ($input['finalText'] ?? '')),
                 'logo' => preg_match('#^data:image/[\w.+-]+;base64,#', (string) ($input['logo'] ?? '')) ? (string) $input['logo'] : '',
             ];
-            if ($settings['directorEmail'] !== '' && !filter_var($settings['directorEmail'], FILTER_VALIDATE_EMAIL)) {
-                throw new RuntimeException('Informe um e-mail valido para a diretora responsavel.');
-            }
             $save = $pdo->prepare('INSERT INTO app_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
             $save->execute([$settingKey, json_encode($settings, JSON_UNESCAPED_UNICODE)]);
             echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
@@ -1199,14 +1192,9 @@ try {
         $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         $reportId = (int) ($input['reportId'] ?? 0);
         if ($reportId <= 0) throw new RuntimeException('Documento invalido para envio.');
-        $settingsQuery = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key=? LIMIT 1");
-        $settingsQuery->execute(['header_settings_' . $ownerId]);
-        $settings = json_decode((string) ($settingsQuery->fetchColumn() ?: '{}'), true);
-        $settings = is_array($settings) ? $settings : [];
-        $directorEmail = trim((string) ($settings['directorEmail'] ?? ''));
-        $directorName = trim((string) ($settings['directorName'] ?? 'Diretora responsavel'));
-        if ($directorEmail === '' || !filter_var($directorEmail, FILTER_VALIDATE_EMAIL)) {
-            throw new RuntimeException('Cadastre o e-mail da diretora responsavel nas configuracoes da escola antes de enviar.');
+        $recipientEmail = trim((string) ($input['recipientEmail'] ?? ''));
+        if ($recipientEmail === '' || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('Informe um e-mail valido para receber o documento.');
         }
         $reportQuery = $pdo->prepare("SELECT p.id,p.texto,p.tipo_documento,p.status,c.nome,c.turma_id,t.nome AS turma_nome,pa.nome AS periodo_nome,u.email AS professora_email FROM pareceres p JOIN criancas c ON c.id=p.crianca_id LEFT JOIN turmas t ON t.id=c.turma_id LEFT JOIN periodos_avaliativos pa ON pa.id=p.periodo_id JOIN usuarios u ON u.id=c.usuario_id WHERE p.id=? AND c.usuario_id=? LIMIT 1");
         $reportQuery->execute([$reportId, $ownerId]);
@@ -1267,10 +1255,10 @@ try {
         $body .= '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#253c31">' . $html . '<p>Enviado por Ai Prof.</p></body></html>' . "\r\n";
         $body .= $inlineParts;
         $body .= "--{$boundary}--\r\n";
-        if (!function_exists('mail') || !mail($directorEmail, $subject, $body, $headers)) {
+        if (!function_exists('mail') || !mail($recipientEmail, $subject, $body, $headers)) {
             throw new RuntimeException('Nao foi possivel enviar o e-mail. Verifique a configuracao de envio de e-mail do servidor.');
         }
-        echo json_encode(['ok' => true, 'message' => 'Documento enviado para ' . $directorName . ' (' . $directorEmail . ').'], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['ok' => true, 'message' => 'Documento enviado para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
     if ($resource === 'reports' && $_SERVER['REQUEST_METHOD'] === 'POST') {

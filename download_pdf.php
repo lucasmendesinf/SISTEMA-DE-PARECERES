@@ -64,6 +64,26 @@ final class PdfLayout {
         $this->pages[$this->page]['content'] .= sprintf("BT /%s %.2F Tf %s%.2F %.2F Td (%s) Tj ET\n", $font, $size, $colorCmd, $x, $y, pdfEscape($text));
         $this->setY($y - $leading);
     }
+    private function textWidth(string $text, float $size): float {
+        return strlen(pdfEscape($text)) * $size * 0.47;
+    }
+    public function justifiedLine(string $text, float $x, float $width, float $size, string $font, float $leading): void {
+        $this->ensure($leading);
+        $y = $this->y();
+        $spaces = substr_count(trim($text), ' ');
+        $wordSpacing = 0.0;
+        if ($spaces > 0) $wordSpacing = max(0, min(8, ($width - $this->textWidth($text, $size)) / $spaces));
+        $this->pages[$this->page]['content'] .= sprintf(
+            "BT /%s %.2F Tf 0 0 0 rg %.3F Tw %.2F %.2F Td (%s) Tj 0 Tw ET\n",
+            $font,
+            $size,
+            $wordSpacing,
+            $x,
+            $y,
+            pdfEscape($text)
+        );
+        $this->setY($y - $leading);
+    }
     public function centered(string $text, float $size = 12, string $font = 'F2', float $leading = 22, ?array $color = null): void {
         $width = strlen(pdfEscape($text)) * $size * 0.52;
         $this->line($text, max(36, (595 - $width) / 2), $size, $font, $leading, $color);
@@ -71,7 +91,12 @@ final class PdfLayout {
     public function paragraph(string $text): void {
         $wrap = (int) max(68, min(98, 1050 / $this->bodySize));
         foreach (preg_split('/\R{2,}/u', trim($text)) ?: [] as $block) {
-            foreach (pdfWrap($block, $wrap) as $line) $this->line($line, 54, $this->bodySize, 'F1', $this->bodyLeading);
+            $lines = pdfWrap($block, $wrap);
+            $lastIndex = count($lines) - 1;
+            foreach ($lines as $index => $line) {
+                if ($index < $lastIndex) $this->justifiedLine($line, 54, 487, $this->bodySize, 'F1', $this->bodyLeading);
+                else $this->line($line, 54, $this->bodySize, 'F1', $this->bodyLeading);
+            }
             $this->setY($this->y() - 7);
         }
     }

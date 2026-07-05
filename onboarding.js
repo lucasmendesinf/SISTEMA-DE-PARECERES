@@ -40,7 +40,7 @@
     state.students = Array.isArray(students) ? students : [];
   }
 
-  const hasHeader = () => ['network', 'school', 'directorName', 'directorEmail', 'contact'].every(key => String(state.header[key] || '').trim() !== '');
+  const hasHeader = () => ['network', 'school', 'contact'].every(key => String(state.header[key] || '').trim() !== '');
   const missingSteps = () => [
     !hasHeader(),
     state.periods.length === 0,
@@ -90,8 +90,6 @@
       <div class="form-grid">
         <div class="field"><label>Nome da rede ou secretaria</label><input id="onboardNetwork" value="${esc(state.header.network)}" placeholder="Ex.: Secretaria Municipal de Educacao"></div>
         <div class="field"><label>Unidade escolar</label><input id="onboardSchool" value="${esc(state.header.school)}" placeholder="Ex.: CMEI Nome da Unidade"></div>
-        <div class="field"><label>Nome da diretora responsavel</label><input id="onboardDirectorName" value="${esc(state.header.directorName)}" placeholder="Ex.: Maria Oliveira"></div>
-        <div class="field"><label>E-mail da diretora responsavel</label><input id="onboardDirectorEmail" type="email" value="${esc(state.header.directorEmail)}" placeholder="diretora@escola.edu.br"></div>
         <div class="field"><label>Endereco e contato</label><textarea id="onboardContact" rows="3" placeholder="Endereco, telefone e e-mail">${esc(state.header.contact)}</textarea></div>
         <div class="field"><label>Logo institucional <span class="muted">(opcional)</span></label><input id="onboardLogo" type="file" accept="image/*"><div id="onboardLogoPreview" class="image-previews">${state.header.logo ? `<img src="${state.header.logo}" alt="Logo">` : ''}</div></div>
       </div>
@@ -177,16 +175,12 @@
   async function saveSchool() {
     const network = $('#onboardNetwork').value.trim();
     const school = $('#onboardSchool').value.trim();
-    const directorName = $('#onboardDirectorName').value.trim();
-    const directorEmail = $('#onboardDirectorEmail').value.trim();
     const contact = $('#onboardContact').value.trim();
     if (!network) { $('#onboardNetwork').focus(); throw new Error('Informe o nome da rede ou secretaria.'); }
     if (!school) { $('#onboardSchool').focus(); throw new Error('Informe a unidade escolar.'); }
-    if (!directorName) { $('#onboardDirectorName').focus(); throw new Error('Informe o nome da diretora responsavel.'); }
-    if (!directorEmail) { $('#onboardDirectorEmail').focus(); throw new Error('Informe o e-mail da diretora responsavel.'); }
     if (!contact) { $('#onboardContact').focus(); throw new Error('Informe o endereco e contato da escola.'); }
     const logo = await fileAsDataUrl($('#onboardLogo').files[0]) || state.header.logo || '';
-    state.header = {network, school, directorName, directorEmail, contact, logo};
+    state.header = {network, school, contact, logo};
     await request('header-settings', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(state.header)});
     localStorage.setItem('parecer-cabecalho-professora-v1', JSON.stringify(state.header));
     if (typeof loadHeaderSettings === 'function') loadHeaderSettings();

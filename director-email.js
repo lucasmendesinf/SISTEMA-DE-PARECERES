@@ -10,16 +10,6 @@
     '"': '&quot;'
   }[char]));
 
-  function ensureDirectorFields() {
-    if ($('#headerDirectorName')) return;
-    const schoolField = $('#headerSchool')?.closest('.field');
-    if (!schoolField) return;
-    schoolField.insertAdjacentHTML('afterend', `
-      <div class="field"><label>Nome da diretora responsavel</label><input id="headerDirectorName" placeholder="Ex.: Maria Oliveira"></div>
-      <div class="field"><label>E-mail da diretora responsavel</label><input id="headerDirectorEmail" type="email" placeholder="diretora@escola.edu.br"></div>
-    `);
-  }
-
   function ensureFinalTextField() {
     if ($('#headerFinalText')) return;
     const contactField = $('#headerContact')?.closest('.field');
@@ -36,16 +26,12 @@
   const originalLoadHeaderSettings = window.loadHeaderSettings;
   window.loadHeaderSettings = async function loadHeaderSettingsWithDirector() {
     if (typeof originalLoadHeaderSettings === 'function') await originalLoadHeaderSettings();
-    ensureDirectorFields();
     ensureFinalTextField();
     const settings = JSON.parse(localStorage.getItem(headerKey) || '{}');
-    $('#headerDirectorName').value = settings.directorName || '';
-    $('#headerDirectorEmail').value = settings.directorEmail || '';
     $('#headerFinalText').value = settings.finalText || '';
   };
 
   function hookSaveHeaderSettings() {
-    ensureDirectorFields();
     ensureFinalTextField();
     const button = $('#saveHeaderSettings');
     if (!button || button.dataset.directorHooked) return;
@@ -61,8 +47,6 @@
         ...old,
         network: $('#headerNetwork')?.value.trim() || '',
         school: $('#headerSchool')?.value.trim() || '',
-        directorName: $('#headerDirectorName')?.value.trim() || '',
-        directorEmail: $('#headerDirectorEmail')?.value.trim() || '',
         contact: $('#headerContact')?.value.trim() || '',
         finalText: $('#headerFinalText')?.value.trim() || '',
         logo
@@ -93,13 +77,15 @@
   window.openDirectorEmailModal = async function openDirectorEmailModal(id) {
     const report = await (window.ensureReportDetail ? window.ensureReportDetail(id) : Promise.resolve(data.reports.find(item => String(item.id) === String(id))));
     if (!report) return alert('Documento nao encontrado.');
-    const settings = JSON.parse(localStorage.getItem(headerKey) || '{}');
-    const director = [settings.directorName, settings.directorEmail].filter(Boolean).join(' - ') || 'diretora responsavel';
     const message = defaultMessage(report);
     if (typeof open === 'function') {
       open(`
-        <h2 class="modal-title">Enviar para diretora</h2>
-        <p class="modal-subtitle">Revise o texto do e-mail antes de enviar para ${escapeHtml(director)}.</p>
+        <h2 class="modal-title">Enviar documento por e-mail</h2>
+        <p class="modal-subtitle">Informe o e-mail que recebera o parecer ou portfolio finalizado.</p>
+        <div class="field">
+          <label>E-mail do destinatario</label>
+          <input id="directorEmailRecipient" type="email" placeholder="destinatario@escola.edu.br" autocomplete="email">
+        </div>
         <div class="field">
           <label>Mensagem do e-mail</label>
           <textarea id="directorEmailMessage" rows="6">${escapeHtml(message)}</textarea>
@@ -115,13 +101,19 @@
 
   window.sendReportToDirector = async function sendReportToDirector(reportId) {
     const status = $('#directorEmailStatus');
+    const recipientEmail = $('#directorEmailRecipient')?.value.trim() || '';
     const message = $('#directorEmailMessage')?.value.trim() || '';
+    if (!recipientEmail) {
+      if (status) status.textContent = 'Informe o e-mail do destinatario.';
+      $('#directorEmailRecipient')?.focus();
+      return;
+    }
     if (status) status.textContent = 'Enviando...';
     try {
       const response = await fetch('api.php?resource=send-report-email', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({reportId, message})
+        body: JSON.stringify({reportId, recipientEmail, message})
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Nao foi possivel enviar o e-mail.');
@@ -139,12 +131,11 @@
       const id = match?.[1];
       const status = row.querySelector('.status');
       if (!id || status?.textContent.trim() !== 'Entregue') return;
-      button.insertAdjacentHTML('beforebegin', `<button class="secondary" data-email-director type="button" onclick="openDirectorEmailModal(${id})">Enviar para diretora</button>`);
+      button.insertAdjacentHTML('beforebegin', `<button class="secondary" data-email-director type="button" onclick="openDirectorEmailModal(${id})">Enviar e-mail</button>`);
     });
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    ensureDirectorFields();
     ensureFinalTextField();
     hookSaveHeaderSettings();
     window.loadHeaderSettings?.();

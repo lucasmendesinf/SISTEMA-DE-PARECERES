@@ -520,7 +520,7 @@ async function editReport(id) {
       <div class="form-actions">
         <button class="secondary" type="button" onclick="wizardClose()">Fechar</button>
         <button class="secondary" type="button" onclick="reopenReport(${report.id})">Reabrir documento</button>
-        <button class="secondary" type="button" onclick="openDirectorEmailModal(${report.id})">Enviar para diretora</button>
+        <button class="secondary" type="button" onclick="openDirectorEmailModal(${report.id})">Enviar e-mail</button>
         <button class="secondary" type="button" onclick="downloadPdf(${report.id})">Baixar PDF</button>
         <button class="primary" type="button" onclick="downloadReport(${report.id})">Baixar DOCX</button>
       </div>
@@ -572,3 +572,86 @@ if (downloadPdfBeforeDetailLoad) {
 
 window.ensureReportDetail = ensureReportDetail;
 window.reopenReport = reopenReport;
+
+let reportAutosaveTimer = null;
+let reportAutosaveRunning = false;
+let reportAutosaveQueued = false;
+
+async function autosaveWizardDraft() {
+  if (reportAutosaveRunning) {
+    reportAutosaveQueued = true;
+    return;
+  }
+  const student = data.students.find(item => String(item.id) === String(wizard.studentId || ''));
+  if (!student || wizard.readOnly || wizard.isProcessingPhotos) return;
+  const text = String(wizard.text || '').trim();
+  const entries = wizardEntries();
+  if (!text && !entries.length) return;
+  reportAutosaveRunning = true;
+  try {
+    const activityIds = [...new Set(entries.flatMap(entry => entry.activityIds || []))];
+    const finalText = typeof configuredFinalText === 'function' ? configuredFinalText() : '';
+    const response = await fetch('api.php?resource=reports', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        draft: true,
+        student: {name: student.name, birthDate: student.birthDate || '', classId: student.classId || 1},
+        text: wizard.text || '',
+        documentType: normalizeDocumentType(wizard.documentType),
+        activityIds,
+        entries,
+        useFinalText: !!wizard.useFinalText,
+        finalText: wizard.useFinalText ? (wizard.finalText || finalText) : '',
+        imageEditorMode: wizard.imageEditorMode || 'none'
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Erro ao salvar rascunho automaticamente.');
+    wizard.databaseId = result.id;
+    const report = data.reports.find(item => String(item.studentId) === String(wizard.studentId));
+    if (report) {
+      Object.assign(report, {
+        databaseId: result.id,
+        text: wizard.text || '',
+        documentType: normalizeDocumentType(wizard.documentType),
+        activityIds,
+        entries,
+        useFinalText: !!wizard.useFinalText,
+        finalText: wizard.useFinalText ? (wizard.finalText || finalText) : '',
+        photoNote: entries.map(entry => entry.photoNote).filter(Boolean).join('\n\n'),
+        status: 'draft'
+      });
+    }
+    persistWizard();
+  } catch (error) {
+    console.warn(error.message || error);
+  } finally {
+    reportAutosaveRunning = false;
+    if (reportAutosaveQueued) {
+      reportAutosaveQueued = false;
+      scheduleWizardAutosave();
+    }
+  }
+}
+
+function scheduleWizardAutosave() {
+  clearTimeout(reportAutosaveTimer);
+  reportAutosaveTimer = setTimeout(autosaveWizardDraft, 1400);
+}
+
+const originalBufferStepOneForAutosave = window.bufferStepOne;
+if (typeof originalBufferStepOneForAutosave === 'function') {
+  window.bufferStepOne = function bufferStepOneWithAutosave(...args) {
+    const result = originalBufferStepOneForAutosave.apply(this, args);
+    scheduleWizardAutosave();
+    return result;
+  };
+}
+
+const originalBufferStepTwoForAutosave = window.bufferStepTwo;
+window.bufferStepTwo = function bufferStepTwoWithAutosave(...args) {
+  const result = originalBufferStepTwoForAutosave?.apply(this, args);
+  scheduleWizardAutosave();
+  return result;
+};

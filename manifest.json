@@ -1,0 +1,49 @@
+{
+  "name": "Ai Prof.",
+  "short_name": "Ai Prof.",
+  "description": "Sistema para criar pareceres e portfólios pedagógicos.",
+  "id": "./",
+  "start_url": "login.php?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "orientation": "portrait",
+  "background_color": "#f5faf7",
+  "theme_color": "#196b52",
+  "categories": ["education", "productivity"],
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "assets/pwa/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/pwa/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/pwa/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Novo documento",
+      "short_name": "Documento",
+      "url": "index.php?view=pareceres&new=1",
+      "icons": [{ "src": "assets/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Atividades",
+      "short_name": "Atividades",
+      "url": "index.php?view=atividades",
+      "icons": [{ "src": "assets/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

@@ -11,6 +11,13 @@ if (empty($_SESSION['user_id'])) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Ai Prof. | Educação Infantil</title>
+  <meta name="theme-color" content="#196b52">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Ai Prof.">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
   <link rel="stylesheet" href="style.css?v=20260703-final-text-1">
   <link rel="stylesheet" href="mobile-menu.css">
   <link rel="stylesheet" href="activity-pagination.css">
@@ -100,5 +107,6 @@ if (empty($_SESSION['user_id'])) {
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>
   <script src="image-editor-flow.js?v=20260703-report-activity-import-1"></script>
   <script src="document-image-zoom.js?v=20260702-document-image-zoom-front-1"></script>
+  <script src="pwa.js?v=20260705-pwa-1"></script>
 </body>
 </html>

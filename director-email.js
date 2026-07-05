@@ -17,7 +17,7 @@
     contactField.insertAdjacentHTML('afterend', `
       <div class="field">
         <label>Texto final do parecer <span class="muted">(opcional)</span></label>
-        <textarea id="headerFinalText" rows="4" placeholder="Ex.: Sem mais para o momento, colocamo-nos a disposicao para dialogar sobre o desenvolvimento da crianca."></textarea>
+        <textarea id="headerFinalText" rows="4" placeholder="Aqui você coloca os nomes das professoras envolvidas no parecer, esses nomes vão ficar no final do documento parecer/portifólio"></textarea>
         <small class="muted">A professora escolhe em cada parecer se deseja usar este texto.</small>
       </div>
     `);

@@ -96,7 +96,7 @@ if (empty($_SESSION['user_id'])) {
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
   <script src="text-ai-review.js?v=20260703-portuguese-review-3"></script>
   <script src="document-button-fix.js"></script>
-  <script src="director-email.js?v=20260703-final-text-1"></script>
+  <script src="director-email.js?v=20260705-final-text-placeholder-1"></script>
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
   <script src="auth-profile.js?v=20260703-billing-buttons-1"></script>
   <script src="onboarding.js?v=20260703-initial-setup-lock-1"></script>

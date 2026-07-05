@@ -127,7 +127,7 @@
       <article><span>Clientes vencidos</span><strong>${summary.overdueClients || 0}</strong></article>
       <article><span>A vencer em 5 dias</span><strong>${summary.dueSoonClients || 0}</strong></article>
       <article><span>Valor pendente</span><strong>${money(summary.pending || 0)}</strong></article>
-      <article><span>Valor ativo mensal</span><strong>${money(summary.approved || 0)}</strong></article>`;
+      <article><span>Valor ativo</span><strong>${money(summary.approved || 0)}</strong></article>`;
   }
 
   function renderClients() {
@@ -147,7 +147,7 @@
             <span class="finance-status ${situation}">${escapeHtml(clientSituationLabel(client))}</span>
           </div>
           <p>Vencimento: ${escapeHtml(dateBr(billing.nextDueDate))} | Valor: ${escapeHtml(money(billing.amount))}</p>
-          <p>Plano: ${escapeHtml(billing.plan || 'Basico')} | Pagamento: ${escapeHtml(paymentLabels[billing.paymentMethod] || 'Pix ou cartao')}</p>
+          <p>Plano: ${escapeHtml(billing.plan || 'Basico')} | Ciclo: ${escapeHtml(billing.cycleLabel || 'Mensal')} | Pagamento: ${escapeHtml(paymentLabels[billing.paymentMethod] || 'Pix ou cartao')}</p>
         </article>`;
     }).join('') || '<p class="muted">Nenhum cliente vencido ou perto do vencimento.</p>';
   }

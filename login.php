@@ -87,7 +87,7 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
     function showBilling(data) {
       const billing = data.billing || {};
       billingBox.hidden = false;
-      billingSummary.textContent = `${billing.plan || 'Plano'} ${cycleLabels[billing.cycle] || 'mensal'} - ${money(billing.amount)}`;
+      billingSummary.textContent = `${billing.plan || 'Plano'} ${billing.cycleLabel || cycleLabels[billing.cycle] || 'mensal'} - ${money(billing.amount)}`;
       billingActions.innerHTML = '';
       (data.paymentMethods || []).forEach(method => {
         const button = document.createElement('button');

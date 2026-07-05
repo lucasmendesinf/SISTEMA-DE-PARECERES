@@ -37,7 +37,8 @@ try {
     $addColumnIfMissing($pdo, 'usuarios', 'image_editor_permission', "image_editor_permission ENUM('none','manual','ai','both') NOT NULL DEFAULT 'none' AFTER ativo");
     $addColumnIfMissing($pdo, 'usuarios', 'billing_plan', "billing_plan VARCHAR(80) NOT NULL DEFAULT 'Basico' AFTER image_editor_permission");
     $addColumnIfMissing($pdo, 'usuarios', 'billing_cycle', "billing_cycle ENUM('monthly','annual') NOT NULL DEFAULT 'monthly' AFTER billing_plan");
-    $addColumnIfMissing($pdo, 'usuarios', 'billing_amount', 'billing_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER billing_cycle');
+    $addColumnIfMissing($pdo, 'usuarios', 'billing_cycle_id', 'billing_cycle_id BIGINT UNSIGNED NULL AFTER billing_cycle');
+    $addColumnIfMissing($pdo, 'usuarios', 'billing_amount', 'billing_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER billing_cycle_id');
     $addColumnIfMissing($pdo, 'usuarios', 'billing_payment_method', "billing_payment_method ENUM('pix','card','both','manual') NOT NULL DEFAULT 'both' AFTER billing_amount");
     $addColumnIfMissing($pdo, 'usuarios', 'billing_status', "billing_status ENUM('trial','pending','active','overdue','canceled','exempt') NOT NULL DEFAULT 'pending' AFTER billing_payment_method");
     $addColumnIfMissing($pdo, 'usuarios', 'billing_next_due_date', 'billing_next_due_date DATE NULL AFTER billing_status');
@@ -71,6 +72,27 @@ try {
         INDEX idx_billing_payments_user (usuario_id),
         INDEX idx_billing_payments_dates (due_date, paid_at, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS billing_cycles (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(80) NOT NULL,
+        slug VARCHAR(40) NOT NULL UNIQUE,
+        month_count INT UNSIGNED NOT NULL DEFAULT 1,
+        amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_billing_cycles_active (active, month_count, name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("INSERT INTO billing_cycles (name,slug,month_count,amount,active) VALUES
+        ('Mensal','monthly',1,0.00,1),
+        ('Trimestral','quarterly',3,0.00,1),
+        ('Semestral','semiannual',6,0.00,1),
+        ('Anual','annual',12,0.00,1)
+        ON DUPLICATE KEY UPDATE name=VALUES(name), month_count=VALUES(month_count)");
+    $pdo->exec("UPDATE usuarios u
+        JOIN billing_cycles c ON c.slug = CASE WHEN u.billing_cycle='annual' THEN 'annual' ELSE 'monthly' END
+        SET u.billing_cycle_id=c.id
+        WHERE u.billing_cycle_id IS NULL");
     $pdo->exec("UPDATE usuarios SET perfil='master', ativo=1 WHERE id=(SELECT id FROM (SELECT id FROM usuarios ORDER BY id LIMIT 1) primeiro_usuario)");
     $pdo->exec("UPDATE turmas SET usuario_id=(SELECT id FROM (SELECT id FROM usuarios ORDER BY id LIMIT 1) primeiro_usuario) WHERE usuario_id IS NULL");
     $pdo->exec("UPDATE periodos_avaliativos SET usuario_id=(SELECT id FROM (SELECT id FROM usuarios ORDER BY id LIMIT 1) primeiro_usuario) WHERE usuario_id IS NULL");
@@ -88,7 +110,7 @@ try {
         'experience-fields' => 'configuracoes',
         'header-settings' => 'configuracoes',
     ];
-    $billingSelect = 'billing_plan,billing_cycle,billing_amount,billing_payment_method,billing_status,billing_next_due_date,billing_notes,mercado_pago_customer_id,mercado_pago_subscription_id,mercado_pago_last_payment_id';
+    $billingSelect = "billing_plan,billing_cycle,billing_cycle_id,billing_amount,billing_payment_method,billing_status,billing_next_due_date,billing_notes,mercado_pago_customer_id,mercado_pago_subscription_id,mercado_pago_last_payment_id,(SELECT name FROM billing_cycles bc WHERE bc.id=usuarios.billing_cycle_id LIMIT 1) AS billing_cycle_name,(SELECT month_count FROM billing_cycles bc WHERE bc.id=usuarios.billing_cycle_id LIMIT 1) AS billing_cycle_months";
     $currentUser = null;
     $billingDateFrom = static function (?string $value): ?DateTimeImmutable {
         $value = trim((string) $value);
@@ -108,6 +130,34 @@ try {
     $billingDateValue = static function (?string $value) use ($billingDateFrom): ?string {
         $date = $billingDateFrom($value);
         return $date ? $date->format('Y-m-d') : null;
+    };
+    $legacyCycleFromMonths = static function (int $months): string {
+        return $months >= 12 ? 'annual' : 'monthly';
+    };
+    $loadBillingCycle = static function (?int $cycleId = null, string $legacyCycle = 'monthly') use ($pdo): array {
+        $row = null;
+        if ($cycleId && $cycleId > 0) {
+            $query = $pdo->prepare('SELECT id,name,slug,month_count,amount,active FROM billing_cycles WHERE id=? LIMIT 1');
+            $query->execute([$cycleId]);
+            $row = $query->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+        if (!$row) {
+            $slug = $legacyCycle === 'annual' ? 'annual' : 'monthly';
+            $query = $pdo->prepare('SELECT id,name,slug,month_count,amount,active FROM billing_cycles WHERE slug=? LIMIT 1');
+            $query->execute([$slug]);
+            $row = $query->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+        if (!$row) {
+            return ['id' => null, 'name' => $legacyCycle === 'annual' ? 'Anual' : 'Mensal', 'slug' => $legacyCycle === 'annual' ? 'annual' : 'monthly', 'months' => $legacyCycle === 'annual' ? 12 : 1, 'amount' => 0.0, 'active' => true];
+        }
+        return [
+            'id' => (int) $row['id'],
+            'name' => (string) $row['name'],
+            'slug' => (string) $row['slug'],
+            'months' => max(1, (int) $row['month_count']),
+            'amount' => (float) $row['amount'],
+            'active' => (bool) $row['active'],
+        ];
     };
     $billingAlertFor = static function (array $row) use ($billingDateFrom): ?array {
         if (($row['perfil'] ?? 'cliente') === 'master') return null;
@@ -194,6 +244,10 @@ try {
         return $currentUser;
     };
     $publicUser = static function (array $row): array {
+        $legacyCycle = (string) ($row['billing_cycle'] ?? 'monthly');
+        $cycleLabel = trim((string) ($row['billing_cycle_name'] ?? ''));
+        if ($cycleLabel === '') $cycleLabel = $legacyCycle === 'annual' ? 'Anual' : 'Mensal';
+        $cycleMonths = max(1, (int) ($row['billing_cycle_months'] ?? ($legacyCycle === 'annual' ? 12 : 1)));
         return [
             'id' => (int) $row['id'],
             'name' => $row['nome'],
@@ -205,7 +259,10 @@ try {
             'imageEditorPermission' => $row['image_editor_permission'] ?? 'none',
             'billing' => [
                 'plan' => $row['billing_plan'] ?? 'Basico',
-                'cycle' => $row['billing_cycle'] ?? 'monthly',
+                'cycle' => $legacyCycle,
+                'cycleId' => isset($row['billing_cycle_id']) ? (int) $row['billing_cycle_id'] : null,
+                'cycleLabel' => $cycleLabel,
+                'cycleMonths' => $cycleMonths,
                 'amount' => (float) ($row['billing_amount'] ?? 0),
                 'paymentMethod' => $row['billing_payment_method'] ?? 'both',
                 'status' => $row['billing_status'] ?? 'pending',
@@ -223,17 +280,23 @@ try {
         if (($row['billing_payment_method'] ?? 'both') === 'manual') return false;
         return in_array((string) ($row['billing_status'] ?? 'pending'), ['pending', 'overdue'], true);
     };
-    $normalizeBilling = static function (array $input) use ($billingDateValue): array {
+    $normalizeBilling = static function (array $input) use ($billingDateValue, $loadBillingCycle, $legacyCycleFromMonths): array {
         $billing = is_array($input['billing'] ?? null) ? $input['billing'] : [];
-        $cycle = in_array(($billing['cycle'] ?? 'monthly'), ['monthly', 'annual'], true) ? (string) $billing['cycle'] : 'monthly';
+        $legacyCycle = in_array(($billing['cycle'] ?? 'monthly'), ['monthly', 'annual'], true) ? (string) $billing['cycle'] : 'monthly';
+        $cycleId = isset($billing['cycleId']) ? (int) $billing['cycleId'] : 0;
+        $registeredCycle = $loadBillingCycle($cycleId > 0 ? $cycleId : null, $legacyCycle);
+        $cycle = $legacyCycleFromMonths((int) $registeredCycle['months']);
         $paymentMethod = in_array(($billing['paymentMethod'] ?? 'both'), ['pix', 'card', 'both', 'manual'], true) ? (string) $billing['paymentMethod'] : 'both';
         $status = in_array(($billing['status'] ?? 'pending'), ['trial', 'pending', 'active', 'overdue', 'canceled', 'exempt'], true) ? (string) $billing['status'] : 'pending';
         $amount = str_replace(',', '.', (string) ($billing['amount'] ?? '0'));
+        $cycleAmount = (float) $registeredCycle['amount'];
+        $finalAmount = $cycleAmount > 0 ? $cycleAmount : max(0, (float) $amount);
         $nextDueDate = trim((string) ($billing['nextDueDate'] ?? ''));
         return [
             'plan' => trim((string) ($billing['plan'] ?? 'Basico')) ?: 'Basico',
+            'cycleId' => $registeredCycle['id'],
             'cycle' => $cycle,
-            'amount' => number_format(max(0, (float) $amount), 2, '.', ''),
+            'amount' => number_format($finalAmount, 2, '.', ''),
             'paymentMethod' => $paymentMethod,
             'status' => $status,
             'nextDueDate' => $billingDateValue($nextDueDate),
@@ -312,20 +375,21 @@ try {
         }
         return $data;
     };
-    $billingCycleFrequency = static function (string $cycle): int {
-        return $cycle === 'annual' ? 12 : 1;
+    $billingCycleFrequency = static function (array $billing): int {
+        return max(1, (int) ($billing['cycleMonths'] ?? (($billing['cycle'] ?? 'monthly') === 'annual' ? 12 : 1)));
     };
-    $billingCycleType = static function (string $cycle): string {
+    $billingCycleType = static function (): string {
         return 'months';
     };
-    $nextBillingDate = static function (string $cycle, ?string $currentDueDate = null): string {
+    $nextBillingDate = static function ($cycleOrMonths, ?string $currentDueDate = null): string {
+        $months = is_numeric($cycleOrMonths) ? max(1, (int) $cycleOrMonths) : (((string) $cycleOrMonths) === 'annual' ? 12 : 1);
         $today = new DateTimeImmutable('today');
         $base = $today;
         if ($currentDueDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $currentDueDate)) {
             $currentDue = new DateTimeImmutable($currentDueDate);
             if ($currentDue > $today) $base = $currentDue;
         }
-        return $base->modify($cycle === 'annual' ? '+1 year' : '+1 month')->format('Y-m-d');
+        return $base->modify('+' . $months . ' months')->format('Y-m-d');
     };
     $validBackUrl = static function (string $url): string {
         $url = trim($url);
@@ -376,7 +440,7 @@ try {
         $billing = $publicUser($row)['billing'];
         $amount = round((float) ($billing['amount'] ?? 0), 2);
         if ($amount <= 0) throw new RuntimeException('Valor do plano invalido.');
-        $description = ($billing['plan'] ?? 'Plano Ai Prof') . ' - ' . (($billing['cycle'] ?? 'monthly') === 'annual' ? 'anual' : 'mensal');
+        $description = ($billing['plan'] ?? 'Plano Ai Prof') . ' - ' . strtolower((string) ($billing['cycleLabel'] ?? (($billing['cycle'] ?? 'monthly') === 'annual' ? 'anual' : 'mensal')));
         if ($method === 'pix') {
             $payment = $mercadoPagoRequest('/v1/payments', [
                 'transaction_amount' => $amount,
@@ -405,8 +469,8 @@ try {
             'payer_email' => $row['email'],
             'external_reference' => 'usuario-' . (int) $row['id'],
             'auto_recurring' => [
-                'frequency' => $billingCycleFrequency((string) ($billing['cycle'] ?? 'monthly')),
-                'frequency_type' => $billingCycleType((string) ($billing['cycle'] ?? 'monthly')),
+                'frequency' => $billingCycleFrequency($billing),
+                'frequency_type' => $billingCycleType(),
                 'transaction_amount' => $amount,
                 'currency_id' => 'BRL',
             ],
@@ -426,12 +490,13 @@ try {
         ];
     };
     $activatePaidUser = static function (int $userId, string $paymentId = '', string $subscriptionId = '') use ($pdo, $nextBillingDate): array {
-        $query = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,billing_plan,billing_cycle,billing_amount,billing_next_due_date FROM usuarios WHERE id=? LIMIT 1");
+        $query = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,billing_plan,billing_cycle,billing_cycle_id,billing_amount,billing_next_due_date,(SELECT month_count FROM billing_cycles bc WHERE bc.id=usuarios.billing_cycle_id LIMIT 1) AS billing_cycle_months FROM usuarios WHERE id=? LIMIT 1");
         $query->execute([$userId]);
         $row = $query->fetch(PDO::FETCH_ASSOC);
         if (!$row) throw new RuntimeException('Usuario da cobranca nao encontrado.');
         $previousDue = $row['billing_next_due_date'] ?? null;
-        $nextDue = $nextBillingDate((string) ($row['billing_cycle'] ?? 'monthly'), $row['billing_next_due_date'] ?? null);
+        $cycleMonths = max(1, (int) ($row['billing_cycle_months'] ?? (($row['billing_cycle'] ?? 'monthly') === 'annual' ? 12 : 1)));
+        $nextDue = $nextBillingDate($cycleMonths, $row['billing_next_due_date'] ?? null);
         $update = $pdo->prepare("UPDATE usuarios SET ativo=1,billing_status='active',billing_next_due_date=?,mercado_pago_last_payment_id=COALESCE(NULLIF(?,''),mercado_pago_last_payment_id),mercado_pago_subscription_id=COALESCE(NULLIF(?,''),mercado_pago_subscription_id) WHERE id=?");
         $update->execute([$nextDue, $paymentId, $subscriptionId, $userId]);
         $insertPayment = $pdo->prepare("INSERT INTO billing_payments (usuario_id,type,status,amount,due_date,paid_at,description,external_id) VALUES (?,?,?,?,?,NOW(),?,?)");
@@ -703,6 +768,9 @@ try {
                     'billing' => [
                         'plan' => $row['billing_plan'] ?? 'Basico',
                         'cycle' => $row['billing_cycle'] ?? 'monthly',
+                        'cycleId' => isset($row['billing_cycle_id']) ? (int) $row['billing_cycle_id'] : null,
+                        'cycleLabel' => trim((string) ($row['billing_cycle_name'] ?? '')) ?: (($row['billing_cycle'] ?? 'monthly') === 'annual' ? 'Anual' : 'Mensal'),
+                        'cycleMonths' => max(1, (int) ($row['billing_cycle_months'] ?? (($row['billing_cycle'] ?? 'monthly') === 'annual' ? 12 : 1))),
                         'amount' => (float) ($row['billing_amount'] ?? 0),
                         'paymentMethod' => $row['billing_payment_method'] ?? 'both',
                         'status' => $row['billing_status'] ?? 'pending',
@@ -763,17 +831,79 @@ try {
             if ($action === 'mark-paid') {
                 $paymentId = (int) ($input['paymentId'] ?? 0);
                 if ($paymentId <= 0) throw new RuntimeException('Cobranca invalida.');
-                $query = $pdo->prepare("SELECT bp.*,u.billing_cycle,u.billing_next_due_date FROM billing_payments bp JOIN usuarios u ON u.id=bp.usuario_id WHERE bp.id=? LIMIT 1");
+                $query = $pdo->prepare("SELECT bp.*,u.billing_cycle,u.billing_cycle_id,u.billing_next_due_date,(SELECT month_count FROM billing_cycles bc WHERE bc.id=u.billing_cycle_id LIMIT 1) AS billing_cycle_months FROM billing_payments bp JOIN usuarios u ON u.id=bp.usuario_id WHERE bp.id=? LIMIT 1");
                 $query->execute([$paymentId]);
                 $payment = $query->fetch(PDO::FETCH_ASSOC);
                 if (!$payment) throw new RuntimeException('Cobranca nao encontrada.');
-                $nextDue = $nextBillingDate((string) ($payment['billing_cycle'] ?? 'monthly'), $payment['billing_next_due_date'] ?? null);
+                $cycleMonths = max(1, (int) ($payment['billing_cycle_months'] ?? (($payment['billing_cycle'] ?? 'monthly') === 'annual' ? 12 : 1)));
+                $nextDue = $nextBillingDate($cycleMonths, $payment['billing_next_due_date'] ?? null);
                 $pdo->prepare("UPDATE billing_payments SET status='approved',paid_at=NOW() WHERE id=?")->execute([$paymentId]);
                 $pdo->prepare("UPDATE usuarios SET ativo=1,billing_status='active',billing_next_due_date=? WHERE id=?")->execute([$nextDue, (int) $payment['usuario_id']]);
                 echo json_encode(['ok' => true, 'nextDueDate' => $nextDue], JSON_UNESCAPED_UNICODE);
                 exit;
             }
             throw new RuntimeException('Acao financeira invalida.');
+        }
+        http_response_code(405);
+        throw new RuntimeException('Metodo nao permitido.');
+    }
+    if ($resource === 'billing-cycles') {
+        $requireMaster();
+        $cycleRow = static function (array $row): array {
+            return [
+                'id' => (int) $row['id'],
+                'name' => $row['name'],
+                'slug' => $row['slug'],
+                'months' => (int) $row['month_count'],
+                'amount' => (float) $row['amount'],
+                'active' => (bool) $row['active'],
+                'createdAt' => $row['created_at'] ?? null,
+            ];
+        };
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            $rows = $pdo->query('SELECT id,name,slug,month_count,amount,active,created_at FROM billing_cycles ORDER BY active DESC, month_count, name')->fetchAll(PDO::FETCH_ASSOC);
+            echo json_encode(['cycles' => array_map($cycleRow, $rows)], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'PUT') {
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+            $id = (int) ($input['id'] ?? 0);
+            $name = trim((string) ($input['name'] ?? ''));
+            $months = max(1, (int) ($input['months'] ?? 1));
+            $amount = max(0, (float) str_replace(',', '.', (string) ($input['amount'] ?? '0')));
+            $active = !empty($input['active']) ? 1 : 0;
+            if ($name === '') throw new RuntimeException('Informe o nome do ciclo.');
+            if ($months > 60) throw new RuntimeException('Informe um ciclo de ate 60 meses.');
+            $asciiName = function_exists('iconv') ? (iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $name) ?: $name) : $name;
+            $slugBase = strtolower(trim((string) preg_replace('/[^a-z0-9]+/i', '-', $asciiName), '-')) ?: 'ciclo';
+            if ($id > 0) {
+                $current = $pdo->prepare('SELECT slug FROM billing_cycles WHERE id=? LIMIT 1');
+                $current->execute([$id]);
+                $slug = (string) ($current->fetchColumn() ?: $slugBase);
+                $update = $pdo->prepare('UPDATE billing_cycles SET name=?,slug=?,month_count=?,amount=?,active=? WHERE id=?');
+                $update->execute([$name, $slug, $months, number_format($amount, 2, '.', ''), $active, $id]);
+            } else {
+                $slug = $slugBase;
+                $suffix = 2;
+                while (true) {
+                    $check = $pdo->prepare('SELECT id FROM billing_cycles WHERE slug=? LIMIT 1');
+                    $check->execute([$slug]);
+                    if (!$check->fetchColumn()) break;
+                    $slug = $slugBase . '-' . $suffix++;
+                }
+                $insert = $pdo->prepare('INSERT INTO billing_cycles (name,slug,month_count,amount,active) VALUES (?,?,?,?,?)');
+                $insert->execute([$name, $slug, $months, number_format($amount, 2, '.', ''), $active]);
+                $id = (int) $pdo->lastInsertId();
+            }
+            echo json_encode(['ok' => true, 'id' => $id], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+            $id = (int) ($_GET['id'] ?? 0);
+            if ($id <= 0) throw new RuntimeException('Ciclo invalido.');
+            $pdo->prepare('UPDATE billing_cycles SET active=0 WHERE id=?')->execute([$id]);
+            echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+            exit;
         }
         http_response_code(405);
         throw new RuntimeException('Metodo nao permitido.');
@@ -788,7 +918,7 @@ try {
             $rows = $pdo->query("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect},created_at FROM usuarios ORDER BY perfil DESC, nome")->fetchAll(PDO::FETCH_ASSOC);
             $users = array_map(static function (array $row): array {
                 $permissions = json_decode((string) ($row['permissoes'] ?? '[]'), true);
-                return ['id' => (int) $row['id'], 'name' => $row['nome'], 'email' => $row['email'], 'phone' => $row['telefone'], 'role' => $row['perfil'], 'permissions' => is_array($permissions) ? $permissions : [], 'active' => (bool) $row['ativo'], 'imageEditorPermission' => $row['image_editor_permission'] ?? 'none', 'billing' => ['plan' => $row['billing_plan'] ?? 'Basico', 'cycle' => $row['billing_cycle'] ?? 'monthly', 'amount' => (float) ($row['billing_amount'] ?? 0), 'paymentMethod' => $row['billing_payment_method'] ?? 'both', 'status' => $row['billing_status'] ?? 'pending', 'nextDueDate' => $row['billing_next_due_date'] ?? null, 'notes' => $row['billing_notes'] ?? ''], 'createdAt' => $row['created_at']];
+                return ['id' => (int) $row['id'], 'name' => $row['nome'], 'email' => $row['email'], 'phone' => $row['telefone'], 'role' => $row['perfil'], 'permissions' => is_array($permissions) ? $permissions : [], 'active' => (bool) $row['ativo'], 'imageEditorPermission' => $row['image_editor_permission'] ?? 'none', 'billing' => ['plan' => $row['billing_plan'] ?? 'Basico', 'cycle' => $row['billing_cycle'] ?? 'monthly', 'cycleId' => isset($row['billing_cycle_id']) ? (int) $row['billing_cycle_id'] : null, 'cycleLabel' => trim((string) ($row['billing_cycle_name'] ?? '')) ?: (($row['billing_cycle'] ?? 'monthly') === 'annual' ? 'Anual' : 'Mensal'), 'cycleMonths' => max(1, (int) ($row['billing_cycle_months'] ?? (($row['billing_cycle'] ?? 'monthly') === 'annual' ? 12 : 1))), 'amount' => (float) ($row['billing_amount'] ?? 0), 'paymentMethod' => $row['billing_payment_method'] ?? 'both', 'status' => $row['billing_status'] ?? 'pending', 'nextDueDate' => $row['billing_next_due_date'] ?? null, 'notes' => $row['billing_notes'] ?? ''], 'createdAt' => $row['created_at']];
             }, $rows);
             echo json_encode(['users' => $users, 'currentUserId' => (int) $masterUser['id'], 'availablePermissions' => $allowedPermissions], JSON_UNESCAPED_UNICODE);
             exit;
@@ -809,8 +939,8 @@ try {
             if ($userId <= 0 && strlen($password) < 6) throw new RuntimeException('A senha inicial deve ter pelo menos 6 caracteres.');
             if ($userId > 0 && $userId === (int) $masterUser['id'] && ($role !== 'master' || $active !== 1)) throw new RuntimeException('Você não pode remover o acesso master da sua própria conta.');
             if ($userId > 0) {
-                $sql = 'UPDATE usuarios SET nome=?,email=?,telefone=?,perfil=?,permissoes=?,ativo=?,image_editor_permission=?,billing_plan=?,billing_cycle=?,billing_amount=?,billing_payment_method=?,billing_status=?,billing_next_due_date=?,billing_notes=?' . ($password !== '' ? ',senha_hash=?' : '') . ' WHERE id=?';
-                $params = [$name, $email, $phone ?: null, $role, json_encode($permissions, JSON_UNESCAPED_UNICODE), $active, $editorPermission, $billing['plan'], $billing['cycle'], $billing['amount'], $billing['paymentMethod'], $billing['status'], $billing['nextDueDate'], $billing['notes']];
+                $sql = 'UPDATE usuarios SET nome=?,email=?,telefone=?,perfil=?,permissoes=?,ativo=?,image_editor_permission=?,billing_plan=?,billing_cycle=?,billing_cycle_id=?,billing_amount=?,billing_payment_method=?,billing_status=?,billing_next_due_date=?,billing_notes=?' . ($password !== '' ? ',senha_hash=?' : '') . ' WHERE id=?';
+                $params = [$name, $email, $phone ?: null, $role, json_encode($permissions, JSON_UNESCAPED_UNICODE), $active, $editorPermission, $billing['plan'], $billing['cycle'], $billing['cycleId'], $billing['amount'], $billing['paymentMethod'], $billing['status'], $billing['nextDueDate'], $billing['notes']];
                 if ($password !== '') {
                     if (strlen($password) < 6) throw new RuntimeException('A nova senha deve ter pelo menos 6 caracteres.');
                     $params[] = password_hash($password, PASSWORD_DEFAULT);
@@ -818,8 +948,8 @@ try {
                 $params[] = $userId;
                 $pdo->prepare($sql)->execute($params);
             } else {
-                $insert = $pdo->prepare('INSERT INTO usuarios (nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,billing_plan,billing_cycle,billing_amount,billing_payment_method,billing_status,billing_next_due_date,billing_notes,senha_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-                $insert->execute([$name, $email, $phone ?: null, $role, json_encode($permissions, JSON_UNESCAPED_UNICODE), $active, $editorPermission, $billing['plan'], $billing['cycle'], $billing['amount'], $billing['paymentMethod'], $billing['status'], $billing['nextDueDate'], $billing['notes'], password_hash($password, PASSWORD_DEFAULT)]);
+                $insert = $pdo->prepare('INSERT INTO usuarios (nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,billing_plan,billing_cycle,billing_cycle_id,billing_amount,billing_payment_method,billing_status,billing_next_due_date,billing_notes,senha_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+                $insert->execute([$name, $email, $phone ?: null, $role, json_encode($permissions, JSON_UNESCAPED_UNICODE), $active, $editorPermission, $billing['plan'], $billing['cycle'], $billing['cycleId'], $billing['amount'], $billing['paymentMethod'], $billing['status'], $billing['nextDueDate'], $billing['notes'], password_hash($password, PASSWORD_DEFAULT)]);
                 $userId = (int) $pdo->lastInsertId();
             }
             echo json_encode(['id' => $userId], JSON_UNESCAPED_UNICODE);

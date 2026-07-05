@@ -27,7 +27,7 @@ if (empty($_SESSION['user_id'])) {
   <link rel="stylesheet" href="user-profile.css?v=20260703-billing-buttons-1">
   <link rel="stylesheet" href="billing-lock.css?v=20260703-billing-lock-3">
   <link rel="stylesheet" href="marketing-notice.css?v=20260702-marketing-notice-list-1">
-  <link rel="stylesheet" href="master-users.css?v=20260702-user-filters-1">
+  <link rel="stylesheet" href="master-users.css?v=20260705-billing-cycles-1">
   <link rel="stylesheet" href="finance-admin.css?v=20260703-finance-due-filter-1">
   <link rel="stylesheet" href="image-editors.css">
   <link rel="stylesheet" href="document-style.css">
@@ -94,14 +94,15 @@ if (empty($_SESSION['user_id'])) {
   <script src="performance-optimizations.js"></script>
   <script src="document-style-settings.js?v=20260703-final-text-1"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
+  <script src="billing-cycles.js?v=20260705-billing-cycles-1"></script>
   <script src="text-ai-review.js?v=20260703-portuguese-review-3"></script>
   <script src="document-button-fix.js"></script>
   <script src="director-email.js?v=20260705-final-text-placeholder-1"></script>
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
-  <script src="auth-profile.js?v=20260703-billing-buttons-1"></script>
+  <script src="auth-profile.js?v=20260705-billing-cycles-1"></script>
   <script src="onboarding.js?v=20260703-initial-setup-lock-1"></script>
-  <script src="master-users.js?v=20260702-user-filters-1"></script>
-  <script src="finance-admin.js?v=20260703-finance-xlsx-1"></script>
+  <script src="master-users.js?v=20260705-billing-cycles-1"></script>
+  <script src="finance-admin.js?v=20260705-billing-cycles-1"></script>
   <script src="image-editor-permissions.js?v=20260702-combined-image-editor-1"></script>
   <script src="manual-image-editor.js?v=20260702-unblur-selection-1"></script>
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>

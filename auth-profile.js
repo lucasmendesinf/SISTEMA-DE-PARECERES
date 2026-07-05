@@ -202,7 +202,7 @@
         <p>${escapeHtml(user.billingLock.message || 'Regularize o pagamento para liberar o acesso.')}</p>
         <dl class="billing-summary">
           <div><dt>Plano</dt><dd>${escapeHtml(billing.plan || 'Basico')}</dd></div>
-          <div><dt>Ciclo</dt><dd>${escapeHtml(cycleLabels[billing.cycle] || 'Mensal')}</dd></div>
+          <div><dt>Ciclo</dt><dd>${escapeHtml(billing.cycleLabel || cycleLabels[billing.cycle] || 'Mensal')}</dd></div>
           <div><dt>Valor</dt><dd>${escapeHtml(money(billing.amount))}</dd></div>
           <div><dt>Vencimento</dt><dd>${escapeHtml(billing.nextDueDate || 'Nao informado')}</dd></div>
         </dl>
@@ -312,7 +312,7 @@
           </div>
           <dl class="billing-summary">
             <div><dt>Plano</dt><dd>${escapeHtml(billing.plan || 'Basico')}</dd></div>
-            <div><dt>Ciclo</dt><dd>${escapeHtml(cycleLabels[billing.cycle] || 'Mensal')}</dd></div>
+            <div><dt>Ciclo</dt><dd>${escapeHtml(billing.cycleLabel || cycleLabels[billing.cycle] || 'Mensal')}</dd></div>
             <div><dt>Valor</dt><dd>${escapeHtml(money(billing.amount))}</dd></div>
             <div><dt>Status</dt><dd>${escapeHtml(billingStatusText)}</dd></div>
             <div><dt>Pagamento</dt><dd>${escapeHtml(paymentLabels[billing.paymentMethod] || 'Pix ou cartao')}</dd></div>

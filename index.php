@@ -18,7 +18,7 @@ if (empty($_SESSION['user_id'])) {
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=20260703-final-text-1">
+  <link rel="stylesheet" href="style.css?v=20260705-report-list-mobile-1">
   <link rel="stylesheet" href="mobile-menu.css?v=20260705-mobile-scroll-1">
   <link rel="stylesheet" href="activity-pagination.css">
   <link rel="stylesheet" href="report-type-badge.css">

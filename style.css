@@ -32,3 +32,9 @@
   #reportsList .report-row .actions{display:grid!important;grid-template-columns:1fr!important;gap:8px!important;width:100%;margin:0!important;padding:0!important}
   #reportsList .report-row .actions .secondary{width:100%!important;min-height:42px;white-space:normal}
 }
+
+.sidebar-bottom > .help{display:none}
+.floating-help{position:fixed;right:24px;bottom:24px;z-index:70;width:54px;height:54px;display:grid;place-items:center;border-radius:50%;background:var(--green);color:#fff;text-decoration:none;font:800 25px 'DM Sans',sans-serif;box-shadow:0 16px 34px rgba(35,107,82,.28),0 3px 8px rgba(25,49,39,.18);border:2px solid rgba(255,255,255,.9);transition:transform .18s,box-shadow .18s,background .18s}
+.floating-help:hover,.floating-help:focus{background:#18553f;transform:translateY(-2px);box-shadow:0 20px 38px rgba(35,107,82,.34),0 4px 10px rgba(25,49,39,.2);outline:0}
+.floating-help:focus-visible{outline:3px solid #c8e4d0;outline-offset:3px}
+@media(max-width:800px){.floating-help{right:18px;bottom:18px;width:50px;height:50px;font-size:23px}}

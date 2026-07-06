@@ -18,7 +18,7 @@ if (empty($_SESSION['user_id'])) {
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=20260705-report-list-mobile-3">
+  <link rel="stylesheet" href="style.css?v=20260706-floating-help-1">
   <link rel="stylesheet" href="mobile-menu.css?v=20260705-mobile-scroll-1">
   <link rel="stylesheet" href="activity-pagination.css">
   <link rel="stylesheet" href="report-type-badge.css">
@@ -52,6 +52,7 @@ if (empty($_SESSION['user_id'])) {
     <div class="sidebar-bottom"><a class="help" href="https://wa.me/5541996310725" target="_blank" rel="noopener noreferrer">◌ Suporte</a><div class="profile" aria-haspopup="true" aria-expanded="false"><div class="avatar">AP</div><div><strong>Usuário logado</strong><small>Professora</small></div></div><div class="profile-menu" hidden><button type="button" id="sidebarProfileButton">Meus dados</button><button type="button" id="sidebarLogoutButton" class="danger">Sair do sistema</button></div></div>
   </aside>
   <button class="mobile-menu-overlay" id="mobileMenuOverlay" type="button" aria-label="Fechar menu"></button>
+  <a class="floating-help" href="https://wa.me/5541996310725" target="_blank" rel="noopener noreferrer" aria-label="Abrir suporte pelo WhatsApp" title="Suporte">?</a>
 
   <main>
     <header><div><button class="crumb" id="menuButton">☰</button><span id="headerTitle">Visão geral</span></div><div class="term">1º semestre de 2026</div></header>

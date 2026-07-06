@@ -29,7 +29,7 @@ if (empty($_SESSION['user_id'])) {
   <link rel="stylesheet" href="marketing-notice.css?v=20260702-marketing-notice-list-1">
   <link rel="stylesheet" href="master-users.css?v=20260705-billing-cycles-1">
   <link rel="stylesheet" href="finance-admin.css?v=20260703-finance-due-filter-1">
-  <link rel="stylesheet" href="image-editors.css">
+  <link rel="stylesheet" href="image-editors.css?v=20260706-photo-loading-1">
   <link rel="stylesheet" href="document-style.css">
   <link rel="stylesheet" href="document-image-zoom.css?v=20260702-document-image-zoom-front-1">
   <link rel="stylesheet" href="onboarding.css?v=20260703-initial-setup-lock-1">
@@ -90,7 +90,7 @@ if (empty($_SESSION['user_id'])) {
   <script src="experience-fields.js?v=20260702-activity-photos-2"></script>
   <script src="modal-controls.js"></script>
   <script src="report-type-badge.js"></script>
-  <script src="report-editor.js?v=20260703-final-text-1"></script>
+  <script src="report-editor.js?v=20260706-photo-loading-1"></script>
   <script src="performance-optimizations.js"></script>
   <script src="document-style-settings.js?v=20260703-final-text-1"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>

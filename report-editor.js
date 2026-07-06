@@ -64,7 +64,37 @@ function wizardPreviewImages() {
   `).join('');
 }
 
+function wizardPhotoLoadingHtml(message = 'Carregando imagens no sistema...') {
+  return `
+    <div class="wizard-photo-loading" role="status" aria-live="polite">
+      <span class="wizard-photo-spinner" aria-hidden="true"></span>
+      <strong>${esc(message)}</strong>
+      <small>Aguarde enquanto a imagem e preparada para edicao.</small>
+    </div>
+  `;
+}
+
+function setWizardPhotoProcessing(processing, message) {
+  wizard.isProcessingPhotos = !!processing;
+  const previews = $('#wizardPreviews');
+  const input = $('#wizardPhotos');
+  const dropzone = $('#wizardDropzone');
+  if (previews) {
+    previews.setAttribute('aria-busy', processing ? 'true' : 'false');
+    previews.innerHTML = processing ? wizardPhotoLoadingHtml(message) : wizardPreviewImages();
+  }
+  if (input) input.disabled = !!processing;
+  if (dropzone) {
+    dropzone.classList.toggle('is-loading', !!processing);
+    dropzone.setAttribute('aria-disabled', processing ? 'true' : 'false');
+  }
+  document.querySelectorAll('#modal .form-actions button').forEach(button => {
+    button.disabled = !!processing;
+  });
+}
+
 function removeWizardPhoto(index) {
+  if (wizard.isProcessingPhotos) return;
   wizard.photos = (wizard.photos || []).filter((_, itemIndex) => itemIndex !== index);
   bufferStepTwo();
   const previews = $('#wizardPreviews');
@@ -72,22 +102,18 @@ function removeWizardPhoto(index) {
 }
 
 async function wizardPhotoCheck(input) {
+  if (!input?.files?.length) return;
   try {
-    wizard.isProcessingPhotos = true;
-    const previews = $('#wizardPreviews');
-    if (previews) previews.innerHTML = '<p class="muted">Abrindo editor de imagem...</p>';
+    setWizardPhotoProcessing(true, 'Carregando imagens no sistema...');
     const result = await window.PortalImageEditors.processFiles(input.files, 3);
     wizard.photos = result.photos;
     wizard.imageEditorMode = result.mode;
-    delete wizard.isProcessingPhotos;
+    setWizardPhotoProcessing(false);
     bufferStepTwo();
-    if (previews) previews.innerHTML = wizardPreviewImages();
   } catch (error) {
     alert(error.message || 'Não foi possível ler uma das imagens.');
-    delete wizard.isProcessingPhotos;
     input.value = '';
-    const previews = $('#wizardPreviews');
-    if (previews) previews.innerHTML = wizardPreviewImages();
+    setWizardPhotoProcessing(false);
   }
 }
 
@@ -135,6 +161,7 @@ function wizardActivitiesV2() {
 }
 
 function finishEntryEdit() {
+  if (wizard.isProcessingPhotos) return alert('Aguarde o carregamento das imagens terminar.');
   bufferStepTwo();
   delete wizard.editingEntryIndex;
   clearActiveWizardEntry();
@@ -403,6 +430,7 @@ async function selectRegisteredActivityForDocument(input) {
 }
 
 async function useRegisteredActivities() {
+  if (wizard.isProcessingPhotos) return alert('Aguarde o carregamento das imagens terminar.');
   bufferStepTwo();
   const count = await importSelectedRegisteredActivities();
   if (!count) return alert('Selecione uma atividade ainda não adicionada.');

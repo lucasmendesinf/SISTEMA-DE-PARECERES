@@ -29,7 +29,7 @@ if (empty($_SESSION['user_id'])) {
   <link rel="stylesheet" href="marketing-notice.css?v=20260702-marketing-notice-list-1">
   <link rel="stylesheet" href="master-users.css?v=20260705-billing-cycles-1">
   <link rel="stylesheet" href="finance-admin.css?v=20260703-finance-due-filter-1">
-  <link rel="stylesheet" href="image-editors.css?v=20260706-photo-loading-1">
+  <link rel="stylesheet" href="image-editors.css?v=20260706-crop-hidden-canvas-1">
   <link rel="stylesheet" href="document-style.css">
   <link rel="stylesheet" href="document-image-zoom.css?v=20260702-document-image-zoom-front-1">
   <link rel="stylesheet" href="onboarding.css?v=20260703-initial-setup-lock-1">
@@ -104,7 +104,7 @@ if (empty($_SESSION['user_id'])) {
   <script src="master-users.js?v=20260705-billing-cycles-1"></script>
   <script src="finance-admin.js?v=20260705-billing-cycles-1"></script>
   <script src="image-editor-permissions.js?v=20260702-combined-image-editor-1"></script>
-  <script src="manual-image-editor.js?v=20260702-unblur-selection-1"></script>
+  <script src="manual-image-editor.js?v=20260706-crop-hidden-canvas-1"></script>
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>
   <script src="image-editor-flow.js?v=20260703-report-activity-import-1"></script>
   <script src="document-image-zoom.js?v=20260702-document-image-zoom-front-1"></script>

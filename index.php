@@ -80,7 +80,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <link rel="stylesheet" href="report-type-badge.css">
   <link rel="stylesheet" href="experience-fields.css">
   <link rel="stylesheet" href="brand-logo.css">
-  <link rel="stylesheet" href="user-profile.css?v=20260703-billing-buttons-1">
+  <link rel="stylesheet" href="user-profile.css?v=20260706-profile-menu-1">
   <link rel="stylesheet" href="billing-lock.css?v=20260703-billing-lock-3">
   <link rel="stylesheet" href="marketing-notice.css?v=20260702-marketing-notice-list-1">
   <link rel="stylesheet" href="master-users.css?v=20260705-billing-cycles-1">
@@ -161,7 +161,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="document-button-fix.js"></script>
   <script src="director-email.js?v=20260705-final-text-placeholder-1"></script>
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
-  <script src="auth-profile.js?v=20260706-fast-menu-1"></script>
+  <script src="auth-profile.js?v=20260706-profile-menu-1"></script>
   <script src="onboarding.js?v=20260703-initial-setup-lock-1"></script>
   <script src="master-users.js?v=20260706-fast-menu-1"></script>
   <script src="finance-admin.js?v=20260706-fast-menu-1"></script>

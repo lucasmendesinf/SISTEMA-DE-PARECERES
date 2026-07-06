@@ -253,6 +253,14 @@
     menu.hidden = true;
   }
 
+  function toggleProfileMenu() {
+    const profile = document.querySelector('.sidebar-bottom .profile');
+    if (!profile) return;
+    const expanded = profile.getAttribute('aria-expanded') === 'true';
+    if (expanded) closeProfileMenu();
+    else openProfileMenu();
+  }
+
   function openProfileMenu() {
     const profile = document.querySelector('.sidebar-bottom .profile');
     const menu = document.querySelector('.profile-menu');
@@ -467,26 +475,19 @@
     document.body.dataset.role = user.role || 'cliente';
     window.dispatchEvent(new CustomEvent('portal:user-ready', {detail: user}));
     if (user.billingWarning && !user.billingAlert) setTimeout(() => alert(user.billingWarning), 300);
-    const sidebarBottom = document.querySelector('.sidebar-bottom');
     const profile = document.querySelector('.sidebar-bottom .profile');
-    sidebarBottom?.addEventListener('mouseenter', openProfileMenu);
-    sidebarBottom?.addEventListener('mouseleave', closeProfileMenu);
-    sidebarBottom?.addEventListener('focusin', openProfileMenu);
-    sidebarBottom?.addEventListener('focusout', event => {
-      if (!sidebarBottom.contains(event.relatedTarget)) closeProfileMenu();
-    });
     profile?.setAttribute('role', 'button');
     profile?.setAttribute('tabindex', '0');
+    profile?.setAttribute('aria-controls', 'profileDropdownMenu');
+    document.querySelector('.profile-menu')?.setAttribute('id', 'profileDropdownMenu');
     profile?.addEventListener('click', event => {
       event.stopPropagation();
-      const expanded = profile.getAttribute('aria-expanded') === 'true';
-      if (expanded) closeProfileMenu();
-      else openProfileMenu();
+      toggleProfileMenu();
     });
     profile?.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        openProfileMenu();
+        toggleProfileMenu();
       }
       if (event.key === 'Escape') {
         closeProfileMenu();

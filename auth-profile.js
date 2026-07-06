@@ -455,7 +455,8 @@
   }
 
   async function init() {
-    try { user = await request(); } catch (_) { return; }
+    window.PortalCurrentUserPromise = window.PortalCurrentUserPromise || request();
+    try { user = await window.PortalCurrentUserPromise; } catch (_) { return; }
     window.PortalCurrentUser = user;
     document.body.dataset.role = user.role || 'cliente';
     window.dispatchEvent(new CustomEvent('portal:user-ready', {detail: user}));

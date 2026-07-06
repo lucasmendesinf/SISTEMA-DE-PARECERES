@@ -159,9 +159,17 @@ try {
             'active' => (bool) $row['active'],
         ];
     };
-    $billingAlertFor = static function (array $row) use ($billingDateFrom): ?array {
+    $billingIsCovered = static function (array $row) use ($billingDateFrom): bool {
+        if (($row['perfil'] ?? 'cliente') === 'master') return true;
+        if ((float) ($row['billing_amount'] ?? 0) <= 0) return true;
+        if ((string) ($row['billing_status'] ?? '') === 'exempt') return true;
+        $due = $billingDateFrom($row['billing_next_due_date'] ?? null);
+        return $due && new DateTimeImmutable('today') <= $due;
+    };
+    $billingAlertFor = static function (array $row) use ($billingDateFrom, $billingIsCovered): ?array {
         if (($row['perfil'] ?? 'cliente') === 'master') return null;
         if ((float) ($row['billing_amount'] ?? 0) <= 0) return null;
+        if ($billingIsCovered($row) && !in_array((string) ($row['billing_status'] ?? ''), ['active', 'trial'], true)) return null;
         if (!in_array((string) ($row['billing_status'] ?? ''), ['active', 'trial', 'pending', 'overdue'], true)) return null;
         $due = $billingDateFrom($row['billing_next_due_date'] ?? null);
         if (!$due) return null;
@@ -196,9 +204,10 @@ try {
             'daysUntil' => $daysUntil,
         ];
     };
-    $billingLockFor = static function (array $row) use ($billingDateFrom): ?array {
+    $billingLockFor = static function (array $row) use ($billingDateFrom, $billingIsCovered): ?array {
         if (($row['perfil'] ?? 'cliente') === 'master') return null;
         if ((float) ($row['billing_amount'] ?? 0) <= 0) return null;
+        if ($billingIsCovered($row)) return null;
         $status = (string) ($row['billing_status'] ?? '');
         if (!in_array($status, ['active', 'trial', 'pending', 'overdue'], true)) return null;
         $due = $billingDateFrom($row['billing_next_due_date'] ?? null);
@@ -327,6 +336,13 @@ try {
         $mp = $getMercadoPagoSettings();
         return $mp['access_token'] !== '' && $mp['public_key'] !== '';
     };
+    $currentPublicUrl = static function (string $resource): string {
+        $host = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
+        if ($host === '' || in_array(strtolower($host), ['localhost', '127.0.0.1'], true)) return '';
+        $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+        $basePath = rtrim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/'))), '/');
+        return ($https ? 'https://' : 'http://') . $host . ($basePath === '' ? '' : $basePath) . '/api.php?resource=' . rawurlencode($resource);
+    };
     $paymentMethodsAvailable = static function (array $billing): array {
         $method = $billing['paymentMethod'] ?? 'both';
         if ($method === 'pix') return ['pix'];
@@ -391,6 +407,30 @@ try {
         }
         return $base->modify('+' . $months . ' months')->format('Y-m-d');
     };
+    $mercadoPagoPaidDate = static function (array $payload): ?string {
+        foreach (['date_approved', 'money_release_date', 'last_modified', 'date_created'] as $key) {
+            $value = trim((string) ($payload[$key] ?? ''));
+            if ($value === '') continue;
+            try {
+                return (new DateTimeImmutable($value))->format('Y-m-d');
+            } catch (Throwable $e) {
+                continue;
+            }
+        }
+        return null;
+    };
+    $mercadoPagoNextDueDate = static function (array $payload): ?string {
+        foreach (['next_payment_date', 'next_payment', 'date_of_next_payment'] as $key) {
+            $value = trim((string) ($payload[$key] ?? ''));
+            if ($value === '') continue;
+            try {
+                return (new DateTimeImmutable($value))->format('Y-m-d');
+            } catch (Throwable $e) {
+                continue;
+            }
+        }
+        return null;
+    };
     $validBackUrl = static function (string $url): string {
         $url = trim($url);
         if ($url === '' || !filter_var($url, FILTER_VALIDATE_URL)) return '';
@@ -436,13 +476,14 @@ try {
         $row['billing_lock'] = $billingLockFor($row);
         return $row;
     };
-    $createMercadoPagoPayment = static function (array $row, string $method) use ($publicUser, $mercadoPagoRequest, $billingCycleFrequency, $billingCycleType, $getMercadoPagoSettings, $validBackUrl, $pdo): array {
+    $createMercadoPagoPayment = static function (array $row, string $method) use ($publicUser, $mercadoPagoRequest, $billingCycleFrequency, $billingCycleType, $getMercadoPagoSettings, $validBackUrl, $currentPublicUrl, $pdo): array {
         $billing = $publicUser($row)['billing'];
         $amount = round((float) ($billing['amount'] ?? 0), 2);
         if ($amount <= 0) throw new RuntimeException('Valor do plano invalido.');
         $description = ($billing['plan'] ?? 'Plano Ai Prof') . ' - ' . strtolower((string) ($billing['cycleLabel'] ?? (($billing['cycle'] ?? 'monthly') === 'annual' ? 'anual' : 'mensal')));
+        $notificationUrl = $currentPublicUrl('mercado-pago-webhook');
         if ($method === 'pix') {
-            $payment = $mercadoPagoRequest('/v1/payments', [
+            $payload = [
                 'transaction_amount' => $amount,
                 'description' => $description,
                 'payment_method_id' => 'pix',
@@ -451,7 +492,9 @@ try {
                     'first_name' => explode(' ', trim((string) $row['nome']))[0] ?? $row['nome'],
                 ],
                 'external_reference' => 'usuario-' . (int) $row['id'],
-            ], 'pix-user-' . (int) $row['id'] . '-' . time());
+            ];
+            if ($notificationUrl !== '') $payload['notification_url'] = $notificationUrl;
+            $payment = $mercadoPagoRequest('/v1/payments', $payload, 'pix-user-' . (int) $row['id'] . '-' . time());
             $pdo->prepare('UPDATE usuarios SET mercado_pago_last_payment_id=? WHERE id=?')->execute([(string) ($payment['id'] ?? ''), (int) $row['id']]);
             return [
                 'ok' => true,
@@ -476,6 +519,7 @@ try {
             ],
             'status' => 'pending',
         ];
+        if ($notificationUrl !== '') $payload['notification_url'] = $notificationUrl;
         $backUrl = $validBackUrl((string) ($mpSettings['success_url'] ?? ''));
         $payload['back_url'] = $backUrl !== '' ? $backUrl : 'https://www.mercadopago.com.br';
         $subscription = $mercadoPagoRequest('/preapproval', $payload);
@@ -489,21 +533,30 @@ try {
             'message' => 'Link para cadastrar cartao gerado com sucesso.',
         ];
     };
-    $activatePaidUser = static function (int $userId, string $paymentId = '', string $subscriptionId = '') use ($pdo, $nextBillingDate): array {
+    $activatePaidUser = static function (int $userId, string $paymentId = '', string $subscriptionId = '', ?string $paidDate = null, ?string $remoteNextDueDate = null) use ($pdo, $nextBillingDate): array {
         $query = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,billing_plan,billing_cycle,billing_cycle_id,billing_amount,billing_next_due_date,(SELECT month_count FROM billing_cycles bc WHERE bc.id=usuarios.billing_cycle_id LIMIT 1) AS billing_cycle_months FROM usuarios WHERE id=? LIMIT 1");
         $query->execute([$userId]);
         $row = $query->fetch(PDO::FETCH_ASSOC);
         if (!$row) throw new RuntimeException('Usuario da cobranca nao encontrado.');
         $previousDue = $row['billing_next_due_date'] ?? null;
         $cycleMonths = max(1, (int) ($row['billing_cycle_months'] ?? (($row['billing_cycle'] ?? 'monthly') === 'annual' ? 12 : 1)));
-        $nextDue = $nextBillingDate($cycleMonths, $row['billing_next_due_date'] ?? null);
+        $nextDue = $remoteNextDueDate ?: $nextBillingDate($cycleMonths, $row['billing_next_due_date'] ?? ($paidDate ?: null));
         $update = $pdo->prepare("UPDATE usuarios SET ativo=1,billing_status='active',billing_next_due_date=?,mercado_pago_last_payment_id=COALESCE(NULLIF(?,''),mercado_pago_last_payment_id),mercado_pago_subscription_id=COALESCE(NULLIF(?,''),mercado_pago_subscription_id) WHERE id=?");
         $update->execute([$nextDue, $paymentId, $subscriptionId, $userId]);
-        $insertPayment = $pdo->prepare("INSERT INTO billing_payments (usuario_id,type,status,amount,due_date,paid_at,description,external_id) VALUES (?,?,?,?,?,NOW(),?,?)");
-        $insertPayment->execute([$userId, 'mercado_pago', 'approved', (float) ($row['billing_amount'] ?? 0), $previousDue ?: date('Y-m-d'), (string) ($row['billing_plan'] ?? 'Plano Ai Prof'), $paymentId ?: $subscriptionId]);
+        $externalId = $paymentId ?: $subscriptionId;
+        $exists = 0;
+        if ($externalId !== '') {
+            $check = $pdo->prepare("SELECT id FROM billing_payments WHERE usuario_id=? AND external_id=? AND status='approved' LIMIT 1");
+            $check->execute([$userId, $externalId]);
+            $exists = (int) $check->fetchColumn();
+        }
+        if ($exists <= 0) {
+            $insertPayment = $pdo->prepare("INSERT INTO billing_payments (usuario_id,type,status,amount,due_date,paid_at,description,external_id) VALUES (?,?,?,?,?,NOW(),?,?)");
+            $insertPayment->execute([$userId, 'mercado_pago', 'approved', (float) ($row['billing_amount'] ?? 0), $previousDue ?: date('Y-m-d'), (string) ($row['billing_plan'] ?? 'Plano Ai Prof'), $externalId]);
+        }
         return ['ok' => true, 'status' => 'active', 'nextDueDate' => $nextDue, 'message' => 'Pagamento confirmado. Acesso liberado.'];
     };
-    $confirmMercadoPagoReturn = static function (array $input) use ($mercadoPagoRequest, $activatePaidUser, $pdo): array {
+    $confirmMercadoPagoReturn = static function (array $input) use ($mercadoPagoRequest, $activatePaidUser, $mercadoPagoPaidDate, $mercadoPagoNextDueDate, $pdo): array {
         $paymentId = trim((string) ($input['payment_id'] ?? $input['collection_id'] ?? $input['id'] ?? ''));
         $preapprovalId = trim((string) ($input['preapproval_id'] ?? ''));
         if ($paymentId !== '') {
@@ -518,7 +571,7 @@ try {
                 $userId = (int) $find->fetchColumn();
             }
             if ($userId <= 0) throw new RuntimeException('Usuario do pagamento nao localizado.');
-            return $activatePaidUser($userId, $paymentId, '');
+            return $activatePaidUser($userId, $paymentId, '', $mercadoPagoPaidDate($payment), $mercadoPagoNextDueDate($payment));
         }
         if ($preapprovalId !== '') {
             $subscription = $mercadoPagoRequest('/preapproval/' . rawurlencode($preapprovalId), [], '', 'GET');
@@ -532,9 +585,110 @@ try {
                 $userId = (int) $find->fetchColumn();
             }
             if ($userId <= 0) throw new RuntimeException('Usuario da assinatura nao localizado.');
-            return $activatePaidUser($userId, '', $preapprovalId);
+            return $activatePaidUser($userId, '', $preapprovalId, $mercadoPagoPaidDate($subscription), $mercadoPagoNextDueDate($subscription));
         }
         throw new RuntimeException('Retorno do Mercado Pago sem identificador de pagamento.');
+    };
+    $extractMercadoPagoDataId = static function (array $input, array $body): string {
+        $candidates = [
+            $input['data_id'] ?? null,
+            $input['data.id'] ?? null,
+            $input['id'] ?? null,
+            $body['data']['id'] ?? null,
+            $body['id'] ?? null,
+        ];
+        foreach ($candidates as $candidate) {
+            $value = trim((string) $candidate);
+            if ($value !== '') return $value;
+        }
+        return '';
+    };
+    $validateMercadoPagoWebhookSignature = static function (string $dataId) use ($getMercadoPagoSettings): void {
+        $settings = $getMercadoPagoSettings();
+        $secret = (string) ($settings['webhook_secret'] ?? '');
+        if ($secret === '') return;
+        $signatureHeader = (string) ($_SERVER['HTTP_X_SIGNATURE'] ?? '');
+        $requestId = (string) ($_SERVER['HTTP_X_REQUEST_ID'] ?? '');
+        if ($signatureHeader === '' || $requestId === '' || $dataId === '') {
+            http_response_code(401);
+            throw new RuntimeException('Webhook Mercado Pago sem assinatura valida.');
+        }
+        $parts = [];
+        foreach (explode(',', $signatureHeader) as $piece) {
+            [$key, $value] = array_pad(explode('=', trim($piece), 2), 2, '');
+            if ($key !== '') $parts[$key] = $value;
+        }
+        $ts = (string) ($parts['ts'] ?? '');
+        $v1 = (string) ($parts['v1'] ?? '');
+        if ($ts === '' || $v1 === '') {
+            http_response_code(401);
+            throw new RuntimeException('Assinatura Mercado Pago incompleta.');
+        }
+        $manifest = 'id:' . $dataId . ';request-id:' . $requestId . ';ts:' . $ts . ';';
+        $expected = hash_hmac('sha256', $manifest, $secret);
+        if (!hash_equals($expected, $v1)) {
+            http_response_code(401);
+            throw new RuntimeException('Assinatura Mercado Pago invalida.');
+        }
+    };
+    $resolveMercadoPagoUserId = static function (array $payload, string $externalId = '', string $subscriptionId = '') use ($pdo): int {
+        $reference = (string) ($payload['external_reference'] ?? $payload['externalReference'] ?? '');
+        if ($reference !== '' && preg_match('/usuario-(\d+)/', $reference, $match)) return (int) $match[1];
+        if ($externalId !== '') {
+            $find = $pdo->prepare('SELECT id FROM usuarios WHERE mercado_pago_last_payment_id=? LIMIT 1');
+            $find->execute([$externalId]);
+            $userId = (int) $find->fetchColumn();
+            if ($userId > 0) return $userId;
+        }
+        $subscription = $subscriptionId ?: (string) ($payload['preapproval_id'] ?? $payload['preapprovalId'] ?? $payload['subscription_id'] ?? '');
+        if ($subscription !== '') {
+            $find = $pdo->prepare('SELECT id FROM usuarios WHERE mercado_pago_subscription_id=? LIMIT 1');
+            $find->execute([$subscription]);
+            $userId = (int) $find->fetchColumn();
+            if ($userId > 0) return $userId;
+        }
+        return 0;
+    };
+    $handleMercadoPagoWebhook = static function (array $input, array $body) use ($mercadoPagoRequest, $activatePaidUser, $mercadoPagoPaidDate, $mercadoPagoNextDueDate, $extractMercadoPagoDataId, $validateMercadoPagoWebhookSignature, $resolveMercadoPagoUserId): array {
+        $dataId = $extractMercadoPagoDataId($input, $body);
+        $validateMercadoPagoWebhookSignature($dataId);
+        $topic = (string) ($input['topic'] ?? $input['type'] ?? $body['topic'] ?? $body['type'] ?? '');
+        if ($topic === '' && !empty($body['action'])) $topic = strtok((string) $body['action'], '.');
+        if ($dataId === '') return ['ok' => true, 'ignored' => true, 'reason' => 'missing-data-id'];
+
+        if (in_array($topic, ['payment', 'payments'], true)) {
+            $payment = $mercadoPagoRequest('/v1/payments/' . rawurlencode($dataId), [], '', 'GET');
+            $status = (string) ($payment['status'] ?? '');
+            if (!in_array($status, ['approved', 'accredited'], true)) return ['ok' => true, 'status' => $status];
+            $userId = $resolveMercadoPagoUserId($payment, $dataId, '');
+            if ($userId <= 0) return ['ok' => true, 'ignored' => true, 'reason' => 'user-not-found'];
+            return $activatePaidUser($userId, $dataId, '', $mercadoPagoPaidDate($payment), $mercadoPagoNextDueDate($payment));
+        }
+
+        if ($topic === 'subscription_preapproval') {
+            $subscription = $mercadoPagoRequest('/preapproval/' . rawurlencode($dataId), [], '', 'GET');
+            $status = (string) ($subscription['status'] ?? '');
+            if (!in_array($status, ['authorized', 'active'], true)) return ['ok' => true, 'status' => $status];
+            $userId = $resolveMercadoPagoUserId($subscription, '', $dataId);
+            if ($userId <= 0) return ['ok' => true, 'ignored' => true, 'reason' => 'user-not-found'];
+            return $activatePaidUser($userId, '', $dataId, $mercadoPagoPaidDate($subscription), $mercadoPagoNextDueDate($subscription));
+        }
+
+        if ($topic === 'subscription_authorized_payment') {
+            $authorized = $mercadoPagoRequest('/authorized_payments/' . rawurlencode($dataId), [], '', 'GET');
+            $status = (string) ($authorized['status'] ?? '');
+            if (!in_array($status, ['approved', 'accredited', 'processed'], true)) return ['ok' => true, 'status' => $status];
+            $subscriptionId = (string) ($authorized['preapproval_id'] ?? $authorized['preapprovalId'] ?? '');
+            $userId = $resolveMercadoPagoUserId($authorized, $dataId, $subscriptionId);
+            if ($userId <= 0 && $subscriptionId !== '') {
+                $subscription = $mercadoPagoRequest('/preapproval/' . rawurlencode($subscriptionId), [], '', 'GET');
+                $userId = $resolveMercadoPagoUserId($subscription, '', $subscriptionId);
+            }
+            if ($userId <= 0) return ['ok' => true, 'ignored' => true, 'reason' => 'user-not-found'];
+            return $activatePaidUser($userId, $dataId, $subscriptionId, $mercadoPagoPaidDate($authorized), $mercadoPagoNextDueDate($authorized));
+        }
+
+        return ['ok' => true, 'ignored' => true, 'topic' => $topic ?: 'unknown'];
     };
     $canUseEditor = static function (string $requested, array $user): bool {
         if ($requested === '' || $requested === 'none') return true;
@@ -613,6 +767,13 @@ try {
     $resource = $_GET['resource'] ?? '';
     if ($resource === 'billing-return' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         echo json_encode($confirmMercadoPagoReturn($_GET), JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($resource === 'mercado-pago-webhook' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $rawWebhookBody = file_get_contents('php://input');
+        $webhookBody = json_decode((string) $rawWebhookBody, true);
+        if (!is_array($webhookBody)) $webhookBody = [];
+        echo json_encode($handleMercadoPagoWebhook($_GET, $webhookBody), JSON_UNESCAPED_UNICODE);
         exit;
     }
     if ($resource === 'billing-public' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -1297,6 +1458,10 @@ try {
             $query = $pdo->prepare("SELECT p.id,p.crianca_id,c.nome,c.data_nascimento,c.turma_id,p.texto,p.usar_texto_final,p.texto_final,p.tipo_documento,p.status,p.updated_at FROM pareceres p JOIN criancas c ON c.id=p.crianca_id WHERE p.id=? AND c.usuario_id=? ORDER BY p.updated_at DESC");
             $query->execute([$detailId, $ownerId]);
             $rows = $query->fetchAll(PDO::FETCH_ASSOC);
+        } elseif ($summary) {
+            $query = $pdo->prepare("SELECT p.id,p.crianca_id,c.nome,c.data_nascimento,c.turma_id,'' AS texto,0 AS usar_texto_final,'' AS texto_final,p.tipo_documento,p.status,p.updated_at,COUNT(pa.atividade_id) AS activity_count FROM pareceres p JOIN criancas c ON c.id=p.crianca_id LEFT JOIN parecer_atividades pa ON pa.parecer_id=p.id WHERE c.usuario_id=? GROUP BY p.id,p.crianca_id,c.nome,c.data_nascimento,c.turma_id,p.tipo_documento,p.status,p.updated_at ORDER BY p.updated_at DESC");
+            $query->execute([$ownerId]);
+            $rows = $query->fetchAll(PDO::FETCH_ASSOC);
         } else {
             $query = $pdo->prepare("SELECT p.id,p.crianca_id,c.nome,c.data_nascimento,c.turma_id,p.texto,p.usar_texto_final,p.texto_final,p.tipo_documento,p.status,p.updated_at FROM pareceres p JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=? ORDER BY p.updated_at DESC");
             $query->execute([$ownerId]);
@@ -1305,7 +1470,7 @@ try {
         $activityQuery=$pdo->prepare('SELECT atividade_id FROM parecer_atividades WHERE parecer_id=?');
         $blockQuery=$pdo->prepare('SELECT ordem,texto,activity_ids FROM parecer_blocos WHERE parecer_id=? ORDER BY ordem,id');
         $attachmentQuery=$summary?null:$pdo->prepare('SELECT ordem,contexto,arquivo,mime_type FROM parecer_anexos WHERE parecer_id=? ORDER BY ordem,id');
-        $result=[]; foreach($rows as $row){$activityQuery->execute([$row['id']]);$activityIds=array_map('intval',$activityQuery->fetchAll(PDO::FETCH_COLUMN));$blockQuery->execute([$row['id']]);$entries=[];foreach($blockQuery->fetchAll(PDO::FETCH_ASSOC) as $block){$ids=json_decode((string)($block['activity_ids']??'[]'),true);$entries[(int)$block['ordem']]=['activityIds'=>is_array($ids)?array_map('intval',$ids):[],'photoNote'=>(string)($block['texto']??''),'photos'=>[]];}if(!$summary&&$attachmentQuery){$attachmentQuery->execute([$row['id']]);foreach($attachmentQuery->fetchAll(PDO::FETCH_ASSOC) as $file){$key=(int)($file['ordem']??0);if(!isset($entries[$key]))$entries[$key]=['activityIds'=>[],'photoNote'=>(string)($file['contexto']??''),'photos'=>[]];$entries[$key]['photos'][]='data:'.$file['mime_type'].';base64,'.base64_encode($file['arquivo']);}}ksort($entries);$result[]=['id'=>(int)$row['id'],'databaseId'=>(int)$row['id'],'studentId'=>'db-'.$row['crianca_id'],'name'=>$row['nome'],'birthDate'=>$row['data_nascimento'],'classId'=>(int)$row['turma_id'],'text'=>$row['texto'],'useFinalText'=>(bool)($row['usar_texto_final']??0),'finalText'=>(string)($row['texto_final']??''),'documentType'=>$row['tipo_documento']==='portfolio'?'portfolio':'parecer','activityIds'=>$activityIds,'entries'=>array_values($entries),'hasFullData'=>!$summary,'status'=>$row['status']==='concluido'?'done':'draft','deliveredAt'=>$row['status']==='concluido'?$row['updated_at']:null];}
+        $result=[]; foreach($rows as $row){$activityIds=[];$entries=[];if($summary){$activityIds=array_fill(0,max(0,(int)($row['activity_count']??0)),0);}else{$activityQuery->execute([$row['id']]);$activityIds=array_map('intval',$activityQuery->fetchAll(PDO::FETCH_COLUMN));$blockQuery->execute([$row['id']]);foreach($blockQuery->fetchAll(PDO::FETCH_ASSOC) as $block){$ids=json_decode((string)($block['activity_ids']??'[]'),true);$entries[(int)$block['ordem']]=['activityIds'=>is_array($ids)?array_map('intval',$ids):[],'photoNote'=>(string)($block['texto']??''),'photos'=>[]];}if($attachmentQuery){$attachmentQuery->execute([$row['id']]);foreach($attachmentQuery->fetchAll(PDO::FETCH_ASSOC) as $file){$key=(int)($file['ordem']??0);if(!isset($entries[$key]))$entries[$key]=['activityIds'=>[],'photoNote'=>(string)($file['contexto']??''),'photos'=>[]];$entries[$key]['photos'][]='data:'.$file['mime_type'].';base64,'.base64_encode($file['arquivo']);}}}ksort($entries);$result[]=['id'=>(int)$row['id'],'databaseId'=>(int)$row['id'],'studentId'=>'db-'.$row['crianca_id'],'name'=>$row['nome'],'birthDate'=>$row['data_nascimento'],'classId'=>(int)$row['turma_id'],'text'=>$row['texto'],'useFinalText'=>(bool)($row['usar_texto_final']??0),'finalText'=>(string)($row['texto_final']??''),'documentType'=>$row['tipo_documento']==='portfolio'?'portfolio':'parecer','activityIds'=>$activityIds,'entries'=>array_values($entries),'hasFullData'=>!$summary,'status'=>$row['status']==='concluido'?'done':'draft','deliveredAt'=>$row['status']==='concluido'?$row['updated_at']:null];}
         echo json_encode($result, JSON_UNESCAPED_UNICODE);
         exit;
     }

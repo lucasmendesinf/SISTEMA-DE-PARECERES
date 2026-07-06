@@ -10,6 +10,31 @@
     });
   }
 
+  function loadImage(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
+
+  async function normalizeImageDataUrl(dataUrl, maxSide = 1800) {
+    const img = await loadImage(dataUrl);
+    const width = img.naturalWidth || img.width;
+    const height = img.naturalHeight || img.height;
+    if (!width || !height || Math.max(width, height) <= maxSide) return dataUrl;
+    const scale = maxSide / Math.max(width, height);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.88);
+  }
+
   function chooseMode(modes) {
     if (!modes.length) return Promise.resolve('none');
     if (modes.includes('manual')) return Promise.resolve('manual');
@@ -58,7 +83,7 @@
     editorMode.last = mode;
     const output = [];
     for (const file of list) {
-      const dataUrl = await fileAsDataUrl(file);
+      const dataUrl = await normalizeImageDataUrl(await fileAsDataUrl(file));
       output.push(await editDataUrl(dataUrl, mode));
     }
     return {photos: output, mode};
@@ -73,7 +98,7 @@
     editorMode.last = mode;
     const output = [];
     for (const dataUrl of list) {
-      output.push(await editDataUrl(dataUrl, mode));
+      output.push(await editDataUrl(await normalizeImageDataUrl(dataUrl), mode));
     }
     return {photos: output, mode};
   }

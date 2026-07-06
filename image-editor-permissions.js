@@ -4,9 +4,13 @@
 
   async function init() {
     try {
-      const response = await fetch('api.php?resource=auth');
-      const user = await response.json();
-      if (!response.ok) throw new Error(user.error || 'Falha ao carregar permissoes.');
+      let user = window.PortalCurrentUser || null;
+      if (!user && window.PortalCurrentUserPromise) user = await window.PortalCurrentUserPromise;
+      if (!user) {
+        const response = await fetch('api.php?resource=auth');
+        user = await response.json();
+        if (!response.ok) throw new Error(user.error || 'Falha ao carregar permissoes.');
+      }
       state.user = user;
       state.permission = allowed.includes(user.imageEditorPermission) ? user.imageEditorPermission : 'none';
     } catch (error) {

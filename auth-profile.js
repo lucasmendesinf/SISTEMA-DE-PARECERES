@@ -455,6 +455,12 @@
   }
 
   async function init() {
+    if (window.PortalBootstrapUser) {
+      user = window.PortalBootstrapUser;
+      window.PortalCurrentUser = user;
+      document.body.dataset.role = user.role || 'cliente';
+      updateChrome();
+    }
     window.PortalCurrentUserPromise = window.PortalCurrentUserPromise || request();
     try { user = await window.PortalCurrentUserPromise; } catch (_) { return; }
     window.PortalCurrentUser = user;

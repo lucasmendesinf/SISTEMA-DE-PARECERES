@@ -349,7 +349,8 @@
 
   async function init() {
     let user = null;
-    try { user = await request(authApi); } catch (_) { return; }
+    window.PortalCurrentUserPromise = window.PortalCurrentUserPromise || request(authApi);
+    try { user = await window.PortalCurrentUserPromise; } catch (_) { return; }
     if (user.role !== 'master') return;
     ensureFinanceView();
     ensureFinanceNav();

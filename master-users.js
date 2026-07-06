@@ -373,7 +373,8 @@
   }
 
   async function init() {
-    try { currentUser = await request(authApi); } catch (_) { return; }
+    window.PortalCurrentUserPromise = window.PortalCurrentUserPromise || request(authApi);
+    try { currentUser = await window.PortalCurrentUserPromise; } catch (_) { return; }
     applyClientPermissions();
     if (currentUser.role !== 'master') return;
     ensureUsersView();

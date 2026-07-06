@@ -40,6 +40,14 @@
     "'": '&#39;',
     '"': '&quot;'
   }[char]));
+  const phoneDigits = value => String(value || '').replace(/\D/g, '').slice(0, 11);
+  const formatPhone = value => {
+    const digits = phoneDigits(value);
+    if (digits.length <= 2) return digits ? `(${digits}` : '';
+    if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  };
 
   async function request(url, options = {}) {
     const response = await fetch(url, options);
@@ -229,7 +237,7 @@
       <div id="portalUserForm" class="form-grid">
         <div class="field"><label>Nome completo</label><input name="name" required value="${escapeHtml(user?.name)}" autofocus></div>
         <div class="field"><label>E-mail</label><input name="email" type="email" required value="${escapeHtml(user?.email)}"></div>
-        <div class="field"><label>Telefone</label><input name="phone" type="tel" value="${escapeHtml(user?.phone)}"></div>
+        <div class="field"><label>Telefone</label><input name="phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="15" pattern="\\([0-9]{2}\\) [0-9]{4,5}-[0-9]{4}" value="${escapeHtml(formatPhone(user?.phone))}" placeholder="(00) 00000-0000"></div>
         <div class="field"><label>${editing ? 'Nova senha' : 'Senha inicial'}</label><input name="password" type="password" ${editing ? '' : 'required'} minlength="6" placeholder="${editing ? 'Preencha apenas se quiser alterar' : 'Minimo de 6 caracteres'}"></div>
         <div class="form-grid two-columns">
           <div class="field"><label>Tipo de login</label><select name="role"><option value="cliente" ${user?.role === 'master' ? '' : 'selected'}>Cliente</option><option value="master" ${user?.role === 'master' ? 'selected' : ''}>Master</option></select></div>
@@ -283,6 +291,9 @@
     cycleSelect.addEventListener('change', syncCycle);
     syncCycle();
     const role = form.querySelector('[name="role"]');
+    const phoneInput = form.querySelector('[name="phone"]');
+    phoneInput.addEventListener('input', () => { phoneInput.value = formatPhone(phoneInput.value); });
+    phoneInput.addEventListener('paste', () => setTimeout(() => { phoneInput.value = formatPhone(phoneInput.value); }, 0));
     const permissionsField = content.querySelector('.permissions-field');
     const syncRole = () => { permissionsField.hidden = role.value === 'master'; };
     role.addEventListener('change', syncRole);
@@ -299,7 +310,7 @@
       id,
       name: form.querySelector('[name="name"]').value,
       email: form.querySelector('[name="email"]').value,
-      phone: form.querySelector('[name="phone"]').value,
+      phone: formatPhone(form.querySelector('[name="phone"]').value),
       password: form.querySelector('[name="password"]').value,
       role: form.querySelector('[name="role"]').value,
       active: form.querySelector('[name="active"]').checked,

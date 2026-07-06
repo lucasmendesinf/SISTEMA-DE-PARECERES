@@ -103,7 +103,7 @@ if (empty($_SESSION['user_id'])) {
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
   <script src="auth-profile.js?v=20260705-billing-cycles-1"></script>
   <script src="onboarding.js?v=20260703-initial-setup-lock-1"></script>
-  <script src="master-users.js?v=20260706-phone-mask-1"></script>
+  <script src="master-users.js?v=20260706-user-reset-1"></script>
   <script src="finance-admin.js?v=20260705-billing-cycles-1"></script>
   <script src="image-editor-permissions.js?v=20260702-combined-image-editor-1"></script>
   <script src="manual-image-editor.js?v=20260706-crop-hidden-canvas-1"></script>

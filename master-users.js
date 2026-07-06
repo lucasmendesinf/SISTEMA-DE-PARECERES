@@ -1,6 +1,7 @@
 (() => {
   const authApi = 'api.php?resource=auth';
   const usersApi = 'api.php?resource=users';
+  const resetUserApi = 'api.php?resource=user-reset';
   const billingCyclesApi = 'api.php?resource=billing-cycles';
   const labels = {
     alunos: 'Alunos',
@@ -196,6 +197,7 @@
         <span class="status ${user.role === 'master' ? 'done' : ''}">${user.role === 'master' ? 'Master' : 'Cliente'}</span>
         <div class="actions">
           <button class="secondary" type="button" data-edit-user="${user.id}">Editar</button>
+          ${user.role === 'cliente' ? `<button class="secondary danger" type="button" data-reset-user="${user.id}">Resetar dados</button>` : ''}
           ${user.id === usersState.currentUserId ? '' : `<button class="secondary danger" type="button" data-delete-user="${user.id}">Excluir</button>`}
         </div>
       </article>`).join('') || '<p class="muted">Nenhum usuario cadastrado.</p>';
@@ -204,6 +206,9 @@
     });
     list.querySelectorAll('[data-delete-user]').forEach(button => {
       button.addEventListener('click', () => deleteUser(Number(button.dataset.deleteUser)));
+    });
+    list.querySelectorAll('[data-reset-user]').forEach(button => {
+      button.addEventListener('click', () => resetUser(Number(button.dataset.resetUser)));
     });
   }
 
@@ -350,6 +355,20 @@
   async function deleteUser(id) {
     if (!confirm('Excluir este usuario de acesso?')) return;
     await request(`${usersApi}&id=${id}`, {method: 'DELETE'});
+    await loadUsers();
+  }
+
+  async function resetUser(id) {
+    const user = usersState.users.find(item => Number(item.id) === Number(id));
+    if (!user || user.role !== 'cliente') return;
+    const typed = prompt(`Esta acao vai apagar os dados iniciais, escola, periodos, turmas, alunos, atividades, pareceres e portfolios de ${user.name}. O login, senha, permissoes e cobranca serao mantidos.\n\nDigite RESETAR para confirmar.`);
+    if (typed !== 'RESETAR') return;
+    await request(resetUserApi, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({userId: id})
+    });
+    alert('Dados resetados. No proximo login, este usuario fara o cadastro inicial novamente.');
     await loadUsers();
   }
 

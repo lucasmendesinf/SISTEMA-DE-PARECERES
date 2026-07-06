@@ -1272,6 +1272,43 @@ try {
         http_response_code(405);
         throw new RuntimeException('Metodo nao permitido.');
     }
+    if ($resource === 'user-reset') {
+        $requireMaster();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            throw new RuntimeException('Metodo nao permitido.');
+        }
+        $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+        $userId = (int) ($input['userId'] ?? 0);
+        if ($userId <= 0) throw new RuntimeException('Usuario invalido para reset.');
+        $userQuery = $pdo->prepare("SELECT id,nome,perfil FROM usuarios WHERE id=? LIMIT 1");
+        $userQuery->execute([$userId]);
+        $resetUser = $userQuery->fetch(PDO::FETCH_ASSOC);
+        if (!$resetUser) throw new RuntimeException('Usuario nao encontrado.');
+        if (($resetUser['perfil'] ?? 'cliente') === 'master') throw new RuntimeException('Nao e permitido resetar um login master.');
+
+        $pdo->beginTransaction();
+        $reportWhere = 'FROM pareceres p JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=?';
+        $deleteReportLinks = [
+            "DELETE pa FROM parecer_anexos pa JOIN pareceres p ON p.id=pa.parecer_id JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=?",
+            "DELETE pb FROM parecer_blocos pb JOIN pareceres p ON p.id=pb.parecer_id JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=?",
+            "DELETE pav FROM parecer_atividades pav JOIN pareceres p ON p.id=pav.parecer_id JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=?",
+        ];
+        foreach ($deleteReportLinks as $sql) {
+            $pdo->prepare($sql)->execute([$userId]);
+        }
+        $pdo->prepare("DELETE p {$reportWhere}")->execute([$userId]);
+        $pdo->prepare("DELETE af FROM atividade_fotos af JOIN atividades a ON a.id=af.atividade_id WHERE a.usuario_id=?")->execute([$userId]);
+        $pdo->prepare('DELETE FROM atividades WHERE usuario_id=?')->execute([$userId]);
+        $pdo->prepare('DELETE FROM criancas WHERE usuario_id=?')->execute([$userId]);
+        $pdo->prepare('DELETE FROM turmas WHERE usuario_id=?')->execute([$userId]);
+        $pdo->prepare('DELETE FROM periodos_avaliativos WHERE usuario_id=?')->execute([$userId]);
+        $pdo->prepare('DELETE FROM app_settings WHERE setting_key=?')->execute(['header_settings_' . $userId]);
+        $pdo->commit();
+
+        echo json_encode(['ok' => true, 'message' => 'Dados iniciais resetados para ' . (string) $resetUser['nome'] . '.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     $requirePermission($resource);
     $loggedUser = $loadCurrentUser();
     if (!empty($loggedUser['billing_lock'])) {

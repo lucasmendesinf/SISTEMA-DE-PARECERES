@@ -21,6 +21,24 @@ function sanitizeHexColor(string $color, string $fallback = '253C31'): string
     return preg_match('/^[0-9A-F]{6}$/', $color) ? $color : $fallback;
 }
 
+function ensureRunFonts(DOMDocument $document, DOMElement $properties, string $fontName): void
+{
+    $wordNs = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    $xpath = new DOMXPath($document);
+    $xpath->registerNamespace('w', $wordNs);
+    $fonts = $xpath->query('./w:rFonts', $properties)->item(0);
+    if (!$fonts) {
+        $fonts = $document->createElementNS($wordNs, 'w:rFonts');
+        $properties->insertBefore($fonts, $properties->firstChild);
+    }
+    foreach (['ascii', 'hAnsi', 'eastAsia', 'cs'] as $type) {
+        $fonts->setAttributeNS($wordNs, 'w:' . $type, $fontName);
+    }
+    foreach (['asciiTheme', 'hAnsiTheme', 'eastAsiaTheme', 'csTheme'] as $themeAttribute) {
+        $fonts->removeAttributeNS($wordNs, $themeAttribute);
+    }
+}
+
 function paragraph(DOMDocument $document, string $value, array $options = []): DOMElement
 {
     $w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -44,13 +62,8 @@ function paragraph(DOMDocument $document, string $value, array $options = []): D
     $p->appendChild($pPr);
     $run = $document->createElementNS($w, 'w:r');
     $rPr = $document->createElementNS($w, 'w:rPr');
-    $fonts = $document->createElementNS($w, 'w:rFonts');
     $fontFamily = $options['font'] ?? ($GLOBALS['documentFont'] ?? 'Arial');
-    $fonts->setAttributeNS($w, 'w:ascii', $fontFamily);
-    $fonts->setAttributeNS($w, 'w:hAnsi', $fontFamily);
-    $fonts->setAttributeNS($w, 'w:eastAsia', $fontFamily);
-    $fonts->setAttributeNS($w, 'w:cs', $fontFamily);
-    $rPr->appendChild($fonts);
+    ensureRunFonts($document, $rPr, $fontFamily);
     $size = $document->createElementNS($w, 'w:sz');
     $size->setAttributeNS($w, 'w:val', (string) ($options['size'] ?? 24));
     $rPr->appendChild($size);
@@ -144,18 +157,32 @@ function forceFontInDocxPackage(ZipArchive $zip, string $fontName): void
         if ($styles->loadXML($stylesXml)) {
             $xpath = new DOMXPath($styles);
             $xpath->registerNamespace('w', $wordNs);
+            $docDefaults = $xpath->query('/w:styles/w:docDefaults')->item(0);
+            if (!$docDefaults) {
+                $docDefaults = $styles->createElementNS($wordNs, 'w:docDefaults');
+                $styles->documentElement->insertBefore($docDefaults, $styles->documentElement->firstChild);
+            }
+            $rPrDefault = $xpath->query('./w:rPrDefault', $docDefaults)->item(0);
+            if (!$rPrDefault) {
+                $rPrDefault = $styles->createElementNS($wordNs, 'w:rPrDefault');
+                $docDefaults->appendChild($rPrDefault);
+            }
+            $defaultRunProperties = $xpath->query('./w:rPr', $rPrDefault)->item(0);
+            if (!$defaultRunProperties) {
+                $defaultRunProperties = $styles->createElementNS($wordNs, 'w:rPr');
+                $rPrDefault->appendChild($defaultRunProperties);
+            }
+            ensureRunFonts($styles, $defaultRunProperties, $fontName);
+            foreach ($xpath->query('//w:style') as $style) {
+                $properties = $xpath->query('./w:rPr', $style)->item(0);
+                if (!$properties) {
+                    $properties = $styles->createElementNS($wordNs, 'w:rPr');
+                    $style->appendChild($properties);
+                }
+                ensureRunFonts($styles, $properties, $fontName);
+            }
             foreach ($xpath->query('//w:rPr') as $properties) {
-                $fonts = $xpath->query('./w:rFonts', $properties)->item(0);
-                if (!$fonts) {
-                    $fonts = $styles->createElementNS($wordNs, 'w:rFonts');
-                    $properties->insertBefore($fonts, $properties->firstChild);
-                }
-                foreach (['ascii', 'hAnsi', 'eastAsia', 'cs'] as $type) {
-                    $fonts->setAttributeNS($wordNs, 'w:' . $type, $fontName);
-                }
-                foreach (['asciiTheme', 'hAnsiTheme', 'eastAsiaTheme', 'cstheme'] as $themeAttribute) {
-                    $fonts->removeAttributeNS($wordNs, $themeAttribute);
-                }
+                ensureRunFonts($styles, $properties, $fontName);
             }
             $zip->addFromString('word/styles.xml', $styles->saveXML());
         }
@@ -190,6 +217,70 @@ function forceFontInDocxPackage(ZipArchive $zip, string $fontName): void
                 $fontTable->documentElement?->appendChild($font);
             }
             $zip->addFromString('word/fontTable.xml', $fontTable->saveXML());
+        }
+    }
+
+    $partNames = [];
+    for ($index = 0; $index < $zip->numFiles; $index++) {
+        $name = $zip->statIndex($index)['name'] ?? '';
+        if (preg_match('#^word/(header|footer|footnotes|endnotes|comments)\d*\.xml$#', $name)) {
+            $partNames[] = $name;
+        }
+    }
+    foreach ($partNames as $partName) {
+        $partXml = $zip->getFromName($partName);
+        if ($partXml === false) continue;
+        $part = new DOMDocument('1.0', 'UTF-8');
+        $part->preserveWhiteSpace = false;
+        if (!$part->loadXML($partXml)) continue;
+        forceFontInDocumentPart($part, $fontName);
+        $zip->addFromString($partName, $part->saveXML());
+    }
+}
+
+function removeWordProtectionFromPackage(ZipArchive $zip): void
+{
+    $wordNs = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    foreach (['word/settings.xml'] as $partName) {
+        $xml = $zip->getFromName($partName);
+        if ($xml === false) continue;
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $document->preserveWhiteSpace = false;
+        if (!$document->loadXML($xml)) continue;
+        $xpath = new DOMXPath($document);
+        $xpath->registerNamespace('w', $wordNs);
+        foreach (['//w:documentProtection', '//w:writeProtection', '//w:permStart', '//w:permEnd', '//w:lock'] as $query) {
+            foreach (iterator_to_array($xpath->query($query)) as $node) {
+                $node->parentNode?->removeChild($node);
+            }
+        }
+        $zip->addFromString($partName, $document->saveXML());
+    }
+}
+
+function forceFontInDocumentPart(DOMDocument $document, string $fontName): void
+{
+    $wordNs = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    $xpath = new DOMXPath($document);
+    $xpath->registerNamespace('w', $wordNs);
+    foreach ($xpath->query('//w:r') as $run) {
+        $properties = $xpath->query('./w:rPr', $run)->item(0);
+        if (!$properties) {
+            $properties = $document->createElementNS($wordNs, 'w:rPr');
+            $run->insertBefore($properties, $run->firstChild);
+        }
+        ensureRunFonts($document, $properties, $fontName);
+    }
+}
+
+function removeWordProtectionFromDocumentPart(DOMDocument $document): void
+{
+    $wordNs = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    $xpath = new DOMXPath($document);
+    $xpath->registerNamespace('w', $wordNs);
+    foreach (['//w:permStart', '//w:permEnd', '//w:lock'] as $query) {
+        foreach (iterator_to_array($xpath->query($query)) as $node) {
+            $node->parentNode?->removeChild($node);
         }
     }
 }
@@ -235,6 +326,7 @@ if ($zip->open($outPath) !== true) {
 }
 
 // Força Arial como padrão do documento, inclusive em estilos herdados do modelo.
+removeWordProtectionFromPackage($zip);
 forceFontInDocxPackage($zip, $documentFont);
 
 $xml = $zip->getFromName('word/document.xml');
@@ -307,6 +399,8 @@ if ($sectionCopy) {
     }
     $body->appendChild($sectionCopy);
 }
+removeWordProtectionFromDocumentPart($document);
+forceFontInDocumentPart($document, $documentFont);
 $zip->addFromString('word/document.xml', $document->saveXML());
 $zip->close();
 

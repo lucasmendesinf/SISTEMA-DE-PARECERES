@@ -49,6 +49,7 @@
         school: $('#headerSchool')?.value.trim() || '',
         contact: $('#headerContact')?.value.trim() || '',
         finalText: $('#headerFinalText')?.value.trim() || '',
+        ...(window.collectDocumentStyleSettings?.() || {}),
         logo
       };
       const response = await fetch('api.php?resource=header-settings', {
@@ -60,6 +61,7 @@
       if (!response.ok) return alert(result.error || 'Nao foi possivel salvar o cabecalho.');
       localStorage.setItem(headerKey, JSON.stringify(settings));
       await window.loadHeaderSettings();
+      window.applyDocumentStylePreview?.();
       alert('Cabecalho salvo com sucesso.');
     }, true);
   }

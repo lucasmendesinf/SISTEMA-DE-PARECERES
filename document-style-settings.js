@@ -59,8 +59,8 @@
   }
 
   const originalLoadHeaderSettings = window.loadHeaderSettings;
-  window.loadHeaderSettings = function loadHeaderSettingsWithDocumentStyle() {
-    originalLoadHeaderSettings?.();
+  window.loadHeaderSettings = async function loadHeaderSettingsWithDocumentStyle() {
+    await originalLoadHeaderSettings?.();
     injectDocumentStyleFields();
     const style = getDocumentStyle();
     const font = document.querySelector('#documentFont');
@@ -77,8 +77,13 @@
     const oldClick = saveButton.onclick;
     saveButton.onclick = async event => {
       await oldClick?.call(saveButton, event);
-      const settings = getHeaderSettings();
-      localStorage.setItem(HEADER_KEY, JSON.stringify({...settings, ...saveDocumentStyleWithHeader()}));
+      const settings = {...getHeaderSettings(), ...saveDocumentStyleWithHeader()};
+      const response = await fetch('api.php?resource=header-settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(settings)
+      });
+      if (response.ok) localStorage.setItem(HEADER_KEY, JSON.stringify(settings));
       window.loadHeaderSettings?.();
       applyDocumentStylePreview();
     };
@@ -181,4 +186,6 @@
   });
 
   window.documentStyleSettings = getDocumentStyle;
+  window.collectDocumentStyleSettings = saveDocumentStyleWithHeader;
+  window.applyDocumentStylePreview = applyDocumentStylePreview;
 })();

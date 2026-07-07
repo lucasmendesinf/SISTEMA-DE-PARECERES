@@ -9,6 +9,7 @@
     step: 0,
     studentDrafts: [],
     locked: false,
+    starting: false,
   };
 
   const $ = selector => document.querySelector(selector);
@@ -79,7 +80,7 @@
 
   function footerHtml(buttonLabel = 'Proximo') {
     const back = state.step > 0 ? '<button class="secondary" type="button" id="onboardingBack">Voltar</button>' : '<span></span>';
-    return `<div class="onboarding-footer"><p class="muted">Etapa ${state.step + 1} de 4</p><div class="form-actions">${back}<button class="primary" type="button" id="onboardingNext">${buttonLabel}</button></div></div>`;
+    return `<div class="onboarding-footer"><p class="muted">Etapa ${state.step + 1} de 4</p><div class="form-actions"><button class="secondary danger" type="button" id="onboardingLogout">Sair do sistema</button>${back}<button class="primary" type="button" id="onboardingNext">${buttonLabel}</button></div></div>`;
   }
 
   function stepSchool() {
@@ -156,6 +157,7 @@
     state.locked = true;
     document.body.classList.add('onboarding-locked');
     if (!dialog.open) dialog.showModal();
+    window.dispatchEvent(new CustomEvent('portal:onboarding-open', {detail: {step: state.step}}));
   }
 
   function fileAsDataUrl(file) {
@@ -170,6 +172,25 @@
   function setLoading(button, loading) {
     button.disabled = loading;
     button.textContent = loading ? 'Salvando...' : (button.dataset.label || 'Proximo');
+  }
+
+  async function showFirstAccessTutorialBeforeOnboarding(user) {
+    const openTutorial = () => {
+      if (!window.TutorialVideos?.showFirstAccessBeforeOnboarding) return Promise.resolve(false);
+      return window.TutorialVideos.showFirstAccessBeforeOnboarding(user, {force: true, allowFallback: true});
+    };
+    if (window.TutorialVideos?.showFirstAccessBeforeOnboarding) return openTutorial();
+    return new Promise(resolve => {
+      let finished = false;
+      const finish = async () => {
+        if (finished) return;
+        finished = true;
+        window.removeEventListener('portal:tutorial-ready', finish);
+        resolve(await openTutorial());
+      };
+      window.addEventListener('portal:tutorial-ready', finish, {once: true});
+      setTimeout(finish, 1200);
+    });
   }
 
   async function saveSchool() {
@@ -263,9 +284,18 @@
     render();
   }
 
+  async function logout() {
+    try {
+      await fetch(api('auth'), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'logout'})});
+    } finally {
+      location.href = 'login.php';
+    }
+  }
+
   function bindStep() {
     $('#onboardingNext')?.addEventListener('click', next);
     $('#onboardingBack')?.addEventListener('click', back);
+    $('#onboardingLogout')?.addEventListener('click', logout);
     $('#addOnboardStudent')?.addEventListener('click', addStudentDraft);
     $('#onboardLogo')?.addEventListener('change', event => {
       const file = event.currentTarget.files[0];
@@ -284,13 +314,18 @@
   async function start(user) {
     state.user = user || window.PortalCurrentUser;
     if (!state.user || state.user.role === 'master') return;
+    if (state.starting || state.locked) return;
+    state.starting = true;
     try {
       await refreshState();
       if (!shouldRun()) return;
       state.step = firstMissingStep();
+      if (state.students.length === 0) await showFirstAccessTutorialBeforeOnboarding(state.user);
       render();
     } catch (error) {
       console.warn('Nao foi possivel iniciar o cadastro inicial.', error);
+    } finally {
+      state.starting = false;
     }
   }
 

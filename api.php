@@ -749,6 +749,7 @@ try {
         }
         if ($resource === 'header-settings') return;
         if ($resource === 'experience-fields') return;
+        if ($resource === 'tutorial-videos') return;
         $setupTables = ['children' => 'criancas', 'classes' => 'turmas', 'periods' => 'periodos_avaliativos'];
         if (isset($setupTables[$resource]) && $_SERVER['REQUEST_METHOD'] === 'GET') return;
         if (isset($setupTables[$resource]) && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -1316,6 +1317,111 @@ try {
         throw new RuntimeException($loggedUser['billing_lock']['message'] ?? 'Pagamento do plano pendente.');
     }
     $ownerId = (int) $loggedUser['id'];
+    if ($resource === 'tutorial-videos') {
+        $tutorialKey = 'tutorial_videos';
+        $loadTutorials = static function () use ($pdo, $tutorialKey): array {
+            $query = $pdo->prepare('SELECT setting_value FROM app_settings WHERE setting_key=? LIMIT 1');
+            $query->execute([$tutorialKey]);
+            $items = json_decode((string) ($query->fetchColumn() ?: '[]'), true);
+            return is_array($items) && ($items === [] || array_keys($items) === range(0, count($items) - 1)) ? $items : [];
+        };
+        $saveTutorials = static function (array $items) use ($pdo, $tutorialKey): void {
+            $save = $pdo->prepare('INSERT INTO app_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
+            $save->execute([$tutorialKey, json_encode(array_values($items), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+        };
+        $youtubeId = static function (string $url): string {
+            $url = trim($url);
+            if (preg_match('/^[A-Za-z0-9_-]{11}$/', $url)) return $url;
+            $parts = parse_url($url);
+            if (!is_array($parts)) return '';
+            $host = strtolower((string) ($parts['host'] ?? ''));
+            $path = trim((string) ($parts['path'] ?? ''), '/');
+            if (str_contains($host, 'youtu.be')) return preg_match('/^[A-Za-z0-9_-]{11}$/', $path) ? $path : '';
+            parse_str((string) ($parts['query'] ?? ''), $query);
+            if (isset($query['v']) && preg_match('/^[A-Za-z0-9_-]{11}$/', (string) $query['v'])) return (string) $query['v'];
+            if (preg_match('#(?:embed|shorts)/([A-Za-z0-9_-]{11})#', $path, $match)) return $match[1];
+            return '';
+        };
+        $publicTutorial = static function (array $item): array {
+            return [
+                'id' => (string) ($item['id'] ?? ''),
+                'title' => (string) ($item['title'] ?? ''),
+                'url' => (string) ($item['url'] ?? ''),
+                'youtubeId' => (string) ($item['youtubeId'] ?? ''),
+                'showOnHome' => !empty($item['showOnHome']),
+                'showFirstLogin' => !empty($item['showFirstLogin']),
+                'createdAt' => (string) ($item['createdAt'] ?? ''),
+                'updatedAt' => (string) ($item['updatedAt'] ?? ''),
+            ];
+        };
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            $items = array_map($publicTutorial, $loadTutorials());
+            usort($items, static fn(array $a, array $b): int => strcmp((string) ($b['createdAt'] ?? ''), (string) ($a['createdAt'] ?? '')));
+            echo json_encode(['videos' => $items], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            if (($loggedUser['perfil'] ?? 'cliente') !== 'master') {
+                http_response_code(403);
+                throw new RuntimeException('Acesso restrito ao login master.');
+            }
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+            $title = trim((string) ($input['title'] ?? ''));
+            $url = trim((string) ($input['url'] ?? ''));
+            $videoId = $youtubeId($url);
+            if ($title === '') throw new RuntimeException('Informe o titulo do tutorial.');
+            if ($videoId === '') throw new RuntimeException('Informe um link valido do YouTube.');
+            $items = $loadTutorials();
+            $id = trim((string) ($input['id'] ?? ''));
+            $updated = false;
+            foreach ($items as $index => $current) {
+                if ($id !== '' && (string) ($current['id'] ?? '') === $id) {
+                    $items[$index] = [
+                        'id' => $id,
+                        'title' => $title,
+                        'url' => $url,
+                        'youtubeId' => $videoId,
+                        'showOnHome' => !empty($input['showOnHome']),
+                        'showFirstLogin' => !empty($input['showFirstLogin']),
+                        'createdAt' => (string) ($current['createdAt'] ?? date('c')),
+                        'updatedAt' => date('c'),
+                    ];
+                    $updated = true;
+                    break;
+                }
+            }
+            if (!$updated) {
+                $items[] = [
+                    'id' => 'tutorial-' . bin2hex(random_bytes(6)),
+                    'title' => $title,
+                    'url' => $url,
+                    'youtubeId' => $videoId,
+                    'showOnHome' => !empty($input['showOnHome']),
+                    'showFirstLogin' => !empty($input['showFirstLogin']),
+                    'createdAt' => date('c'),
+                    'updatedAt' => date('c'),
+                ];
+            }
+            usort($items, static fn(array $a, array $b): int => strcmp((string) ($b['createdAt'] ?? ''), (string) ($a['createdAt'] ?? '')));
+            $saveTutorials($items);
+            echo json_encode(['ok' => true, 'videos' => array_map($publicTutorial, $items)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+            if (($loggedUser['perfil'] ?? 'cliente') !== 'master') {
+                http_response_code(403);
+                throw new RuntimeException('Acesso restrito ao login master.');
+            }
+            $id = trim((string) ($_GET['id'] ?? ''));
+            if ($id === '') throw new RuntimeException('Informe o tutorial que deseja excluir.');
+            $items = array_values(array_filter($loadTutorials(), static fn(array $item): bool => (string) ($item['id'] ?? '') !== $id));
+            $saveTutorials($items);
+            echo json_encode(['ok' => true, 'videos' => array_map($publicTutorial, $items)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        http_response_code(405);
+        throw new RuntimeException('Metodo nao permitido.');
+    }
     if ($resource === 'children' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         $query=$pdo->prepare('SELECT id,turma_id,nome,data_nascimento,foto,foto_mime FROM criancas WHERE usuario_id=? ORDER BY nome');
         $query->execute([$ownerId]);
@@ -1443,6 +1549,9 @@ try {
                 'school' => trim((string) ($input['school'] ?? '')),
                 'contact' => trim((string) ($input['contact'] ?? '')),
                 'finalText' => trim((string) ($input['finalText'] ?? '')),
+                'documentFont' => in_array((string) ($input['documentFont'] ?? ''), ['Arial', 'Times New Roman', 'Calibri', 'Georgia', 'Verdana', 'Courier New'], true) ? (string) $input['documentFont'] : 'Arial',
+                'documentFontSize' => min(16, max(10, (int) ($input['documentFontSize'] ?? 12))),
+                'detailColor' => preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($input['detailColor'] ?? '')) ? (string) $input['detailColor'] : '#253c31',
                 'logo' => preg_match('#^data:image/[\w.+-]+;base64,#', (string) ($input['logo'] ?? '')) ? (string) $input['logo'] : '',
             ];
             $save = $pdo->prepare('INSERT INTO app_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');

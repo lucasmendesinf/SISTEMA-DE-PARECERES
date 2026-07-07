@@ -311,7 +311,7 @@ function finalTextHtml() {
 function finalTextOptionHtml() {
   const text = configuredFinalText();
   if (!text) return '';
-  return `<label class="final-text-option"><input type="checkbox" ${wizard.useFinalText ? 'checked' : ''} onchange="toggleFinalText(this)"> Usar texto final configurado</label>`;
+  return `<label class="final-text-option"><input type="checkbox" ${wizard.useFinalText ? 'checked' : ''} onchange="toggleFinalText(this)"> Adicionar pessoas envolvidas</label>`;
 }
 
 function toggleFinalText(input) {

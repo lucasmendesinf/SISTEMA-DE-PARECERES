@@ -94,8 +94,10 @@ final class PdfLayout {
             $lines = pdfWrap($block, $wrap);
             $lastIndex = count($lines) - 1;
             foreach ($lines as $index => $line) {
-                if ($index < $lastIndex) $this->justifiedLine($line, 54, 487, $this->bodySize, 'F1', $this->bodyLeading);
-                else $this->line($line, 54, $this->bodySize, 'F1', $this->bodyLeading);
+                $x = $index === 0 ? 90 : 54;
+                $width = $index === 0 ? 451 : 487;
+                if ($index < $lastIndex) $this->justifiedLine($line, $x, $width, $this->bodySize, 'F1', $this->bodyLeading);
+                else $this->line($line, $x, $this->bodySize, 'F1', $this->bodyLeading);
             }
             $this->setY($this->y() - 7);
         }

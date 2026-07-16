@@ -207,7 +207,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="google-drive-integration.js?v=20260716-client-permissions-1"></script>
   <script src="tutorial-videos.js?v=20260706-video-before-onboarding-2"></script>
   <script src="onboarding.js?v=20260716-terms-before-onboarding-1"></script>
-  <script src="master-users.js?v=20260716-client-permissions-1"></script>
+  <script src="master-users.js?v=20260716-reset-terms-1"></script>
   <script src="finance-admin.js?v=20260716-fast-admin-menu-1"></script>
   <script src="ai-usage-admin.js?v=20260716-ai-usage-1"></script>
   <script src="image-editor-permissions.js?v=20260702-combined-image-editor-1"></script>

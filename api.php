@@ -2472,6 +2472,8 @@ try {
         $pdo->beginTransaction();
         $reportWhere = 'FROM pareceres p JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=?';
         $deleteReportLinks = [
+            "DELETE pf FROM parecer_arquivos pf JOIN pareceres p ON p.id=pf.parecer_id JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=?",
+            "DELETE gu FROM google_drive_uploads gu JOIN pareceres p ON p.id=gu.parecer_id JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=?",
             "DELETE pa FROM parecer_anexos pa JOIN pareceres p ON p.id=pa.parecer_id JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=?",
             "DELETE pb FROM parecer_blocos pb JOIN pareceres p ON p.id=pb.parecer_id JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=?",
             "DELETE pav FROM parecer_atividades pav JOIN pareceres p ON p.id=pav.parecer_id JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=?",
@@ -2486,9 +2488,10 @@ try {
         $pdo->prepare('DELETE FROM turmas WHERE usuario_id=?')->execute([$userId]);
         $pdo->prepare('DELETE FROM periodos_avaliativos WHERE usuario_id=?')->execute([$userId]);
         $pdo->prepare('DELETE FROM app_settings WHERE setting_key=?')->execute(['header_settings_' . $userId]);
+        $pdo->prepare('UPDATE usuarios SET terms_accepted_at=NULL, terms_version=NULL, terms_ip=NULL WHERE id=?')->execute([$userId]);
         $pdo->commit();
 
-        echo json_encode(['ok' => true, 'message' => 'Dados iniciais resetados para ' . (string) $resetUser['nome'] . '.'], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['ok' => true, 'message' => 'Dados iniciais e aceite dos termos resetados para ' . (string) $resetUser['nome'] . '.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
     $requirePermission($resource);

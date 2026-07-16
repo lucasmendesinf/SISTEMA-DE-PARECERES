@@ -386,7 +386,7 @@
   async function resetUser(id) {
     const user = usersState.users.find(item => Number(item.id) === Number(id));
     if (!user || user.role !== 'cliente') return;
-    const typed = prompt(`Esta acao vai apagar os dados iniciais, escola, periodos, turmas, alunos, atividades, pareceres e portfolios de ${user.name}. O login, senha, permissoes e cobranca serao mantidos.\n\nDigite RESETAR para confirmar.`);
+    const typed = prompt(`Esta acao vai apagar os dados iniciais, escola, periodos, turmas, alunos, atividades, pareceres, portfolios e aceite dos termos de ${user.name}. O login, senha, permissoes e cobranca serao mantidos.\n\nDigite RESETAR para confirmar.`);
     if (typed !== 'RESETAR') return;
     await request(resetUserApi, {
       method: 'POST',

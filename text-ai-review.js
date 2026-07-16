@@ -219,7 +219,13 @@
       const suggestion = await requestAiReview(original, action);
       showComparisonModal(textarea, original, suggestion, 'Gemini');
     } catch (error) {
-      if (confirm((error.message || 'Nao foi possivel revisar com IA agora.') + '\n\nDeseja aplicar a revisao local simples?')) {
+      const message = String(error?.message || 'Nao foi possivel revisar com IA agora.');
+      const quotaExceeded = /quota|rate|limit|exceeded|retry/i.test(message);
+      if (quotaExceeded) {
+        showComparisonModal(textarea, original, reviewPortuguese(original), 'Revisao local - limite da IA atingido');
+        return;
+      }
+      if (confirm(message + '\n\nDeseja aplicar a revisao local simples?')) {
         showComparisonModal(textarea, original, reviewPortuguese(original), 'Revisao local');
       }
     } finally {
@@ -326,22 +332,46 @@
     panel.innerHTML = `
       <div class="profile-subtitle">
         <h3>Revisao inteligente com IA</h3>
-        <p>Configure o Gemini para revisar textos de pareceres sem expor a chave no navegador.</p>
+        <p>Escolha o provedor usado para revisar textos de pareceres sem expor credenciais no navegador.</p>
       </div>
       <div class="form-grid">
         <label class="checkline"><input id="aiReviewEnabled" type="checkbox"> Habilitar revisao por IA</label>
         <label class="checkline"><input id="aiReviewFallback" type="checkbox"> Usar fallback quando o provedor falhar</label>
-        <label class="checkline"><input id="aiGeminiEnabled" type="checkbox"> Gemini ativo</label>
-        <div class="field"><label>Gemini API Key</label><input id="aiGeminiApiKey" type="password" autocomplete="off" placeholder="Cole a API Key ou deixe em branco para manter"></div>
-        <div class="field"><label>Modelo Gemini</label><input id="aiGeminiModel" placeholder="gemini-3.5-flash"></div>
+        <div class="field">
+          <label>Provedor de IA</label>
+          <select id="aiReviewProvider">
+            <option value="gemini">Gemini</option>
+            <option value="llama">Llama / Ollama</option>
+          </select>
+        </div>
+        <div class="ai-provider-fields" data-ai-provider-fields="gemini">
+          <label class="checkline"><input id="aiGeminiEnabled" type="checkbox"> Gemini ativo</label>
+          <div class="field"><label>Gemini API Key</label><input id="aiGeminiApiKey" type="password" autocomplete="off" placeholder="Cole a API Key ou deixe em branco para manter"></div>
+          <div class="field"><label>Modelo Gemini</label><input id="aiGeminiModel" placeholder="gemini-3.5-flash"></div>
+        </div>
+        <div class="ai-provider-fields" data-ai-provider-fields="llama">
+          <label class="checkline"><input id="aiLlamaEnabled" type="checkbox"> Llama/Ollama ativo</label>
+          <div class="field"><label>URL do Ollama</label><input id="aiLlamaBaseUrl" placeholder="http://127.0.0.1:11434"></div>
+          <div class="field"><label>API Key do Llama/Ollama</label><input id="aiLlamaApiKey" type="password" autocomplete="off" placeholder="Opcional, deixe em branco para manter"></div>
+          <div class="field"><label>Modelo Llama</label><input id="aiLlamaModel" placeholder="llama3.1"></div>
+          <small class="muted">Use uma URL acessivel pelo servidor de hospedagem. Em producao, localhost aponta para o servidor, nao para seu computador.</small>
+        </div>
         <div class="field"><label>Limite diario por professora</label><input id="aiDailyUserLimit" type="number" min="1" max="500"></div>
         <div class="field"><label>Limite diario por escola</label><input id="aiDailySchoolLimit" type="number" min="1" max="5000"></div>
       </div>
       <p id="aiReviewSettingsStatus" class="profile-message"></p>
       <div class="form-actions"><button class="primary" type="button" id="saveAiReviewSettings">Salvar IA</button></div>`;
     config.append(panel);
+    panel.querySelector('#aiReviewProvider')?.addEventListener('change', toggleAiProviderFields);
     loadAiSettings();
     panel.querySelector('#saveAiReviewSettings')?.addEventListener('click', saveAiSettings);
+  }
+
+  function toggleAiProviderFields() {
+    const provider = document.querySelector('#aiReviewProvider')?.value || 'gemini';
+    document.querySelectorAll('[data-ai-provider-fields]').forEach(box => {
+      box.style.display = box.dataset.aiProviderFields === provider ? 'contents' : 'none';
+    });
   }
 
   async function loadAiSettings() {
@@ -350,11 +380,17 @@
       const settings = await apiJson('api.php?resource=ai-review-settings');
       document.querySelector('#aiReviewEnabled').checked = !!settings.enabled;
       document.querySelector('#aiReviewFallback').checked = !!settings.fallbackEnabled;
+      document.querySelector('#aiReviewProvider').value = settings.provider || 'gemini';
       document.querySelector('#aiGeminiEnabled').checked = !!settings.geminiEnabled;
       document.querySelector('#aiGeminiApiKey').placeholder = settings.geminiConfigured ? `Configurada: ${settings.geminiApiKeyMasked}` : 'Cole a API Key do Gemini';
       document.querySelector('#aiGeminiModel').value = settings.geminiModel || 'gemini-3.5-flash';
+      document.querySelector('#aiLlamaEnabled').checked = !!settings.llamaEnabled;
+      document.querySelector('#aiLlamaBaseUrl').value = settings.llamaBaseUrl || 'http://127.0.0.1:11434';
+      document.querySelector('#aiLlamaApiKey').placeholder = settings.llamaApiKeyConfigured ? `Configurada: ${settings.llamaApiKeyMasked}` : 'Opcional, cole a API Key';
+      document.querySelector('#aiLlamaModel').value = settings.llamaModel || 'llama3.1';
       document.querySelector('#aiDailyUserLimit').value = settings.dailyUserLimit || 10;
       document.querySelector('#aiDailySchoolLimit').value = settings.dailySchoolLimit || 100;
+      toggleAiProviderFields();
       if (status) status.textContent = settings.enabled ? 'Revisao por IA habilitada.' : 'Revisao por IA desabilitada.';
     } catch (error) {
       if (status) status.textContent = error.message;
@@ -367,15 +403,21 @@
     try {
       const payload = {
         enabled: document.querySelector('#aiReviewEnabled')?.checked,
+        provider: document.querySelector('#aiReviewProvider')?.value || 'gemini',
         fallbackEnabled: document.querySelector('#aiReviewFallback')?.checked,
         geminiEnabled: document.querySelector('#aiGeminiEnabled')?.checked,
         geminiApiKey: document.querySelector('#aiGeminiApiKey')?.value.trim(),
         geminiModel: document.querySelector('#aiGeminiModel')?.value.trim(),
+        llamaEnabled: document.querySelector('#aiLlamaEnabled')?.checked,
+        llamaBaseUrl: document.querySelector('#aiLlamaBaseUrl')?.value.trim(),
+        llamaApiKey: document.querySelector('#aiLlamaApiKey')?.value.trim(),
+        llamaModel: document.querySelector('#aiLlamaModel')?.value.trim(),
         dailyUserLimit: document.querySelector('#aiDailyUserLimit')?.value,
         dailySchoolLimit: document.querySelector('#aiDailySchoolLimit')?.value
       };
       await apiJson('api.php?resource=ai-review-settings', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
       if (document.querySelector('#aiGeminiApiKey')) document.querySelector('#aiGeminiApiKey').value = '';
+      if (document.querySelector('#aiLlamaApiKey')) document.querySelector('#aiLlamaApiKey').value = '';
       if (status) status.textContent = 'Configuracao de IA salva com sucesso.';
       loadAiSettings();
     } catch (error) {

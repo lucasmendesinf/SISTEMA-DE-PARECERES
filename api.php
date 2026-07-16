@@ -474,6 +474,13 @@ try {
                 'api_key' => trim((string) (getenv('GEMINI_API_KEY') ?: ($config['gemini']['api_key'] ?? ''))),
                 'model' => trim((string) (getenv('GEMINI_MODEL') ?: ($config['gemini']['model'] ?? 'gemini-3.5-flash'))),
             ],
+            'llama' => [
+                'enabled' => false,
+                'priority' => 2,
+                'base_url' => trim((string) (getenv('OLLAMA_BASE_URL') ?: ($config['ollama']['base_url'] ?? 'http://127.0.0.1:11434'))),
+                'api_key' => trim((string) (getenv('OLLAMA_API_KEY') ?: ($config['ollama']['api_key'] ?? ''))),
+                'model' => trim((string) (getenv('OLLAMA_MODEL') ?: ($config['ollama']['model'] ?? 'llama3.1'))),
+            ],
         ],
     ];
     $getAiReviewSettings = static function () use ($pdo, $aiReviewDefaults): array {
@@ -483,15 +490,22 @@ try {
         $settings = array_replace_recursive($aiReviewDefaults, is_array($saved) ? $saved : []);
         $envKey = trim((string) (getenv('GEMINI_API_KEY') ?: ''));
         $envModel = trim((string) (getenv('GEMINI_MODEL') ?: ''));
+        $ollamaUrl = trim((string) (getenv('OLLAMA_BASE_URL') ?: ''));
+        $ollamaKey = trim((string) (getenv('OLLAMA_API_KEY') ?: ''));
+        $ollamaModel = trim((string) (getenv('OLLAMA_MODEL') ?: ''));
         if ($envKey !== '' && trim((string) ($settings['providers']['gemini']['api_key'] ?? '')) === '') $settings['providers']['gemini']['api_key'] = $envKey;
         if ($envModel !== '' && trim((string) ($settings['providers']['gemini']['model'] ?? '')) === '') $settings['providers']['gemini']['model'] = $envModel;
+        if ($ollamaUrl !== '' && trim((string) ($settings['providers']['llama']['base_url'] ?? '')) === '') $settings['providers']['llama']['base_url'] = $ollamaUrl;
+        if ($ollamaKey !== '' && trim((string) ($settings['providers']['llama']['api_key'] ?? '')) === '') $settings['providers']['llama']['api_key'] = $ollamaKey;
+        if ($ollamaModel !== '' && trim((string) ($settings['providers']['llama']['model'] ?? '')) === '') $settings['providers']['llama']['model'] = $ollamaModel;
         return $settings;
     };
     $publicAiReviewSettings = static function (array $settings) use ($maskSecret): array {
         $gemini = is_array($settings['providers']['gemini'] ?? null) ? $settings['providers']['gemini'] : [];
+        $llama = is_array($settings['providers']['llama'] ?? null) ? $settings['providers']['llama'] : [];
         return [
             'enabled' => !empty($settings['enabled']),
-            'provider' => (string) ($settings['provider'] ?? 'gemini'),
+            'provider' => in_array((string) ($settings['provider'] ?? 'gemini'), ['gemini', 'llama'], true) ? (string) $settings['provider'] : 'gemini',
             'fallbackEnabled' => !empty($settings['fallback_enabled']),
             'dailyUserLimit' => (int) ($settings['daily_user_limit'] ?? 10),
             'dailySchoolLimit' => (int) ($settings['daily_school_limit'] ?? 100),
@@ -499,6 +513,12 @@ try {
             'geminiConfigured' => trim((string) ($gemini['api_key'] ?? '')) !== '',
             'geminiApiKeyMasked' => $maskSecret((string) ($gemini['api_key'] ?? '')),
             'geminiModel' => (string) ($gemini['model'] ?? 'gemini-3.5-flash'),
+            'llamaEnabled' => !empty($llama['enabled']),
+            'llamaConfigured' => trim((string) ($llama['base_url'] ?? '')) !== '' && trim((string) ($llama['model'] ?? '')) !== '',
+            'llamaBaseUrl' => (string) ($llama['base_url'] ?? 'http://127.0.0.1:11434'),
+            'llamaApiKeyConfigured' => trim((string) ($llama['api_key'] ?? '')) !== '',
+            'llamaApiKeyMasked' => $maskSecret((string) ($llama['api_key'] ?? '')),
+            'llamaModel' => (string) ($llama['model'] ?? 'llama3.1'),
         ];
     };
     $aiSchoolHash = static function (int $userId) use ($pdo): string {
@@ -1319,10 +1339,15 @@ try {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
             $currentGemini = is_array($settings['providers']['gemini'] ?? null) ? $settings['providers']['gemini'] : [];
+            $currentLlama = is_array($settings['providers']['llama'] ?? null) ? $settings['providers']['llama'] : [];
             $apiKey = trim((string) ($input['geminiApiKey'] ?? ''));
+            $provider = in_array((string) ($input['provider'] ?? 'gemini'), ['gemini', 'llama'], true) ? (string) $input['provider'] : 'gemini';
+            $llamaBaseUrl = rtrim(trim((string) ($input['llamaBaseUrl'] ?? ($currentLlama['base_url'] ?? 'http://127.0.0.1:11434'))), '/');
+            $llamaApiKey = trim((string) ($input['llamaApiKey'] ?? ''));
+            $llamaModel = trim((string) ($input['llamaModel'] ?? ($currentLlama['model'] ?? 'llama3.1'))) ?: 'llama3.1';
             $settings = [
                 'enabled' => !empty($input['enabled']),
-                'provider' => 'gemini',
+                'provider' => $provider,
                 'fallback_enabled' => !empty($input['fallbackEnabled']),
                 'daily_user_limit' => max(1, min(500, (int) ($input['dailyUserLimit'] ?? 10))),
                 'daily_school_limit' => max(1, min(5000, (int) ($input['dailySchoolLimit'] ?? 100))),
@@ -1333,10 +1358,20 @@ try {
                         'api_key' => $apiKey !== '' ? $apiKey : (string) ($currentGemini['api_key'] ?? ''),
                         'model' => trim((string) ($input['geminiModel'] ?? 'gemini-3.5-flash')) ?: 'gemini-3.5-flash',
                     ],
+                    'llama' => [
+                        'enabled' => !empty($input['llamaEnabled']),
+                        'priority' => 2,
+                        'base_url' => $llamaBaseUrl,
+                        'api_key' => $llamaApiKey !== '' ? $llamaApiKey : (string) ($currentLlama['api_key'] ?? ''),
+                        'model' => $llamaModel,
+                    ],
                 ],
             ];
-            if ($settings['enabled'] && $settings['providers']['gemini']['enabled'] && trim((string) $settings['providers']['gemini']['api_key']) === '') {
+            if ($settings['enabled'] && $provider === 'gemini' && $settings['providers']['gemini']['enabled'] && trim((string) $settings['providers']['gemini']['api_key']) === '') {
                 throw new RuntimeException('Informe a API Key do Gemini para ativar a revisao por IA.');
+            }
+            if ($settings['enabled'] && $provider === 'llama' && $settings['providers']['llama']['enabled'] && trim((string) $settings['providers']['llama']['base_url']) === '') {
+                throw new RuntimeException('Informe a URL do Ollama para ativar o Llama.');
             }
             $save = $pdo->prepare('INSERT INTO app_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
             $save->execute(['ai_review', json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
@@ -1382,10 +1417,56 @@ try {
         $prompt = "Voce e especialista em educacao infantil e elaboracao de pareceres pedagogicos.\nRevise o texto obedecendo rigorosamente as regras abaixo:\n- Corrigir ortografia, gramatica, acentuacao e pontuacao.\n- Melhorar clareza e linguagem pedagogica.\n- Nao inventar informacoes.\n- Nao criar atividades inexistentes.\n- Nao fazer diagnosticos.\n- Nao alterar o sentido do texto.\n- Retornar somente o texto revisado.\n\nTarefa: {$instructions[$action]}\n\nTexto:\n{$safeText}";
         $providers = [];
         $gemini = is_array($settings['providers']['gemini'] ?? null) ? $settings['providers']['gemini'] : [];
-        if (!empty($gemini['enabled'])) $providers[] = ['name' => 'gemini', 'settings' => $gemini];
+        $llama = is_array($settings['providers']['llama'] ?? null) ? $settings['providers']['llama'] : [];
+        $selectedProvider = in_array((string) ($settings['provider'] ?? 'gemini'), ['gemini', 'llama'], true) ? (string) $settings['provider'] : 'gemini';
+        if ($selectedProvider === 'gemini' && !empty($gemini['enabled'])) $providers[] = ['name' => 'gemini', 'settings' => $gemini];
+        if ($selectedProvider === 'llama' && !empty($llama['enabled'])) $providers[] = ['name' => 'llama', 'settings' => $llama];
+        if (!$providers) throw new RuntimeException('O provedor de IA selecionado nao esta ativo nas configuracoes.');
         $lastError = '';
         foreach ($providers as $provider) {
             try {
+                if ($provider['name'] === 'llama') {
+                    $baseUrl = rtrim(trim((string) ($provider['settings']['base_url'] ?? '')), '/');
+                    $apiKey = trim((string) ($provider['settings']['api_key'] ?? ''));
+                    $model = trim((string) ($provider['settings']['model'] ?? 'llama3.1')) ?: 'llama3.1';
+                    if ($baseUrl === '') throw new RuntimeException('URL do Ollama nao configurada.');
+                    if (!function_exists('curl_init')) throw new RuntimeException('Extensao cURL do PHP nao habilitada.');
+                    $payload = json_encode([
+                        'model' => $model,
+                        'prompt' => $prompt,
+                        'system' => 'Voce revisa textos pedagogicos em portugues do Brasil e retorna apenas o texto final.',
+                        'stream' => false,
+                        'options' => ['temperature' => 0.2],
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    $curl = curl_init($baseUrl . '/api/generate');
+                    $headers = ['Content-Type: application/json'];
+                    if ($apiKey !== '') $headers[] = 'Authorization: Bearer ' . $apiKey;
+                    curl_setopt_array($curl, [
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_POST => true,
+                        CURLOPT_HTTPHEADER => $headers,
+                        CURLOPT_POSTFIELDS => $payload,
+                        CURLOPT_TIMEOUT => 60,
+                    ]);
+                    $raw = curl_exec($curl);
+                    $curlError = curl_error($curl);
+                    $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+                    curl_close($curl);
+                    if ($raw === false || $curlError !== '') {
+                        throw new RuntimeException('Nao foi possivel conectar ao Ollama/Llama em ' . $baseUrl . '. Verifique se o Ollama esta instalado, aberto e com o modelo ' . $model . ' baixado.');
+                    }
+                    $data = json_decode((string) $raw, true);
+                    if ($status >= 400 || !is_array($data)) {
+                        $apiMessage = is_array($data) ? (string) ($data['error'] ?? '') : '';
+                        throw new RuntimeException($apiMessage !== '' ? 'Llama: ' . $apiMessage : 'O Ollama/Llama recusou a solicitacao.');
+                    }
+                    $reviewed = trim((string) ($data['response'] ?? ''));
+                    if ($reviewed === '') throw new RuntimeException('O Llama nao retornou texto revisado.');
+                    if ($studentName !== '') $reviewed = str_replace('[ALUNO]', $studentName, $reviewed);
+                    $logAiReview((int) $user['id'], 'llama', $action, 'success', $schoolHash);
+                    echo json_encode(['success' => true, 'provider' => 'llama', 'texto_original' => $text, 'texto_revisado' => $reviewed], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
                 if ($provider['name'] !== 'gemini') continue;
                 $apiKey = trim((string) ($provider['settings']['api_key'] ?? ''));
                 $model = trim((string) ($provider['settings']['model'] ?? 'gemini-3.5-flash')) ?: 'gemini-3.5-flash';

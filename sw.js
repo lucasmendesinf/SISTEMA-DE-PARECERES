@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260716-ai-usage-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260716-official-email-files-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -29,11 +29,11 @@ const STATIC_ASSETS = [
   './app.js?v=20260715-keep-current-menu-1',
   './report-editor.js?v=20260715-deliver-keeps-done-1',
   './document-style-settings.js?v=20260716-force-docx-font-1',
-  './text-ai-review.js?v=20260716-ai-escape-fix-1',
-  './director-email.js?v=20260716-email-same-download-files-1',
+  './text-ai-review.js?v=20260716-email-no-ai-1',
+  './director-email.js?v=20260716-official-email-files-1',
   './terms-consent.js?v=20260716-terms-fast-accept-1',
   './auth-profile.js?v=20260716-fast-admin-menu-1',
-  './google-drive-integration.js?v=20260716-drive-choice-front-1',
+  './google-drive-integration.js?v=20260716-official-email-files-1',
   './tutorial-videos.js?v=20260706-video-before-onboarding-2',
   './manual-image-editor.js?v=20260709-activity-photos-30-1',
   './image-editor-flow.js?v=20260709-activity-photos-30-1',

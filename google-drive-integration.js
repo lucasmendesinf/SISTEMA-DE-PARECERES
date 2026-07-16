@@ -326,6 +326,7 @@
       }
       toast('Enviando para Google Drive...', 'warning');
       const context = await buildReportFiles(report);
+      await window.saveOfficialReportFiles?.(context.report, context);
       const docx = await uploadOne(context.docx, 'docx', context);
       const pdf = await uploadOne(context.pdf, 'pdf', context);
       if (docx.ok && pdf.ok) toast('Parecer enviado com sucesso para seu Google Drive.');

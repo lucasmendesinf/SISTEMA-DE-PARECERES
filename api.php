@@ -142,6 +142,20 @@ try {
         INDEX idx_ai_review_school_date (escola_hash, created_at),
         INDEX idx_ai_review_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS parecer_arquivos (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        parecer_id BIGINT UNSIGNED NOT NULL,
+        usuario_id BIGINT UNSIGNED NOT NULL,
+        tipo ENUM('docx','pdf') NOT NULL,
+        arquivo_nome VARCHAR(220) NOT NULL,
+        mime_type VARCHAR(140) NOT NULL,
+        arquivo LONGBLOB NOT NULL,
+        tamanho BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_parecer_arquivo_tipo (parecer_id, tipo),
+        INDEX idx_parecer_arquivos_usuario (usuario_id, parecer_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec("CREATE TABLE IF NOT EXISTS ai_model_prices (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         provider VARCHAR(40) NOT NULL,
@@ -2871,6 +2885,54 @@ try {
         echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
         exit;
     }
+    if ($resource === 'report-files') {
+        $cleanFileName = static function (string $name): string {
+            $name = trim(preg_replace('/[\\\\\/:*?"<>|]+/', '-', $name) ?: '');
+            return $name !== '' ? $name : 'documento';
+        };
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            $reportId = (int) ($_GET['reportId'] ?? 0);
+            $type = in_array((string) ($_GET['type'] ?? ''), ['docx', 'pdf'], true) ? (string) $_GET['type'] : '';
+            if ($reportId <= 0 || $type === '') throw new RuntimeException('Arquivo invalido.');
+            $query = $pdo->prepare("SELECT pa.arquivo_nome,pa.mime_type,pa.arquivo,pa.tamanho FROM parecer_arquivos pa JOIN pareceres p ON p.id=pa.parecer_id JOIN criancas c ON c.id=p.crianca_id WHERE pa.parecer_id=? AND pa.tipo=? AND c.usuario_id=? LIMIT 1");
+            $query->execute([$reportId, $type, $ownerId]);
+            $file = $query->fetch(PDO::FETCH_ASSOC);
+            if (!$file) throw new RuntimeException('Arquivo final ainda nao foi salvo para este documento. Finalize ou baixe o documento novamente.');
+            header('Content-Type: ' . $file['mime_type']);
+            header('Content-Disposition: attachment; filename="' . addcslashes((string) $file['arquivo_nome'], "\"\\") . '"');
+            header('Content-Length: ' . (int) $file['tamanho']);
+            echo $file['arquivo'];
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $reportId = (int) ($_POST['reportId'] ?? 0);
+            $type = in_array((string) ($_POST['type'] ?? ''), ['docx', 'pdf'], true) ? (string) $_POST['type'] : '';
+            if ($reportId <= 0 || $type === '') throw new RuntimeException('Arquivo invalido para salvar.');
+            $ownerCheck = $pdo->prepare("SELECT p.id,p.status,c.nome FROM pareceres p JOIN criancas c ON c.id=p.crianca_id WHERE p.id=? AND c.usuario_id=? LIMIT 1");
+            $ownerCheck->execute([$reportId, $ownerId]);
+            $reportRow = $ownerCheck->fetch(PDO::FETCH_ASSOC);
+            if (!$reportRow) throw new RuntimeException('Documento nao encontrado para salvar arquivo.');
+            if (($reportRow['status'] ?? '') !== 'concluido') throw new RuntimeException('Somente arquivos de documentos entregues podem ser salvos.');
+            if (empty($_FILES['file']['tmp_name']) || !is_uploaded_file($_FILES['file']['tmp_name'])) throw new RuntimeException('Arquivo final nao recebido.');
+            $binary = file_get_contents($_FILES['file']['tmp_name']);
+            if (!is_string($binary) || $binary === '') throw new RuntimeException('Arquivo final vazio.');
+            $mime = $type === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+            $fallbackName = $cleanFileName('Parecer - ' . (string) ($reportRow['nome'] ?? 'Aluno')) . '.' . $type;
+            $name = $cleanFileName((string) ($_FILES['file']['name'] ?? $fallbackName));
+            if (!str_ends_with(strtolower($name), '.' . $type)) $name .= '.' . $type;
+            $stmt = $pdo->prepare("INSERT INTO parecer_arquivos (parecer_id,usuario_id,tipo,arquivo_nome,mime_type,arquivo,tamanho) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE usuario_id=VALUES(usuario_id),arquivo_nome=VALUES(arquivo_nome),mime_type=VALUES(mime_type),arquivo=VALUES(arquivo),tamanho=VALUES(tamanho),updated_at=NOW()");
+            $stmt->bindValue(1, $reportId, PDO::PARAM_INT);
+            $stmt->bindValue(2, $ownerId, PDO::PARAM_INT);
+            $stmt->bindValue(3, $type);
+            $stmt->bindValue(4, $name);
+            $stmt->bindValue(5, $mime);
+            $stmt->bindValue(6, $binary, PDO::PARAM_LOB);
+            $stmt->bindValue(7, strlen($binary), PDO::PARAM_INT);
+            $stmt->execute();
+            echo json_encode(['ok' => true, 'type' => $type, 'name' => $name, 'size' => strlen($binary)], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    }
     if ($resource === 'send-report-email' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         ignore_user_abort(true);
         if (function_exists('set_time_limit')) {
@@ -2938,7 +3000,20 @@ try {
             }
         }
         if (!$emailAttachments) {
-            throw new RuntimeException('Nenhum arquivo foi gerado para anexar ao e-mail.');
+            $fileQuery = $pdo->prepare("SELECT tipo,arquivo_nome,mime_type,arquivo FROM parecer_arquivos WHERE parecer_id=? AND usuario_id=? AND tipo IN ('docx','pdf') ORDER BY FIELD(tipo,'docx','pdf')");
+            $fileQuery->execute([$reportId, $ownerId]);
+            foreach ($fileQuery->fetchAll(PDO::FETCH_ASSOC) as $fileRow) {
+                $content = (string) ($fileRow['arquivo'] ?? '');
+                if ($content === '') continue;
+                $emailAttachments[] = [
+                    'name' => $cleanFileName((string) ($fileRow['arquivo_nome'] ?? ('documento.' . $fileRow['tipo']))),
+                    'mime' => (string) ($fileRow['mime_type'] ?? (($fileRow['tipo'] ?? '') === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')),
+                    'content' => $content,
+                ];
+            }
+        }
+        if (!$emailAttachments) {
+            throw new RuntimeException('Nenhum arquivo final salvo foi encontrado para anexar ao e-mail. Entregue ou baixe o documento novamente para salvar os arquivos finais.');
         }
         $totalAttachmentBytes = array_sum(array_map(static fn (array $attachment): int => strlen((string) $attachment['content']), $emailAttachments));
         if ($totalAttachmentBytes > 22 * 1024 * 1024) {

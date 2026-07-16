@@ -176,13 +176,13 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="document-style-settings.js?v=20260716-force-docx-font-1"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
   <script src="billing-cycles.js?v=20260705-billing-cycles-1"></script>
-  <script src="text-ai-review.js?v=20260716-ai-escape-fix-1"></script>
+  <script src="text-ai-review.js?v=20260716-email-no-ai-1"></script>
   <script src="document-button-fix.js"></script>
-  <script src="director-email.js?v=20260716-email-same-download-files-1"></script>
+  <script src="director-email.js?v=20260716-official-email-files-1"></script>
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
   <script src="terms-consent.js?v=20260716-terms-fast-accept-1"></script>
   <script src="auth-profile.js?v=20260716-fast-admin-menu-1"></script>
-  <script src="google-drive-integration.js?v=20260716-drive-choice-front-1"></script>
+  <script src="google-drive-integration.js?v=20260716-official-email-files-1"></script>
   <script src="tutorial-videos.js?v=20260706-video-before-onboarding-2"></script>
   <script src="onboarding.js?v=20260715-onboarding-draft-1"></script>
   <script src="master-users.js?v=20260716-fast-admin-menu-1"></script>

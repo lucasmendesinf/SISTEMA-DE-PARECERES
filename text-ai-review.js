@@ -293,6 +293,12 @@
 
   function addReviewButton(textarea) {
     if (!(textarea instanceof HTMLTextAreaElement)) return;
+    if (textarea.id === 'directorEmailMessage' || textarea.dataset.aiReviewDisabled === '1') {
+      const nextButton = textarea.nextElementSibling;
+      if (nextButton?.classList?.contains('ai-adjust')) nextButton.remove();
+      textarea.dataset.aiReviewAdded = '';
+      return;
+    }
     const existing = textarea.parentElement?.querySelector(`button.ai-adjust[data-ai-review-for="${textarea.id || textarea.name || 'textarea'}"]`);
     if (existing) return;
     const nextButton = textarea.nextElementSibling;

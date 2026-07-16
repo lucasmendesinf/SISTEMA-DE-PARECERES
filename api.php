@@ -509,8 +509,12 @@ try {
         return hash('sha256', mb_strtolower($school !== '' ? $school : 'usuario-' . $userId, 'UTF-8'));
     };
     $logAiReview = static function (int $userId, string $provider, string $action, string $status, string $schoolHash = '', string $error = '') use ($pdo): void {
-        $stmt = $pdo->prepare('INSERT INTO ai_review_logs (usuario_id,provider,action,status,escola_hash,error_message) VALUES (?,?,?,?,?,?)');
-        $stmt->execute([$userId, $provider, $action, $status, $schoolHash ?: null, mb_substr($error, 0, 2000, 'UTF-8') ?: null]);
+        try {
+            $stmt = $pdo->prepare('INSERT INTO ai_review_logs (usuario_id,provider,action,status,escola_hash,error_message) VALUES (?,?,?,?,?,?)');
+            $stmt->execute([$userId, $provider, $action, $status, $schoolHash ?: null, mb_substr($error, 0, 2000, 'UTF-8') ?: null]);
+        } catch (Throwable $e) {
+            error_log('AiProf ai_review_logs skipped: ' . $e->getMessage());
+        }
     };
     $googleDriveAudit = static function (?int $userId, string $action, string $details = '') use ($pdo): void {
         $stmt = $pdo->prepare('INSERT INTO google_drive_audit_logs (usuario_id,action,details) VALUES (?,?,?)');

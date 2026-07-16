@@ -158,9 +158,9 @@
 
   function showComparisonModal(textarea, original, suggestion, provider = '') {
     document.querySelector('#aiReviewModal')?.remove();
-    const modal = document.createElement('div');
+    const modal = document.createElement('dialog');
     modal.id = 'aiReviewModal';
-    modal.className = 'ai-review-backdrop';
+    modal.className = 'ai-review-dialog';
     modal.innerHTML = `
       <section class="ai-review-modal" role="dialog" aria-modal="true" aria-labelledby="aiReviewTitle">
         <button class="ai-review-close" type="button" data-ai-review-close aria-label="Fechar">x</button>
@@ -178,7 +178,17 @@
         </div>
       </section>`;
     document.body.append(modal);
-    const closeModal = () => modal.remove();
+    const closeModal = () => {
+      if (modal.open) modal.close();
+      modal.remove();
+    };
+    modal.addEventListener('cancel', event => {
+      event.preventDefault();
+      closeModal();
+    });
+    modal.addEventListener('click', event => {
+      if (event.target === modal) closeModal();
+    });
     modal.querySelectorAll('[data-ai-review-close]').forEach(button => button.addEventListener('click', closeModal));
     modal.querySelector('[data-ai-review-copy]')?.addEventListener('click', async () => {
       await navigator.clipboard.writeText(modal.querySelector('#aiReviewSuggestion')?.value || suggestion);
@@ -189,6 +199,7 @@
       closeModal();
       textarea.focus();
     });
+    if (typeof modal.showModal === 'function') modal.showModal();
     modal.querySelector('#aiReviewSuggestion')?.focus();
   }
 
@@ -220,16 +231,31 @@
   }
 
   function openAiReviewMenu(textarea, anchor) {
+    document.querySelector('#aiReviewMenuDialog')?.remove();
     document.querySelector('#aiReviewMenu')?.remove();
+    const dialog = document.createElement('dialog');
+    dialog.id = 'aiReviewMenuDialog';
+    dialog.className = 'ai-review-menu-dialog';
     const menu = document.createElement('div');
     menu.id = 'aiReviewMenu';
     menu.className = 'ai-review-menu';
     menu.innerHTML = Object.entries(actionLabels).map(([action, label]) => `<button type="button" data-ai-action="${action}">${label}</button>`).join('');
-    document.body.append(menu);
+    dialog.append(menu);
+    document.body.append(dialog);
     const rect = anchor?.getBoundingClientRect?.() || textarea.getBoundingClientRect();
-    menu.style.left = `${Math.min(rect.left, window.innerWidth - 230)}px`;
-    menu.style.top = `${rect.bottom + window.scrollY + 6}px`;
-    const closeMenu = () => menu.remove();
+    dialog.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 238))}px`;
+    dialog.style.top = `${Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 220))}px`;
+    const closeMenu = () => {
+      if (dialog.open) dialog.close();
+      dialog.remove();
+    };
+    dialog.addEventListener('cancel', event => {
+      event.preventDefault();
+      closeMenu();
+    });
+    dialog.addEventListener('click', event => {
+      if (event.target === dialog) closeMenu();
+    });
     menu.addEventListener('click', event => {
       const button = event.target.closest('[data-ai-action]');
       if (!button) return;
@@ -237,7 +263,8 @@
       closeMenu();
       runAiReview(textarea, action, anchor);
     });
-    setTimeout(() => document.addEventListener('click', closeMenu, {once: true}), 0);
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    menu.querySelector('button')?.focus();
   }
 
   window.adjustTextWithAI = function adjustTextWithAI(field) {

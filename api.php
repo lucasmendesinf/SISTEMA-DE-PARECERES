@@ -1215,13 +1215,10 @@ try {
             if ($acceptedVersion !== $termsVersion) throw new RuntimeException('Versão do termo inválida. Atualize a página e tente novamente.');
             $ip = substr((string) ($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45);
             $pdo->prepare('UPDATE usuarios SET terms_accepted_at=NOW(), terms_version=?, terms_ip=? WHERE id=?')->execute([$termsVersion, $ip ?: null, (int) $_SESSION['user_id']]);
-            $user = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect},terms_accepted_at,terms_version,terms_ip FROM usuarios WHERE id=? LIMIT 1");
-            $user->execute([(int) $_SESSION['user_id']]);
-            $row = $user->fetch(PDO::FETCH_ASSOC);
-            if (!$row) { http_response_code(401); throw new RuntimeException('Usuário não encontrado.'); }
-            $permissions = json_decode((string) ($row['permissoes'] ?? '[]'), true);
-            $row['permissions'] = is_array($permissions) ? $permissions : [];
-            $row = $auditBillingAccess($row);
+            $row = $loadCurrentUser();
+            $row['terms_accepted_at'] = date('Y-m-d H:i:s');
+            $row['terms_version'] = $termsVersion;
+            $row['terms_ip'] = $ip ?: null;
             $public = $publicUser($row);
             $storeBootstrapUser($public);
             echo json_encode(['ok' => true, 'user' => $public], JSON_UNESCAPED_UNICODE);

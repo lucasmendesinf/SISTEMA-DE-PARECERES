@@ -100,59 +100,9 @@
     return blob;
   }
 
-  function isImageDataUrl(value) {
-    return typeof value === 'string' && /^data:image\/[\w.+-]+;base64,/.test(value);
-  }
-
   function formatBytes(bytes) {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
     return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
-  }
-
-  async function compactImageDataUrl(dataUrl, maxWidth = 1200, quality = 0.72) {
-    if (!isImageDataUrl(dataUrl)) return dataUrl || '';
-    return new Promise(resolve => {
-      const image = new Image();
-      const finish = value => resolve(value || dataUrl);
-      const timer = setTimeout(() => finish(dataUrl), 7000);
-      image.onload = () => {
-        clearTimeout(timer);
-        try {
-          const scale = Math.min(1, maxWidth / Math.max(image.naturalWidth || image.width || maxWidth, 1));
-          const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
-          const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const context = canvas.getContext('2d', {alpha: false});
-          context.fillStyle = '#ffffff';
-          context.fillRect(0, 0, width, height);
-          context.drawImage(image, 0, 0, width, height);
-          const compact = canvas.toDataURL('image/jpeg', quality);
-          finish(compact.length < dataUrl.length ? compact : dataUrl);
-        } catch (error) {
-          finish(dataUrl);
-        }
-      };
-      image.onerror = () => {
-        clearTimeout(timer);
-        finish(dataUrl);
-      };
-      image.src = dataUrl;
-    });
-  }
-
-  async function compactReportEntries(entries) {
-    const sourceEntries = Array.isArray(entries) ? entries : [];
-    const compacted = [];
-    for (const entry of sourceEntries) {
-      const photos = [];
-      for (const photo of (Array.isArray(entry?.photos) ? entry.photos : [])) {
-        photos.push(await compactImageDataUrl(photo, 1280, 0.72));
-      }
-      compacted.push({...entry, photos});
-    }
-    return compacted;
   }
 
   async function blobToBase64(blob) {
@@ -166,10 +116,7 @@
 
   async function buildEmailAttachments(report) {
     if (window.ensureReportDetail) {
-      await Promise.race([
-        window.ensureReportDetail(report.databaseId || report.id),
-        new Promise(resolve => setTimeout(resolve, 8000))
-      ]);
+      await window.ensureReportDetail(report.databaseId || report.id);
     }
     const fullReport = data.reports.find(item => String(item.id) === String(report.id) || String(item.databaseId) === String(report.databaseId)) || report;
     const student = data.students.find(item => String(item.id) === String(fullReport.studentId));
@@ -180,9 +127,6 @@
     const type = normalizeType(fullReport.documentType);
     const label = documentLabel(fullReport.documentType);
     const safeName = `${label} - ${student.name}`.replace(/[\\/:*?"<>|]+/g, '-');
-    const compactStudentPhoto = await compactImageDataUrl(student.photo || '', 900, 0.74);
-    const compactHeaderLogo = await compactImageDataUrl(header.logo || '', 700, 0.78);
-    const compactEntries = await compactReportEntries(fullReport.entries || []);
     const baseFields = styledFields({
       name: student.name,
       birthDate: student.birthDate || '',
@@ -190,19 +134,23 @@
       period: period?.name || 'Periodo avaliativo',
       text: fullReport.text || '',
       documentType: type,
-      studentPhoto: compactStudentPhoto,
-      entries: JSON.stringify(compactEntries),
+      studentPhoto: student.photo || '',
+      entries: JSON.stringify(fullReport.entries || []),
       finalText: fullReport.useFinalText ? (fullReport.finalText || header.finalText || '') : '',
       headerNetwork: header.network || '',
       headerSchool: header.school || '',
       headerContact: header.contact || '',
-      headerLogo: compactHeaderLogo
+      headerLogo: header.logo || ''
     });
+    const pdfEntries = await Promise.all((fullReport.entries || []).map(async entry => ({
+      ...entry,
+      photos: (await Promise.all((entry.photos || []).map(src => typeof pdfJpeg === 'function' ? pdfJpeg(src) : src))).filter(Boolean)
+    })));
     const pdfFields = {
       ...baseFields,
-      studentPhoto: compactStudentPhoto,
-      headerLogo: compactHeaderLogo,
-      entries: JSON.stringify(compactEntries)
+      studentPhoto: typeof pdfJpeg === 'function' ? await pdfJpeg(student.photo || '') : student.photo || '',
+      headerLogo: typeof pdfJpeg === 'function' ? await pdfJpeg(header.logo || '') : header.logo || '',
+      entries: JSON.stringify(pdfEntries)
     };
     return {
       docx: await documentBlob('download_parecer.php', baseFields),
@@ -259,7 +207,7 @@
     try {
       const report = data.reports.find(item => String(item.databaseId || item.id) === String(reportId) || String(item.id) === String(reportId));
       if (!report) throw new Error('Documento nao encontrado para gerar anexos.');
-      if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Otimizando imagens e gerando anexos PDF e Word...';
+      if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Gerando os mesmos arquivos PDF e Word da listagem...';
       const attachments = await buildEmailAttachments(report);
       if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Anexando arquivos e enviando e-mail...';
       const totalSize = attachments.docx.size + attachments.pdf.size;

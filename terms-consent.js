@@ -21,6 +21,20 @@
     return data.user;
   }
 
+  function acceptedUser(user, version) {
+    const acceptedAt = new Date().toISOString();
+    return {
+      ...(user || {}),
+      terms: {
+        ...(user?.terms || {}),
+        accepted: true,
+        acceptedAt,
+        version,
+        currentVersion: version
+      }
+    };
+  }
+
   async function logout() {
     try {
       await fetch(api, {
@@ -121,18 +135,20 @@
         message.textContent = 'Marque o aceite para continuar.';
         return;
       }
+      const optimisticUser = acceptedUser(user, version);
+      window.PortalCurrentUser = optimisticUser;
+      window.dispatchEvent(new CustomEvent('portal:terms-accepted', {detail: optimisticUser}));
+      modal.remove();
+      document.body.classList.remove('terms-consent-lock');
       acceptButton.disabled = true;
       acceptButton.textContent = 'Registrando aceite...';
       try {
         const updatedUser = await acceptTerms(version);
         window.PortalCurrentUser = updatedUser;
         window.dispatchEvent(new CustomEvent('portal:terms-accepted', {detail: updatedUser}));
-        modal.remove();
-        document.body.classList.remove('terms-consent-lock');
       } catch (error) {
-        message.textContent = error.message || 'Nao foi possivel registrar o aceite.';
-        acceptButton.disabled = false;
-        acceptButton.textContent = 'Aceitar e continuar';
+        console.warn(error);
+        alert(error.message || 'Nao foi possivel registrar o aceite. Atualize a pagina e tente novamente.');
       }
     });
     checkbox.focus();

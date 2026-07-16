@@ -180,7 +180,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
   <script src="terms-consent.js?v=20260716-terms-link-1"></script>
   <script src="auth-profile.js?v=20260716-fast-admin-menu-1"></script>
-  <script src="google-drive-integration.js?v=20260716-drive-pairs-1"></script>
+  <script src="google-drive-integration.js?v=20260716-deliver-drive-timeout-1"></script>
   <script src="tutorial-videos.js?v=20260706-video-before-onboarding-2"></script>
   <script src="onboarding.js?v=20260715-onboarding-draft-1"></script>
   <script src="master-users.js?v=20260716-fast-admin-menu-1"></script>

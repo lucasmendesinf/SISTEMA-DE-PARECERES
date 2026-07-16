@@ -394,29 +394,58 @@
   function wrapDeliverReport() {
     const original = window.deliverReport;
     if (typeof original !== 'function' || original.__driveWrapped) return;
+    const withTimeout = (promise, ms, fallback = null) => new Promise(resolve => {
+      const timer = setTimeout(() => resolve(fallback), ms);
+      Promise.resolve(promise)
+        .then(value => {
+          clearTimeout(timer);
+          resolve(value);
+        })
+        .catch(() => {
+          clearTimeout(timer);
+          resolve(fallback);
+        });
+    });
+    const setButtonLoading = (button, loading) => {
+      if (!button) return;
+      if (loading) {
+        button.dataset.originalText = button.dataset.originalText || button.textContent;
+        button.disabled = true;
+        button.textContent = 'Finalizando...';
+        return;
+      }
+      button.disabled = false;
+      button.textContent = button.dataset.originalText || 'Entregar documento';
+    };
     window.deliverReport = async function deliverReportWithDrive(id) {
-      const state = driveState || await loadDriveState().catch(() => null);
-      if (state?.settings?.enabled && state?.settings?.required && !state.connected) {
-        toast('Conecte o Google Drive antes de finalizar este documento.', 'warning');
-        document.querySelector('.nav-item[data-view="configuracoes"]')?.click();
-        return null;
-      }
-      const report = data.reports.find(item => String(item.id) === String(id) || String(item.databaseId) === String(id));
-      if (!state?.settings?.enabled) return original(id);
-      const choice = await openDeliveryChoice(state);
-      if (choice === 'cancel') return null;
-      if (choice === 'config') {
-        document.querySelector('.nav-item[data-view="configuracoes"]')?.click();
-        return null;
-      }
-      if (choice === 'download') return original(id);
-      if (!report) return original(id);
+      const button = document.activeElement?.tagName === 'BUTTON' ? document.activeElement : null;
+      setButtonLoading(button, true);
       try {
+        const state = driveState || await withTimeout(loadDriveState(), 4500, null);
+        const report = data.reports.find(item => String(item.id) === String(id) || String(item.databaseId) === String(id));
+        if (state?.settings?.enabled && state?.settings?.required && !state.connected) {
+          toast('Conecte o Google Drive antes de finalizar este documento.', 'warning');
+          document.querySelector('.nav-item[data-view="configuracoes"]')?.click();
+          return null;
+        }
+        if (!state?.settings?.enabled) return await original(id);
+        setButtonLoading(button, false);
+        const choice = await openDeliveryChoice(state);
+        if (choice === 'cancel') return null;
+        if (choice === 'config') {
+          document.querySelector('.nav-item[data-view="configuracoes"]')?.click();
+          return null;
+        }
+        setButtonLoading(button, true);
+        if (choice === 'download') return await original(id);
+        if (!report) return await original(id);
         await deliverReportWithoutDownload(report);
         await uploadReportToDrive(report);
       } catch (error) {
         console.error(error);
         alert(error.message || 'Nao foi possivel finalizar o documento.');
+      } finally {
+        setButtonLoading(button, false);
       }
       return null;
     };

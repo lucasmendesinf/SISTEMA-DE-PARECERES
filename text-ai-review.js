@@ -1,4 +1,12 @@
 (() => {
+  const escapeHtml = value => String(value || '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[char]));
+
   const correctionPairs = [
     ['nao', 'n\u00e3o'], ['voce', 'voc\u00ea'], ['voces', 'voc\u00eas'], ['tambem', 'tamb\u00e9m'],
     ['ja', 'j\u00e1'], ['so', 's\u00f3'], ['apos', 'ap\u00f3s'], ['ate', 'at\u00e9'], ['atraves', 'atrav\u00e9s'],
@@ -341,7 +349,7 @@
           <label>Provedor de IA</label>
           <select id="aiReviewProvider">
             <option value="gemini">Gemini</option>
-            <option value="llama">Llama / Ollama</option>
+            <option value="llama">Llama via API</option>
           </select>
         </div>
         <div class="ai-provider-fields" data-ai-provider-fields="gemini">
@@ -350,11 +358,11 @@
           <div class="field"><label>Modelo Gemini</label><input id="aiGeminiModel" placeholder="gemini-3.5-flash"></div>
         </div>
         <div class="ai-provider-fields" data-ai-provider-fields="llama">
-          <label class="checkline"><input id="aiLlamaEnabled" type="checkbox"> Llama/Ollama ativo</label>
-          <div class="field"><label>URL do Ollama</label><input id="aiLlamaBaseUrl" placeholder="http://127.0.0.1:11434"></div>
-          <div class="field"><label>API Key do Llama/Ollama</label><input id="aiLlamaApiKey" type="password" autocomplete="off" placeholder="Opcional, deixe em branco para manter"></div>
-          <div class="field"><label>Modelo Llama</label><input id="aiLlamaModel" placeholder="llama3.1"></div>
-          <small class="muted">Use uma URL acessivel pelo servidor de hospedagem. Em producao, localhost aponta para o servidor, nao para seu computador.</small>
+          <label class="checkline"><input id="aiLlamaEnabled" type="checkbox"> Llama via API ativo</label>
+          <div class="field"><label>URL base da API</label><input id="aiLlamaBaseUrl" placeholder="https://api.groq.com/openai/v1"></div>
+          <div class="field"><label>API Key do Llama</label><input id="aiLlamaApiKey" type="password" autocomplete="off" placeholder="Cole a API Key ou deixe em branco para manter"></div>
+          <div class="field"><label>Modelo Llama</label><input id="aiLlamaModel" placeholder="llama-3.3-70b-versatile"></div>
+          <small class="muted">Use uma API compatível com OpenAI Chat Completions, como Groq, Together ou OpenRouter.</small>
         </div>
         <div class="field"><label>Limite diario por professora</label><input id="aiDailyUserLimit" type="number" min="1" max="500"></div>
         <div class="field"><label>Limite diario por escola</label><input id="aiDailySchoolLimit" type="number" min="1" max="5000"></div>
@@ -385,9 +393,9 @@
       document.querySelector('#aiGeminiApiKey').placeholder = settings.geminiConfigured ? `Configurada: ${settings.geminiApiKeyMasked}` : 'Cole a API Key do Gemini';
       document.querySelector('#aiGeminiModel').value = settings.geminiModel || 'gemini-3.5-flash';
       document.querySelector('#aiLlamaEnabled').checked = !!settings.llamaEnabled;
-      document.querySelector('#aiLlamaBaseUrl').value = settings.llamaBaseUrl || 'http://127.0.0.1:11434';
-      document.querySelector('#aiLlamaApiKey').placeholder = settings.llamaApiKeyConfigured ? `Configurada: ${settings.llamaApiKeyMasked}` : 'Opcional, cole a API Key';
-      document.querySelector('#aiLlamaModel').value = settings.llamaModel || 'llama3.1';
+      document.querySelector('#aiLlamaBaseUrl').value = settings.llamaBaseUrl || 'https://api.groq.com/openai/v1';
+      document.querySelector('#aiLlamaApiKey').placeholder = settings.llamaApiKeyConfigured ? `Configurada: ${settings.llamaApiKeyMasked}` : 'Cole a API Key do provedor';
+      document.querySelector('#aiLlamaModel').value = settings.llamaModel || 'llama-3.3-70b-versatile';
       document.querySelector('#aiDailyUserLimit').value = settings.dailyUserLimit || 10;
       document.querySelector('#aiDailySchoolLimit').value = settings.dailySchoolLimit || 100;
       toggleAiProviderFields();

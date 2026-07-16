@@ -99,6 +99,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <link rel="stylesheet" href="google-drive-integration.css?v=20260716-drive-pairs-1">
   <link rel="stylesheet" href="master-users.css?v=20260705-billing-cycles-1">
   <link rel="stylesheet" href="finance-admin.css?v=20260703-finance-due-filter-1">
+  <link rel="stylesheet" href="ai-usage-admin.css?v=20260716-ai-usage-1">
   <link rel="stylesheet" href="image-editors.css?v=20260709-activity-photo-picker-front-1">
   <link rel="stylesheet" href="document-style.css?v=20260706-paragraph-indent-1">
   <link rel="stylesheet" href="tutorial-videos.css?v=20260706-video-before-onboarding-2">
@@ -124,6 +125,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
       <?php if ($isMaster): ?><button class="nav-item" data-view="informativoMarketing"><span aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a2 2 0 0 0 2 2h2l4 5v-5h2l7 3V6l-7 3H5a2 2 0 0 0-2 2Z"/><path d="M17 9.5v5"/><path d="M7 15v4"/></svg></span> Informativo</button><?php endif; ?>
       <?php if ($isMaster): ?><button class="nav-item" data-view="usuarios"><span>@</span> Usuarios</button><?php endif; ?>
       <?php if ($isMaster): ?><button class="nav-item" data-view="financeiro"><span>$</span> Financeiro</button><?php endif; ?>
+      <?php if ($isMaster): ?><button class="nav-item" data-view="consumoIa"><span>◫</span> Consumo IA</button><?php endif; ?>
     </nav>
     <div class="sidebar-bottom"><a class="help" href="https://wa.me/5541996310725" target="_blank" rel="noopener noreferrer">◌ Suporte</a><div class="profile" aria-haspopup="true" aria-expanded="false"><div class="avatar"><?= $escape($initials($bootstrapUser['name'])) ?></div><div><strong><?= $escape($bootstrapUser['name']) ?></strong><small><?= $escape($profileRole) ?></small></div></div><div class="profile-menu" hidden><button type="button" id="sidebarProfileButton">Meus dados</button><button type="button" id="sidebarLogoutButton" class="danger">Sair do sistema</button></div></div>
   </aside>
@@ -174,7 +176,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="document-style-settings.js?v=20260716-force-docx-font-1"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
   <script src="billing-cycles.js?v=20260705-billing-cycles-1"></script>
-  <script src="text-ai-review.js?v=20260716-llama-api-key-1"></script>
+  <script src="text-ai-review.js?v=20260716-ai-escape-fix-1"></script>
   <script src="document-button-fix.js"></script>
   <script src="director-email.js?v=20260716-email-same-download-files-1"></script>
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
@@ -185,6 +187,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="onboarding.js?v=20260715-onboarding-draft-1"></script>
   <script src="master-users.js?v=20260716-fast-admin-menu-1"></script>
   <script src="finance-admin.js?v=20260716-fast-admin-menu-1"></script>
+  <script src="ai-usage-admin.js?v=20260716-ai-usage-1"></script>
   <script src="image-editor-permissions.js?v=20260702-combined-image-editor-1"></script>
   <script src="manual-image-editor.js?v=20260709-activity-photos-30-1"></script>
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>

@@ -5,6 +5,7 @@ header('Content-Type: application/json; charset=utf-8');
 ini_set('display_errors', '0');
 date_default_timezone_set('America/Sao_Paulo');
 session_start();
+require_once __DIR__ . '/ai_usage_helpers.php';
 
 if (!function_exists('str_starts_with')) {
     function str_starts_with(string $haystack, string $needle): bool
@@ -141,6 +142,77 @@ try {
         INDEX idx_ai_review_school_date (escola_hash, created_at),
         INDEX idx_ai_review_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS ai_model_prices (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        provider VARCHAR(40) NOT NULL,
+        model_id VARCHAR(160) NOT NULL,
+        display_name VARCHAR(180) NOT NULL,
+        input_price_per_million DECIMAL(20,10) NOT NULL DEFAULT 0.0000000000,
+        output_price_per_million DECIMAL(20,10) NOT NULL DEFAULT 0.0000000000,
+        cached_input_price_per_million DECIMAL(20,10) NULL,
+        currency VARCHAR(12) NOT NULL DEFAULT 'USD',
+        effective_from DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        effective_until DATETIME NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_ai_model_price_active (provider, model_id, is_active),
+        INDEX idx_ai_model_price_lookup (provider, model_id, is_active, effective_from)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS ai_usage_logs (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        provider VARCHAR(40) NOT NULL,
+        model_id VARCHAR(160) NOT NULL,
+        request_id VARCHAR(120) NOT NULL,
+        external_request_id VARCHAR(160) NULL,
+        user_id BIGINT UNSIGNED NULL,
+        school_hash VARCHAR(64) NULL,
+        school_name VARCHAR(180) NULL,
+        tenant_id BIGINT UNSIGNED NULL,
+        feature VARCHAR(80) NOT NULL DEFAULT 'revisao_parecer',
+        operation VARCHAR(80) NOT NULL DEFAULT 'improve',
+        status ENUM('success','failed','cancelled','timeout','rate_limited','no_usage_data') NOT NULL,
+        prompt_tokens INT UNSIGNED NULL,
+        cached_tokens INT UNSIGNED NULL,
+        completion_tokens INT UNSIGNED NULL,
+        total_tokens INT UNSIGNED NULL,
+        input_unit_price_snapshot DECIMAL(20,10) NULL,
+        output_unit_price_snapshot DECIMAL(20,10) NULL,
+        cached_input_unit_price_snapshot DECIMAL(20,10) NULL,
+        input_cost_usd DECIMAL(20,10) NULL,
+        output_cost_usd DECIMAL(20,10) NULL,
+        cached_input_cost_usd DECIMAL(20,10) NULL,
+        total_cost_usd DECIMAL(20,10) NULL,
+        exchange_rate_brl DECIMAL(20,10) NULL,
+        total_cost_brl DECIMAL(20,10) NULL,
+        duration_ms INT UNSIGNED NULL,
+        error_code VARCHAR(80) NULL,
+        error_message TEXT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_ai_usage_request (request_id),
+        INDEX idx_ai_usage_date (created_at),
+        INDEX idx_ai_usage_user_date (user_id, created_at),
+        INDEX idx_ai_usage_school_date (school_hash, created_at),
+        INDEX idx_ai_usage_model_date (provider, model_id, created_at),
+        INDEX idx_ai_usage_status (status, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS ai_usage_alerts (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        cycle_key VARCHAR(20) NOT NULL,
+        alert_type VARCHAR(60) NOT NULL,
+        level VARCHAR(20) NOT NULL DEFAULT 'warning',
+        message VARCHAR(255) NOT NULL,
+        context_json TEXT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        resolved_at DATETIME NULL,
+        UNIQUE KEY uq_ai_usage_alert_cycle (cycle_key, alert_type),
+        INDEX idx_ai_usage_alert_open (resolved_at, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("INSERT INTO ai_model_prices
+        (provider,model_id,display_name,input_price_per_million,output_price_per_million,cached_input_price_per_million,currency,is_active)
+        SELECT 'Groq','llama-3.3-70b-versatile','Llama 3.3 70B Versatile',0.5900000000,0.7900000000,0.0000000000,'USD',1
+        WHERE NOT EXISTS (SELECT 1 FROM ai_model_prices WHERE provider='Groq' AND model_id='llama-3.3-70b-versatile' AND is_active=1)");
     $pdo->exec("INSERT INTO billing_cycles (name,slug,month_count,amount,active) VALUES
         ('Mensal','monthly',1,0.00,1),
         ('Trimestral','quarterly',3,0.00,1),
@@ -477,9 +549,9 @@ try {
             'llama' => [
                 'enabled' => false,
                 'priority' => 2,
-                'base_url' => trim((string) (getenv('OLLAMA_BASE_URL') ?: ($config['ollama']['base_url'] ?? 'http://127.0.0.1:11434'))),
-                'api_key' => trim((string) (getenv('OLLAMA_API_KEY') ?: ($config['ollama']['api_key'] ?? ''))),
-                'model' => trim((string) (getenv('OLLAMA_MODEL') ?: ($config['ollama']['model'] ?? 'llama3.1'))),
+                'base_url' => trim((string) (getenv('LLAMA_API_BASE_URL') ?: getenv('OLLAMA_BASE_URL') ?: ($config['llama']['base_url'] ?? $config['ollama']['base_url'] ?? 'https://api.groq.com/openai/v1'))),
+                'api_key' => trim((string) (getenv('LLAMA_API_KEY') ?: getenv('OLLAMA_API_KEY') ?: ($config['llama']['api_key'] ?? $config['ollama']['api_key'] ?? ''))),
+                'model' => trim((string) (getenv('LLAMA_MODEL') ?: getenv('OLLAMA_MODEL') ?: ($config['llama']['model'] ?? $config['ollama']['model'] ?? 'llama-3.3-70b-versatile'))),
             ],
         ],
     ];
@@ -490,14 +562,20 @@ try {
         $settings = array_replace_recursive($aiReviewDefaults, is_array($saved) ? $saved : []);
         $envKey = trim((string) (getenv('GEMINI_API_KEY') ?: ''));
         $envModel = trim((string) (getenv('GEMINI_MODEL') ?: ''));
-        $ollamaUrl = trim((string) (getenv('OLLAMA_BASE_URL') ?: ''));
-        $ollamaKey = trim((string) (getenv('OLLAMA_API_KEY') ?: ''));
-        $ollamaModel = trim((string) (getenv('OLLAMA_MODEL') ?: ''));
+        $llamaUrl = trim((string) (getenv('LLAMA_API_BASE_URL') ?: getenv('OLLAMA_BASE_URL') ?: ''));
+        $llamaKey = trim((string) (getenv('LLAMA_API_KEY') ?: getenv('OLLAMA_API_KEY') ?: ''));
+        $llamaModel = trim((string) (getenv('LLAMA_MODEL') ?: getenv('OLLAMA_MODEL') ?: ''));
         if ($envKey !== '' && trim((string) ($settings['providers']['gemini']['api_key'] ?? '')) === '') $settings['providers']['gemini']['api_key'] = $envKey;
         if ($envModel !== '' && trim((string) ($settings['providers']['gemini']['model'] ?? '')) === '') $settings['providers']['gemini']['model'] = $envModel;
-        if ($ollamaUrl !== '' && trim((string) ($settings['providers']['llama']['base_url'] ?? '')) === '') $settings['providers']['llama']['base_url'] = $ollamaUrl;
-        if ($ollamaKey !== '' && trim((string) ($settings['providers']['llama']['api_key'] ?? '')) === '') $settings['providers']['llama']['api_key'] = $ollamaKey;
-        if ($ollamaModel !== '' && trim((string) ($settings['providers']['llama']['model'] ?? '')) === '') $settings['providers']['llama']['model'] = $ollamaModel;
+        if ($llamaUrl !== '' && trim((string) ($settings['providers']['llama']['base_url'] ?? '')) === '') $settings['providers']['llama']['base_url'] = $llamaUrl;
+        if ($llamaKey !== '' && trim((string) ($settings['providers']['llama']['api_key'] ?? '')) === '') $settings['providers']['llama']['api_key'] = $llamaKey;
+        if ($llamaModel !== '' && trim((string) ($settings['providers']['llama']['model'] ?? '')) === '') $settings['providers']['llama']['model'] = $llamaModel;
+        if (trim((string) ($settings['providers']['llama']['model'] ?? '')) === 'llama3.1') {
+            $settings['providers']['llama']['model'] = 'llama-3.3-70b-versatile';
+        }
+        if (trim((string) ($settings['providers']['llama']['base_url'] ?? '')) === 'http://127.0.0.1:11434') {
+            $settings['providers']['llama']['base_url'] = 'https://api.groq.com/openai/v1';
+        }
         return $settings;
     };
     $publicAiReviewSettings = static function (array $settings) use ($maskSecret): array {
@@ -515,10 +593,10 @@ try {
             'geminiModel' => (string) ($gemini['model'] ?? 'gemini-3.5-flash'),
             'llamaEnabled' => !empty($llama['enabled']),
             'llamaConfigured' => trim((string) ($llama['base_url'] ?? '')) !== '' && trim((string) ($llama['model'] ?? '')) !== '',
-            'llamaBaseUrl' => (string) ($llama['base_url'] ?? 'http://127.0.0.1:11434'),
+            'llamaBaseUrl' => (string) ($llama['base_url'] ?? 'https://api.groq.com/openai/v1'),
             'llamaApiKeyConfigured' => trim((string) ($llama['api_key'] ?? '')) !== '',
             'llamaApiKeyMasked' => $maskSecret((string) ($llama['api_key'] ?? '')),
-            'llamaModel' => (string) ($llama['model'] ?? 'llama3.1'),
+            'llamaModel' => (string) ($llama['model'] ?? 'llama-3.3-70b-versatile'),
         ];
     };
     $aiSchoolHash = static function (int $userId) use ($pdo): string {
@@ -534,6 +612,133 @@ try {
             $stmt->execute([$userId, $provider, $action, $status, $schoolHash ?: null, mb_substr($error, 0, 2000, 'UTF-8') ?: null]);
         } catch (Throwable $e) {
             error_log('AiProf ai_review_logs skipped: ' . $e->getMessage());
+        }
+    };
+    $aiUsageDefaults = [
+        'exchange_rate_brl' => 5.50,
+        'monthly_limit_usd' => 20.00,
+        'alert_70' => 70,
+        'alert_90' => 90,
+        'alert_100' => 100,
+        'limit_action' => 'alert',
+    ];
+    $getAiUsageSettings = static function () use ($pdo, $aiUsageDefaults): array {
+        $query = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key='ai_usage' LIMIT 1");
+        $query->execute();
+        $saved = json_decode((string) ($query->fetchColumn() ?: '{}'), true);
+        $settings = array_replace($aiUsageDefaults, is_array($saved) ? $saved : []);
+        $settings['exchange_rate_brl'] = max(0.01, (float) ($settings['exchange_rate_brl'] ?? 5.50));
+        $settings['monthly_limit_usd'] = max(0, (float) ($settings['monthly_limit_usd'] ?? 20.00));
+        foreach (['alert_70', 'alert_90', 'alert_100'] as $key) {
+            $settings[$key] = max(1, min(1000, (int) ($settings[$key] ?? $aiUsageDefaults[$key])));
+        }
+        $settings['limit_action'] = in_array((string) ($settings['limit_action'] ?? 'alert'), ['alert', 'block', 'fallback', 'continue'], true) ? (string) $settings['limit_action'] : 'alert';
+        return $settings;
+    };
+    $aiSchoolContext = static function (int $userId) use ($pdo): array {
+        $query = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key=? LIMIT 1");
+        $query->execute(['header_settings_' . $userId]);
+        $settings = json_decode((string) ($query->fetchColumn() ?: '{}'), true);
+        $network = is_array($settings) ? trim((string) ($settings['network'] ?? '')) : '';
+        $school = is_array($settings) ? trim((string) ($settings['school'] ?? '')) : '';
+        $name = $school !== '' ? $school : ($network !== '' ? $network : 'Cliente #' . $userId);
+        return [
+            'hash' => hash('sha256', mb_strtolower($school !== '' ? $school : ($network !== '' ? $network : 'usuario-' . $userId), 'UTF-8')),
+            'name' => mb_substr($name, 0, 180, 'UTF-8'),
+        ];
+    };
+    $getAiModelPrice = static function (string $provider, string $modelId) use ($pdo): ?array {
+        $query = $pdo->prepare("SELECT * FROM ai_model_prices WHERE provider=? AND model_id=? AND is_active=1 AND effective_from<=NOW() AND (effective_until IS NULL OR effective_until>NOW()) ORDER BY effective_from DESC, id DESC LIMIT 1");
+        $query->execute([$provider, $modelId]);
+        $row = $query->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    };
+    $createAiUsageAlert = static function (string $cycleKey, string $type, string $level, string $message, array $context = []) use ($pdo): void {
+        try {
+            $stmt = $pdo->prepare('INSERT IGNORE INTO ai_usage_alerts (cycle_key,alert_type,level,message,context_json) VALUES (?,?,?,?,?)');
+            $stmt->execute([$cycleKey, $type, $level, mb_substr($message, 0, 255, 'UTF-8'), json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+        } catch (Throwable $e) {
+            error_log('AiProf ai_usage_alert skipped: ' . $e->getMessage());
+        }
+    };
+    $monthlyAiUsageUsd = static function () use ($pdo): float {
+        $cycle = ai_usage_month_cycle();
+        $query = $pdo->prepare("SELECT COALESCE(SUM(total_cost_usd),0) FROM ai_usage_logs WHERE created_at>=? AND created_at<? AND status IN ('success','no_usage_data')");
+        $query->execute([$cycle['start'], $cycle['end']]);
+        return (float) $query->fetchColumn();
+    };
+    $recordAiUsage = static function (array $entry) use ($pdo, $getAiUsageSettings, $getAiModelPrice, $createAiUsageAlert): void {
+        try {
+            $settings = $getAiUsageSettings();
+            $provider = (string) ($entry['provider'] ?? 'Groq');
+            $modelId = (string) ($entry['model_id'] ?? '');
+            $usage = ai_usage_extract_tokens(is_array($entry['usage'] ?? null) ? $entry['usage'] : null);
+            $status = (string) ($entry['status'] ?? 'failed');
+            if ($status === 'success' && empty($usage['has_usage'])) $status = 'no_usage_data';
+            $price = $getAiModelPrice($provider, $modelId);
+            $costs = ai_usage_calculate_costs($usage, $price, (float) $settings['exchange_rate_brl']);
+            $requestId = trim((string) ($entry['request_id'] ?? ''));
+            if ($requestId === '') $requestId = bin2hex(random_bytes(12));
+            if ($status === 'success' && !$price) {
+                $cycle = ai_usage_month_cycle();
+                $createAiUsageAlert($cycle['key'], 'missing_price_' . md5($provider . ':' . $modelId), 'danger', 'Modelo sem preco cadastrado: ' . $provider . ' / ' . $modelId, ['provider' => $provider, 'model' => $modelId]);
+            }
+            if ($status === 'no_usage_data') {
+                $cycle = ai_usage_month_cycle();
+                $createAiUsageAlert($cycle['key'], 'no_usage_data_' . md5($provider . ':' . $modelId), 'warning', 'Resposta da IA sem informacoes oficiais de uso.', ['provider' => $provider, 'model' => $modelId]);
+            }
+            if ($status === 'rate_limited') {
+                $cycle = ai_usage_month_cycle();
+                $createAiUsageAlert($cycle['key'], 'rate_limited', 'danger', 'A API Groq retornou limite de uso atingido.', ['provider' => $provider, 'model' => $modelId]);
+            }
+            $stmt = $pdo->prepare("INSERT IGNORE INTO ai_usage_logs
+                (provider,model_id,request_id,external_request_id,user_id,school_hash,school_name,tenant_id,feature,operation,status,prompt_tokens,cached_tokens,completion_tokens,total_tokens,input_unit_price_snapshot,output_unit_price_snapshot,cached_input_unit_price_snapshot,input_cost_usd,output_cost_usd,cached_input_cost_usd,total_cost_usd,exchange_rate_brl,total_cost_brl,duration_ms,error_code,error_message)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            $stmt->execute([
+                $provider,
+                $modelId,
+                $requestId,
+                trim((string) ($entry['external_request_id'] ?? '')) ?: null,
+                isset($entry['user_id']) ? (int) $entry['user_id'] : null,
+                trim((string) ($entry['school_hash'] ?? '')) ?: null,
+                trim((string) ($entry['school_name'] ?? '')) ?: null,
+                isset($entry['tenant_id']) ? (int) $entry['tenant_id'] : null,
+                trim((string) ($entry['feature'] ?? 'revisao_parecer')) ?: 'revisao_parecer',
+                trim((string) ($entry['operation'] ?? 'improve')) ?: 'improve',
+                in_array($status, ['success', 'failed', 'cancelled', 'timeout', 'rate_limited', 'no_usage_data'], true) ? $status : 'failed',
+                $usage['prompt_tokens'],
+                $usage['cached_tokens'],
+                $usage['completion_tokens'],
+                $usage['total_tokens'],
+                $price ? ai_usage_decimal((float) $price['input_price_per_million']) : null,
+                $price ? ai_usage_decimal((float) $price['output_price_per_million']) : null,
+                $price ? ai_usage_decimal((float) ($price['cached_input_price_per_million'] ?? 0)) : null,
+                $costs['input_cost_usd'],
+                $costs['output_cost_usd'],
+                $costs['cached_input_cost_usd'],
+                $costs['total_cost_usd'],
+                ai_usage_decimal((float) $settings['exchange_rate_brl']),
+                $costs['total_cost_brl'],
+                isset($entry['duration_ms']) ? max(0, (int) $entry['duration_ms']) : null,
+                trim((string) ($entry['error_code'] ?? '')) ?: null,
+                mb_substr((string) ($entry['error_message'] ?? ''), 0, 2000, 'UTF-8') ?: null,
+            ]);
+            $cycle = ai_usage_month_cycle();
+            $query = $pdo->prepare("SELECT COALESCE(SUM(total_cost_usd),0) FROM ai_usage_logs WHERE created_at>=? AND created_at<? AND status IN ('success','no_usage_data')");
+            $query->execute([$cycle['start'], $cycle['end']]);
+            $monthly = (float) $query->fetchColumn();
+            $limit = (float) ($settings['monthly_limit_usd'] ?? 0);
+            if ($limit > 0) {
+                foreach ([70 => 'alert_70', 90 => 'alert_90', 100 => 'alert_100'] as $fallback => $key) {
+                    $threshold = (int) ($settings[$key] ?? $fallback);
+                    if ($monthly >= ($limit * ($threshold / 100))) {
+                        $level = $threshold >= 100 ? 'danger' : ($threshold >= 90 ? 'warning' : 'info');
+                        $createAiUsageAlert($cycle['key'], 'monthly_' . $threshold, $level, 'Consumo estimado de IA atingiu ' . $threshold . '% do limite mensal interno.', ['monthly_usd' => $monthly, 'limit_usd' => $limit]);
+                    }
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('AiProf ai_usage_logs skipped: ' . $e->getMessage());
         }
     };
     $googleDriveAudit = static function (?int $userId, string $action, string $details = '') use ($pdo): void {
@@ -1342,9 +1547,10 @@ try {
             $currentLlama = is_array($settings['providers']['llama'] ?? null) ? $settings['providers']['llama'] : [];
             $apiKey = trim((string) ($input['geminiApiKey'] ?? ''));
             $provider = in_array((string) ($input['provider'] ?? 'gemini'), ['gemini', 'llama'], true) ? (string) $input['provider'] : 'gemini';
-            $llamaBaseUrl = rtrim(trim((string) ($input['llamaBaseUrl'] ?? ($currentLlama['base_url'] ?? 'http://127.0.0.1:11434'))), '/');
+            $llamaBaseUrl = rtrim(trim((string) ($input['llamaBaseUrl'] ?? ($currentLlama['base_url'] ?? 'https://api.groq.com/openai/v1'))), '/');
             $llamaApiKey = trim((string) ($input['llamaApiKey'] ?? ''));
-            $llamaModel = trim((string) ($input['llamaModel'] ?? ($currentLlama['model'] ?? 'llama3.1'))) ?: 'llama3.1';
+            $llamaModel = trim((string) ($input['llamaModel'] ?? ($currentLlama['model'] ?? 'llama-3.3-70b-versatile'))) ?: 'llama-3.3-70b-versatile';
+            if ($llamaModel === 'llama3.1') $llamaModel = 'llama-3.3-70b-versatile';
             $settings = [
                 'enabled' => !empty($input['enabled']),
                 'provider' => $provider,
@@ -1371,13 +1577,140 @@ try {
                 throw new RuntimeException('Informe a API Key do Gemini para ativar a revisao por IA.');
             }
             if ($settings['enabled'] && $provider === 'llama' && $settings['providers']['llama']['enabled'] && trim((string) $settings['providers']['llama']['base_url']) === '') {
-                throw new RuntimeException('Informe a URL do Ollama para ativar o Llama.');
+                throw new RuntimeException('Informe a URL base da API para ativar o Llama.');
+            }
+            if ($settings['enabled'] && $provider === 'llama' && $settings['providers']['llama']['enabled'] && trim((string) $settings['providers']['llama']['api_key']) === '') {
+                throw new RuntimeException('Informe a API Key para ativar o Llama via API.');
             }
             $save = $pdo->prepare('INSERT INTO app_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
             $save->execute(['ai_review', json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
             echo json_encode(['ok' => true, 'settings' => $publicAiReviewSettings($settings)], JSON_UNESCAPED_UNICODE);
             exit;
         }
+    }
+    if ($resource === 'ai-usage') {
+        $requireMaster();
+        $action = (string) ($_GET['action'] ?? 'summary');
+        $validDate = static function (string $value, string $fallback): string {
+            return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : $fallback;
+        };
+        $today = new DateTimeImmutable('today');
+        $startDate = $validDate((string) ($_GET['start'] ?? ''), $today->modify('first day of this month')->format('Y-m-d'));
+        $endDate = $validDate((string) ($_GET['end'] ?? ''), $today->format('Y-m-d'));
+        $startAt = $startDate . ' 00:00:00';
+        $endAt = (new DateTimeImmutable($endDate))->modify('+1 day')->format('Y-m-d 00:00:00');
+        $where = ['l.created_at>=?', 'l.created_at<?'];
+        $params = [$startAt, $endAt];
+        $addFilter = static function (string $sql, $value) use (&$where, &$params): void {
+            if ($value === '' || $value === null) return;
+            $where[] = $sql;
+            $params[] = $value;
+        };
+        $addFilter('l.provider=?', trim((string) ($_GET['provider'] ?? '')));
+        $addFilter('l.model_id=?', trim((string) ($_GET['model'] ?? '')));
+        $addFilter('l.feature=?', trim((string) ($_GET['feature'] ?? '')));
+        $addFilter('l.status=?', trim((string) ($_GET['status'] ?? '')));
+        $userFilter = (int) ($_GET['userId'] ?? 0);
+        if ($userFilter > 0) $addFilter('l.user_id=?', $userFilter);
+        $schoolFilter = trim((string) ($_GET['school'] ?? ''));
+        if ($schoolFilter !== '') $addFilter('l.school_hash=?', $schoolFilter);
+        $whereSql = implode(' AND ', $where);
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+            $postAction = (string) ($input['action'] ?? 'settings');
+            if ($postAction === 'settings') {
+                $settings = [
+                    'exchange_rate_brl' => max(0.01, (float) ($input['exchangeRateBrl'] ?? 5.50)),
+                    'monthly_limit_usd' => max(0, (float) ($input['monthlyLimitUsd'] ?? 20)),
+                    'alert_70' => max(1, min(1000, (int) ($input['alert70'] ?? 70))),
+                    'alert_90' => max(1, min(1000, (int) ($input['alert90'] ?? 90))),
+                    'alert_100' => max(1, min(1000, (int) ($input['alert100'] ?? 100))),
+                    'limit_action' => in_array((string) ($input['limitAction'] ?? 'alert'), ['alert', 'block', 'fallback', 'continue'], true) ? (string) $input['limitAction'] : 'alert',
+                ];
+                $save = $pdo->prepare('INSERT INTO app_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
+                $save->execute(['ai_usage', json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+                echo json_encode(['ok' => true, 'settings' => $settings], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            if ($postAction === 'price') {
+                $providerName = trim((string) ($input['provider'] ?? 'Groq')) ?: 'Groq';
+                $modelId = trim((string) ($input['modelId'] ?? ''));
+                if ($modelId === '') throw new RuntimeException('Informe o modelo.');
+                $displayName = trim((string) ($input['displayName'] ?? $modelId)) ?: $modelId;
+                $pdo->prepare('UPDATE ai_model_prices SET is_active=0,effective_until=NOW() WHERE provider=? AND model_id=? AND is_active=1')->execute([$providerName, $modelId]);
+                $insert = $pdo->prepare('INSERT INTO ai_model_prices (provider,model_id,display_name,input_price_per_million,output_price_per_million,cached_input_price_per_million,currency,effective_from,is_active) VALUES (?,?,?,?,?,?,?,NOW(),1)');
+                $insert->execute([
+                    $providerName,
+                    $modelId,
+                    $displayName,
+                    ai_usage_decimal(max(0, (float) ($input['inputPrice'] ?? 0))),
+                    ai_usage_decimal(max(0, (float) ($input['outputPrice'] ?? 0))),
+                    ai_usage_decimal(max(0, (float) ($input['cachedInputPrice'] ?? 0))),
+                    trim((string) ($input['currency'] ?? 'USD')) ?: 'USD',
+                ]);
+                echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            throw new RuntimeException('Acao de consumo IA invalida.');
+        }
+
+        if ($action === 'export') {
+            header('Content-Type: text/csv; charset=utf-8');
+            header('Content-Disposition: attachment; filename="consumo-ia-' . date('Y-m-d') . '.csv"');
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['data', 'usuario', 'escola', 'provedor', 'modelo', 'recurso', 'operacao', 'status', 'tokens_entrada', 'tokens_cache', 'tokens_saida', 'tokens_total', 'custo_usd', 'custo_brl', 'duracao_ms']);
+            $query = $pdo->prepare("SELECT l.*,u.nome AS user_name FROM ai_usage_logs l LEFT JOIN usuarios u ON u.id=l.user_id WHERE {$whereSql} ORDER BY l.created_at DESC LIMIT 5000");
+            $query->execute($params);
+            while ($row = $query->fetch(PDO::FETCH_ASSOC)) {
+                fputcsv($out, [
+                    $row['created_at'], $row['user_name'] ?? '', $row['school_name'] ?? '', $row['provider'], $row['model_id'], $row['feature'], $row['operation'], $row['status'],
+                    $row['prompt_tokens'], $row['cached_tokens'], $row['completion_tokens'], $row['total_tokens'], $row['total_cost_usd'], $row['total_cost_brl'], $row['duration_ms'],
+                ]);
+            }
+            fclose($out);
+            exit;
+        }
+
+        $summaryQuery = $pdo->prepare("SELECT COUNT(*) AS requests,SUM(status='success') AS successes,SUM(status NOT IN ('success','no_usage_data')) AS failures,COALESCE(SUM(prompt_tokens),0) AS prompt_tokens,COALESCE(SUM(cached_tokens),0) AS cached_tokens,COALESCE(SUM(completion_tokens),0) AS completion_tokens,COALESCE(SUM(total_tokens),0) AS total_tokens,COALESCE(SUM(total_cost_usd),0) AS total_cost_usd,COALESCE(SUM(total_cost_brl),0) AS total_cost_brl,COALESCE(AVG(NULLIF(total_cost_usd,0)),0) AS avg_cost_usd FROM ai_usage_logs l WHERE {$whereSql}");
+        $summaryQuery->execute($params);
+        $month = ai_usage_month_cycle();
+        $monthQuery = $pdo->prepare("SELECT COUNT(*) requests,COALESCE(SUM(total_cost_usd),0) total_cost_usd,COALESCE(SUM(total_cost_brl),0) total_cost_brl FROM ai_usage_logs WHERE created_at>=? AND created_at<?");
+        $monthQuery->execute([$month['start'], $month['end']]);
+        $todayQuery = $pdo->prepare("SELECT COALESCE(SUM(total_cost_usd),0) total_cost_usd,COALESCE(SUM(total_cost_brl),0) total_cost_brl FROM ai_usage_logs WHERE created_at>=?");
+        $todayQuery->execute([$today->format('Y-m-d 00:00:00')]);
+        $seriesQuery = $pdo->prepare("SELECT DATE(l.created_at) day,COUNT(*) requests,COALESCE(SUM(total_tokens),0) total_tokens,COALESCE(SUM(total_cost_usd),0) total_cost_usd FROM ai_usage_logs l WHERE {$whereSql} GROUP BY DATE(l.created_at) ORDER BY day");
+        $seriesQuery->execute($params);
+        $group = static function (string $select, string $groupBy) use ($pdo, $whereSql, $params): array {
+            $query = $pdo->prepare("SELECT {$select},COUNT(*) requests,COALESCE(SUM(total_tokens),0) total_tokens,COALESCE(SUM(total_cost_usd),0) total_cost_usd FROM ai_usage_logs l LEFT JOIN usuarios u ON u.id=l.user_id WHERE {$whereSql} GROUP BY {$groupBy} ORDER BY total_cost_usd DESC, requests DESC LIMIT 12");
+            $query->execute($params);
+            return $query->fetchAll(PDO::FETCH_ASSOC);
+        };
+        $logsQuery = $pdo->prepare("SELECT l.*,u.nome AS user_name FROM ai_usage_logs l LEFT JOIN usuarios u ON u.id=l.user_id WHERE {$whereSql} ORDER BY l.created_at DESC LIMIT 200");
+        $logsQuery->execute($params);
+        $prices = $pdo->query("SELECT * FROM ai_model_prices ORDER BY is_active DESC, provider, model_id, effective_from DESC")->fetchAll(PDO::FETCH_ASSOC);
+        $alerts = $pdo->query("SELECT * FROM ai_usage_alerts WHERE resolved_at IS NULL ORDER BY created_at DESC LIMIT 20")->fetchAll(PDO::FETCH_ASSOC);
+        $users = $pdo->query("SELECT id,nome FROM usuarios ORDER BY nome")->fetchAll(PDO::FETCH_ASSOC);
+        $schools = $pdo->query("SELECT school_hash,COALESCE(MAX(school_name),school_hash) AS name FROM ai_usage_logs WHERE school_hash IS NOT NULL GROUP BY school_hash ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode([
+            'settings' => $getAiUsageSettings(),
+            'summary' => $summaryQuery->fetch(PDO::FETCH_ASSOC) ?: [],
+            'today' => $todayQuery->fetch(PDO::FETCH_ASSOC) ?: [],
+            'month' => $monthQuery->fetch(PDO::FETCH_ASSOC) ?: [],
+            'monthCycle' => $month,
+            'series' => $seriesQuery->fetchAll(PDO::FETCH_ASSOC),
+            'byModel' => $group('l.provider,l.model_id', 'l.provider,l.model_id'),
+            'byUser' => $group("l.user_id,COALESCE(u.nome,'Sem usuario') AS name", 'l.user_id,u.nome'),
+            'bySchool' => $group("l.school_hash,COALESCE(l.school_name,l.school_hash,'Sem escola') AS name", 'l.school_hash,l.school_name'),
+            'byFeature' => $group('l.feature AS name', 'l.feature'),
+            'logs' => $logsQuery->fetchAll(PDO::FETCH_ASSOC),
+            'prices' => $prices,
+            'alerts' => $alerts,
+            'users' => $users,
+            'schools' => $schools,
+            'note' => 'Consumo estimado e registrado pelo iProf. Pode haver diferencas em relacao a cobranca final da Groq.',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
     }
     if ($resource === 'ai-review' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = $loadCurrentUser();
@@ -1389,7 +1722,8 @@ try {
         if ($text === '') throw new RuntimeException('Escreva um texto antes de solicitar a revisao.');
         if (mb_strlen($text, 'UTF-8') > 12000) throw new RuntimeException('O texto esta muito longo para revisao. Divida em partes menores.');
         if (empty($settings['enabled'])) throw new RuntimeException('Revisao por IA ainda nao esta habilitada pelo administrador.');
-        $schoolHash = $aiSchoolHash((int) $user['id']);
+        $schoolContext = $aiSchoolContext((int) $user['id']);
+        $schoolHash = $schoolContext['hash'];
         $todayStart = (new DateTimeImmutable('today'))->format('Y-m-d 00:00:00');
         $userCount = $pdo->prepare("SELECT COUNT(*) FROM ai_review_logs WHERE usuario_id=? AND status='success' AND created_at>=?");
         $userCount->execute([(int) $user['id'], $todayStart]);
@@ -1422,47 +1756,95 @@ try {
         if ($selectedProvider === 'gemini' && !empty($gemini['enabled'])) $providers[] = ['name' => 'gemini', 'settings' => $gemini];
         if ($selectedProvider === 'llama' && !empty($llama['enabled'])) $providers[] = ['name' => 'llama', 'settings' => $llama];
         if (!$providers) throw new RuntimeException('O provedor de IA selecionado nao esta ativo nas configuracoes.');
+        if ($selectedProvider === 'llama') {
+            $usageSettings = $getAiUsageSettings();
+            if (($usageSettings['limit_action'] ?? 'alert') === 'block' && (float) ($usageSettings['monthly_limit_usd'] ?? 0) > 0 && $monthlyAiUsageUsd() >= (float) $usageSettings['monthly_limit_usd']) {
+                throw new RuntimeException('O limite mensal interno de IA foi atingido. Ajuste o limite no painel administrativo para liberar novas revisoes.');
+            }
+        }
         $lastError = '';
         foreach ($providers as $provider) {
+            $aiUsageAttempt = [];
             try {
                 if ($provider['name'] === 'llama') {
                     $baseUrl = rtrim(trim((string) ($provider['settings']['base_url'] ?? '')), '/');
                     $apiKey = trim((string) ($provider['settings']['api_key'] ?? ''));
-                    $model = trim((string) ($provider['settings']['model'] ?? 'llama3.1')) ?: 'llama3.1';
-                    if ($baseUrl === '') throw new RuntimeException('URL do Ollama nao configurada.');
+                    $model = trim((string) ($provider['settings']['model'] ?? 'llama-3.3-70b-versatile')) ?: 'llama-3.3-70b-versatile';
+                    if ($baseUrl === '') throw new RuntimeException('URL base da API do Llama nao configurada.');
+                    if ($apiKey === '') throw new RuntimeException('API Key do Llama nao configurada.');
                     if (!function_exists('curl_init')) throw new RuntimeException('Extensao cURL do PHP nao habilitada.');
                     $payload = json_encode([
                         'model' => $model,
-                        'prompt' => $prompt,
-                        'system' => 'Voce revisa textos pedagogicos em portugues do Brasil e retorna apenas o texto final.',
+                        'messages' => [
+                            ['role' => 'system', 'content' => 'Voce revisa textos pedagogicos em portugues do Brasil e retorna apenas o texto final.'],
+                            ['role' => 'user', 'content' => $prompt],
+                        ],
+                        'temperature' => 0.2,
+                        'max_tokens' => 4096,
                         'stream' => false,
-                        'options' => ['temperature' => 0.2],
                     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                    $curl = curl_init($baseUrl . '/api/generate');
-                    $headers = ['Content-Type: application/json'];
-                    if ($apiKey !== '') $headers[] = 'Authorization: Bearer ' . $apiKey;
+                    $endpoint = preg_match('#/chat/completions$#', $baseUrl) ? $baseUrl : $baseUrl . '/chat/completions';
+                    $curl = curl_init($endpoint);
+                    $headers = ['Content-Type: application/json', 'Authorization: Bearer ' . $apiKey];
+                    $requestId = bin2hex(random_bytes(12));
+                    $startedAt = microtime(true);
+                    $usageProvider = stripos($baseUrl, 'groq.com') !== false ? 'Groq' : 'Groq-compatible';
+                    $aiUsageAttempt = [
+                        'provider' => $usageProvider,
+                        'model_id' => $model,
+                        'request_id' => $requestId,
+                        'user_id' => (int) $user['id'],
+                        'school_hash' => $schoolHash,
+                        'school_name' => $schoolContext['name'],
+                        'tenant_id' => (int) $user['id'],
+                        'feature' => 'revisao_parecer',
+                        'operation' => $action,
+                    ];
                     curl_setopt_array($curl, [
                         CURLOPT_RETURNTRANSFER => true,
                         CURLOPT_POST => true,
                         CURLOPT_HTTPHEADER => $headers,
                         CURLOPT_POSTFIELDS => $payload,
                         CURLOPT_TIMEOUT => 60,
+                        CURLOPT_HEADER => true,
                     ]);
                     $raw = curl_exec($curl);
                     $curlError = curl_error($curl);
                     $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+                    $headerSize = (int) curl_getinfo($curl, CURLINFO_HEADER_SIZE);
                     curl_close($curl);
+                    $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+                    $headersRaw = is_string($raw) ? substr($raw, 0, $headerSize) : '';
+                    $bodyRaw = is_string($raw) ? substr($raw, $headerSize) : '';
+                    $externalRequestId = '';
+                    if (preg_match('/^(?:x-request-id|x-groq-id):\s*(.+)$/mi', $headersRaw, $match)) {
+                        $externalRequestId = trim($match[1]);
+                    }
                     if ($raw === false || $curlError !== '') {
-                        throw new RuntimeException('Nao foi possivel conectar ao Ollama/Llama em ' . $baseUrl . '. Verifique se o Ollama esta instalado, aberto e com o modelo ' . $model . ' baixado.');
+                        $recordAiUsage($aiUsageAttempt + ['status' => 'timeout', 'duration_ms' => $durationMs, 'error_code' => 'curl', 'error_message' => $curlError ?: 'Falha de conexao']);
+                        throw new RuntimeException('Nao foi possivel conectar a API do Llama em ' . $baseUrl . '. Verifique a URL base, a API Key e o modelo ' . $model . '.');
                     }
-                    $data = json_decode((string) $raw, true);
+                    $data = json_decode((string) $bodyRaw, true);
                     if ($status >= 400 || !is_array($data)) {
-                        $apiMessage = is_array($data) ? (string) ($data['error'] ?? '') : '';
-                        throw new RuntimeException($apiMessage !== '' ? 'Llama: ' . $apiMessage : 'O Ollama/Llama recusou a solicitacao.');
+                        $apiMessage = is_array($data) ? (string) ($data['error']['message'] ?? $data['error'] ?? '') : '';
+                        $recordAiUsage($aiUsageAttempt + [
+                            'status' => $status === 429 ? 'rate_limited' : 'failed',
+                            'duration_ms' => $durationMs,
+                            'external_request_id' => $externalRequestId,
+                            'error_code' => (string) $status,
+                            'error_message' => $apiMessage,
+                        ]);
+                        throw new RuntimeException($apiMessage !== '' ? 'Llama: ' . $apiMessage : 'A API do Llama recusou a solicitacao.');
                     }
-                    $reviewed = trim((string) ($data['response'] ?? ''));
+                    $reviewed = trim((string) ($data['choices'][0]['message']['content'] ?? $data['choices'][0]['text'] ?? ''));
                     if ($reviewed === '') throw new RuntimeException('O Llama nao retornou texto revisado.');
                     if ($studentName !== '') $reviewed = str_replace('[ALUNO]', $studentName, $reviewed);
+                    $recordAiUsage($aiUsageAttempt + [
+                        'status' => 'success',
+                        'duration_ms' => $durationMs,
+                        'external_request_id' => $externalRequestId ?: (string) ($data['id'] ?? ''),
+                        'usage' => is_array($data['usage'] ?? null) ? $data['usage'] : null,
+                    ]);
                     $logAiReview((int) $user['id'], 'llama', $action, 'success', $schoolHash);
                     echo json_encode(['success' => true, 'provider' => 'llama', 'texto_original' => $text, 'texto_revisado' => $reviewed], JSON_UNESCAPED_UNICODE);
                     exit;
@@ -1525,6 +1907,9 @@ try {
                 exit;
             } catch (Throwable $e) {
                 $lastError = $e->getMessage();
+                if (($provider['name'] ?? '') === 'llama' && $aiUsageAttempt) {
+                    $recordAiUsage($aiUsageAttempt + ['status' => 'failed', 'error_code' => 'exception', 'error_message' => $lastError]);
+                }
                 $logAiReview((int) $user['id'], (string) $provider['name'], $action, 'error', $schoolHash, $lastError);
                 if (empty($settings['fallback_enabled'])) break;
             }

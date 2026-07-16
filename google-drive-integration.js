@@ -124,6 +124,11 @@
     const list = document.querySelector('#driveHistoryList');
     if (!list) return;
     const labels = {uploaded: 'Enviado', error: 'Erro', queued: 'Na fila', uploading: 'Enviando'};
+    const baseFileName = name => String(name || '').replace(/\.(pdf|docx)$/i, '');
+    const fileFormat = name => {
+      const match = String(name || '').match(/\.(pdf|docx)$/i);
+      return match ? match[1].toUpperCase() : 'Arquivo';
+    };
     const groups = driveUploads.reduce((acc, item) => {
       const student = item.student || 'Aluno nao informado';
       if (!acc.has(student)) acc.set(student, []);
@@ -137,20 +142,34 @@
           <span>${files.length} ${files.length === 1 ? 'arquivo' : 'arquivos'}</span>
         </header>
         <div class="drive-student-files">
-          ${files.map(item => `
-            <div class="drive-file-row">
-              <div>
-                <strong>${escapeHtml(item.fileName)}</strong>
-                <p>${escapeHtml(item.folder || 'Pasta nao informada')} - ${escapeHtml(item.uploadedAt || item.createdAt || '-')}</p>
-                ${item.error ? `<p class="drive-error">${escapeHtml(item.error)}</p>` : ''}
+          ${[...files.reduce((acc, item) => {
+            const key = baseFileName(item.fileName);
+            if (!acc.has(key)) acc.set(key, []);
+            acc.get(key).push(item);
+            return acc;
+          }, new Map()).entries()].map(([title, documentFiles]) => `
+            <section class="drive-document-group">
+              <div class="drive-document-title">
+                <strong>${escapeHtml(title)}</strong>
+                <span>${documentFiles.length} ${documentFiles.length === 1 ? 'formato' : 'formatos'}</span>
               </div>
-              <span class="drive-status ${escapeHtml(item.status)}">${escapeHtml(labels[item.status] || item.status)}</span>
-              <div class="drive-file-actions">
-                ${item.link ? `<a class="secondary" href="${escapeHtml(item.link)}" target="_blank" rel="noopener">Abrir</a><button class="secondary" type="button" data-drive-copy="${escapeHtml(item.link)}">Copiar link</button>` : ''}
-                ${item.status === 'error' ? `<button class="secondary" type="button" data-drive-retry="${item.id}">Reenviar</button>` : ''}
-                <button class="secondary danger" type="button" data-drive-remove="${item.id}">Excluir historico</button>
+              <div class="drive-document-formats">
+                ${documentFiles.map(item => `
+                  <div class="drive-file-row">
+                    <div>
+                      <strong>${escapeHtml(fileFormat(item.fileName))}</strong>
+                      <p>${escapeHtml(item.folder || 'Pasta nao informada')} - ${escapeHtml(item.uploadedAt || item.createdAt || '-')}</p>
+                      ${item.error ? `<p class="drive-error">${escapeHtml(item.error)}</p>` : ''}
+                    </div>
+                    <span class="drive-status ${escapeHtml(item.status)}">${escapeHtml(labels[item.status] || item.status)}</span>
+                    <div class="drive-file-actions">
+                      ${item.link ? `<a class="secondary" href="${escapeHtml(item.link)}" target="_blank" rel="noopener">Abrir</a><button class="secondary" type="button" data-drive-copy="${escapeHtml(item.link)}">Copiar link</button>` : ''}
+                      ${item.status === 'error' ? `<button class="secondary" type="button" data-drive-retry="${item.id}">Reenviar</button>` : ''}
+                      <button class="secondary danger" type="button" data-drive-remove="${item.id}">Excluir historico</button>
+                    </div>
+                  </div>`).join('')}
               </div>
-            </div>`).join('')}
+            </section>`).join('')}
         </div>
       </article>`).join('') || '<p class="muted">Nenhum arquivo enviado ao Drive ainda.</p>';
   }

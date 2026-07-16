@@ -11,6 +11,17 @@ $bootstrapUser = [
   'role' => 'cliente',
   'permissions' => [],
 ];
+if (!empty($_SESSION['bootstrap_user']) && is_array($_SESSION['bootstrap_user'])) {
+  $sessionBootstrap = $_SESSION['bootstrap_user'];
+  $bootstrapUser = [
+    'id' => (int) ($sessionBootstrap['id'] ?? $_SESSION['user_id']),
+    'name' => (string) ($sessionBootstrap['name'] ?? 'Usuário logado'),
+    'email' => (string) ($sessionBootstrap['email'] ?? ''),
+    'phone' => (string) ($sessionBootstrap['phone'] ?? ''),
+    'role' => (string) ($sessionBootstrap['role'] ?? 'cliente'),
+    'permissions' => is_array($sessionBootstrap['permissions'] ?? null) ? array_values(array_filter($sessionBootstrap['permissions'], 'is_string')) : [],
+  ];
+}
 try {
   $config = require __DIR__ . '/config.php';
   $pdo = new PDO(
@@ -32,6 +43,7 @@ try {
       'role' => (string) ($row['perfil'] ?? 'cliente'),
       'permissions' => is_array($permissions) ? array_values(array_filter($permissions, 'is_string')) : [],
     ];
+    $_SESSION['bootstrap_user'] = $bootstrapUser;
   }
 } catch (Throwable $ignored) {
   // A API ainda valida a sessao; aqui e apenas para evitar atraso visual no primeiro carregamento.
@@ -167,12 +179,12 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="director-email.js?v=20260706-document-style-save-1"></script>
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
   <script src="terms-consent.js?v=20260716-lgpd-terms-1"></script>
-  <script src="auth-profile.js?v=20260716-trial-plan-choice-1"></script>
+  <script src="auth-profile.js?v=20260716-fast-admin-menu-1"></script>
   <script src="google-drive-integration.js?v=20260716-google-drive-1"></script>
   <script src="tutorial-videos.js?v=20260706-video-before-onboarding-2"></script>
   <script src="onboarding.js?v=20260715-onboarding-draft-1"></script>
-  <script src="master-users.js?v=20260716-trial-plan-choice-1"></script>
-  <script src="finance-admin.js?v=20260706-fast-menu-1"></script>
+  <script src="master-users.js?v=20260716-fast-admin-menu-1"></script>
+  <script src="finance-admin.js?v=20260716-fast-admin-menu-1"></script>
   <script src="image-editor-permissions.js?v=20260702-combined-image-editor-1"></script>
   <script src="manual-image-editor.js?v=20260709-activity-photos-30-1"></script>
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>

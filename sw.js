@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260716-google-drive-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260716-fast-admin-menu-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -30,12 +30,12 @@ const STATIC_ASSETS = [
   './document-style-settings.js?v=20260716-force-docx-font-1',
   './director-email.js?v=20260706-document-style-save-1',
   './terms-consent.js?v=20260716-lgpd-terms-1',
-  './auth-profile.js?v=20260716-trial-plan-choice-1',
+  './auth-profile.js?v=20260716-fast-admin-menu-1',
   './google-drive-integration.js?v=20260716-google-drive-1',
   './tutorial-videos.js?v=20260706-video-before-onboarding-2',
   './manual-image-editor.js?v=20260709-activity-photos-30-1',
   './image-editor-flow.js?v=20260709-activity-photos-30-1',
-  './master-users.js?v=20260716-trial-plan-choice-1',
+  './master-users.js?v=20260716-fast-admin-menu-1',
   './assets/ai-prof-logo-transparent.png',
   './assets/pwa/icon-192.png',
   './assets/pwa/icon-512.png',

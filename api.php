@@ -338,6 +338,16 @@ try {
             ],
         ];
     };
+    $storeBootstrapUser = static function (array $publicUser): void {
+        $_SESSION['bootstrap_user'] = [
+            'id' => (int) ($publicUser['id'] ?? 0),
+            'name' => (string) ($publicUser['name'] ?? 'Usuario logado'),
+            'email' => (string) ($publicUser['email'] ?? ''),
+            'phone' => (string) ($publicUser['phone'] ?? ''),
+            'role' => (string) ($publicUser['role'] ?? 'cliente'),
+            'permissions' => is_array($publicUser['permissions'] ?? null) ? array_values(array_filter($publicUser['permissions'], 'is_string')) : [],
+        ];
+    };
     $billingRequiresPayment = static function (array $row): bool {
         if (($row['perfil'] ?? 'cliente') === 'master') return false;
         if ((float) ($row['billing_amount'] ?? 0) <= 0) return false;
@@ -1108,7 +1118,9 @@ try {
             $row = $auditBillingAccess($row);
             session_regenerate_id(true);
             $_SESSION['user_id'] = (int) $row['id'];
-            echo json_encode(['ok' => true, 'user' => $publicUser($row)], JSON_UNESCAPED_UNICODE);
+            $public = $publicUser($row);
+            $storeBootstrapUser($public);
+            echo json_encode(['ok' => true, 'user' => $public], JSON_UNESCAPED_UNICODE);
             exit;
         }
         if ($action === 'logout') {
@@ -1130,7 +1142,9 @@ try {
             $permissions = json_decode((string) ($row['permissoes'] ?? '[]'), true);
             $row['permissions'] = is_array($permissions) ? $permissions : [];
             $row = $auditBillingAccess($row);
-            echo json_encode(['ok' => true, 'user' => $publicUser($row)], JSON_UNESCAPED_UNICODE);
+            $public = $publicUser($row);
+            $storeBootstrapUser($public);
+            echo json_encode(['ok' => true, 'user' => $public], JSON_UNESCAPED_UNICODE);
             exit;
         }
     }
@@ -1144,7 +1158,9 @@ try {
         $permissions = json_decode((string) ($row['permissoes'] ?? '[]'), true);
         $row['permissions'] = is_array($permissions) ? $permissions : [];
         $row = $auditBillingAccess($row);
-        echo json_encode($publicUser($row), JSON_UNESCAPED_UNICODE);
+        $public = $publicUser($row);
+        $storeBootstrapUser($public);
+        echo json_encode($public, JSON_UNESCAPED_UNICODE);
         exit;
     }
     if ($resource === 'auth' && $_SERVER['REQUEST_METHOD'] === 'PUT') {
@@ -1178,6 +1194,11 @@ try {
         if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) throw new RuntimeException('Informe nome e e-mail válidos.');
         $update = $pdo->prepare('UPDATE usuarios SET nome=?,email=?,telefone=? WHERE id=?');
         $update->execute([$name, $email, $phone ?: null, (int) $_SESSION['user_id']]);
+        if (!empty($_SESSION['bootstrap_user']) && is_array($_SESSION['bootstrap_user'])) {
+            $_SESSION['bootstrap_user']['name'] = $name;
+            $_SESSION['bootstrap_user']['email'] = $email;
+            $_SESSION['bootstrap_user']['phone'] = $phone;
+        }
         echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
         exit;
     }

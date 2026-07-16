@@ -514,18 +514,34 @@
   }
 
   async function init() {
-    if (window.PortalBootstrapUser) {
-      user = window.PortalBootstrapUser;
+    let lastReadyRole = '';
+    const publishUser = () => {
+      if (!user) return;
       window.PortalCurrentUser = user;
       document.body.dataset.role = user.role || 'cliente';
       updateChrome();
+      const currentRole = user.role || 'cliente';
+      if (lastReadyRole !== currentRole) {
+        lastReadyRole = currentRole;
+        window.dispatchEvent(new CustomEvent('portal:user-ready', {detail: user}));
+      }
+    };
+
+    if (window.PortalBootstrapUser) {
+      user = window.PortalBootstrapUser;
+      window.PortalCurrentUserPromise = window.PortalCurrentUserPromise || Promise.resolve(user);
+      publishUser();
     }
-    window.PortalCurrentUserPromise = window.PortalCurrentUserPromise || request();
-    try { user = await window.PortalCurrentUserPromise; } catch (_) { return; }
-    window.PortalCurrentUser = user;
-    await refreshBillingChoices();
-    document.body.dataset.role = user.role || 'cliente';
-    window.dispatchEvent(new CustomEvent('portal:user-ready', {detail: user}));
+    const freshUserPromise = request();
+    window.PortalCurrentUserPromise = freshUserPromise;
+    try { user = await freshUserPromise; } catch (_) { return; }
+    publishUser();
+    refreshBillingChoices().then(() => {
+      publishUser();
+      renderBillingBanner();
+      renderBillingLockModal();
+      redirectOverdueBillingOnce();
+    });
     if (user.billingWarning && !user.billingAlert) setTimeout(() => alert(user.billingWarning), 300);
     const profile = document.querySelector('.sidebar-bottom .profile');
     profile?.setAttribute('role', 'button');
@@ -549,7 +565,6 @@
     document.querySelector('#sidebarLogoutButton')?.addEventListener('click', logout);
     document.querySelector('.profile-menu')?.addEventListener('click', event => event.stopPropagation());
     document.addEventListener('click', closeProfileMenu);
-    updateChrome();
     renderBillingBanner();
     renderBillingLockModal();
     redirectOverdueBillingOnce();

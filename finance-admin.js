@@ -348,7 +348,11 @@
   }
 
   async function init() {
-    let user = null;
+    let user = window.PortalCurrentUser || window.PortalBootstrapUser || null;
+    if (user?.role === 'master') {
+      ensureFinanceView();
+      ensureFinanceNav();
+    }
     window.PortalCurrentUserPromise = window.PortalCurrentUserPromise || request(authApi);
     try { user = await window.PortalCurrentUserPromise; } catch (_) { return; }
     if (user.role !== 'master') return;

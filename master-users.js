@@ -394,6 +394,14 @@
   }
 
   async function init() {
+    currentUser = window.PortalCurrentUser || window.PortalBootstrapUser || null;
+    if (currentUser) {
+      applyClientPermissions();
+      if (currentUser.role === 'master') {
+        ensureUsersView();
+        ensureUsersNav();
+      }
+    }
     window.PortalCurrentUserPromise = window.PortalCurrentUserPromise || request(authApi);
     try { currentUser = await window.PortalCurrentUserPromise; } catch (_) { return; }
     applyClientPermissions();

@@ -430,6 +430,7 @@
         }
         if (!state?.settings?.enabled) return await original(id);
         setButtonLoading(button, false);
+        wizardClose?.();
         const choice = await openDeliveryChoice(state);
         if (choice === 'cancel') return null;
         if (choice === 'config') {

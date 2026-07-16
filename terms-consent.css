@@ -15,4 +15,6 @@
 .terms-consent-check input{width:auto;margin-top:3px;accent-color:#236b52}
 .terms-consent-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 .terms-consent-message{min-height:18px;margin:10px 0 0;color:#9c3d3d;font-size:12px}
+.terms-menu-link{font-size:12px!important;color:#73817b!important;font-weight:600!important}
+.terms-menu-link:hover{color:#236b52!important;text-decoration:underline}
 @media(max-width:650px){.terms-consent-backdrop{padding:14px}.terms-consent-modal{max-height:92vh}.terms-consent-header,.terms-consent-body,.terms-consent-footer{padding-left:18px;padding-right:18px}.terms-consent-actions{display:grid;grid-template-columns:1fr}.terms-consent-actions button{width:100%}}

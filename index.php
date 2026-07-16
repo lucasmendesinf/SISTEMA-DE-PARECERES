@@ -95,8 +95,8 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <link rel="stylesheet" href="user-profile.css?v=20260716-trial-plan-choice-1">
   <link rel="stylesheet" href="billing-lock.css?v=20260703-billing-lock-3">
   <link rel="stylesheet" href="marketing-notice.css?v=20260702-marketing-notice-list-1">
-  <link rel="stylesheet" href="terms-consent.css?v=20260716-lgpd-terms-1">
-  <link rel="stylesheet" href="google-drive-integration.css?v=20260716-google-drive-1">
+  <link rel="stylesheet" href="terms-consent.css?v=20260716-terms-link-1">
+  <link rel="stylesheet" href="google-drive-integration.css?v=20260716-drive-choice-1">
   <link rel="stylesheet" href="master-users.css?v=20260705-billing-cycles-1">
   <link rel="stylesheet" href="finance-admin.css?v=20260703-finance-due-filter-1">
   <link rel="stylesheet" href="image-editors.css?v=20260709-activity-photo-picker-front-1">
@@ -178,9 +178,9 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="document-button-fix.js"></script>
   <script src="director-email.js?v=20260706-document-style-save-1"></script>
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
-  <script src="terms-consent.js?v=20260716-lgpd-terms-1"></script>
+  <script src="terms-consent.js?v=20260716-terms-link-1"></script>
   <script src="auth-profile.js?v=20260716-fast-admin-menu-1"></script>
-  <script src="google-drive-integration.js?v=20260716-google-drive-1"></script>
+  <script src="google-drive-integration.js?v=20260716-drive-choice-1"></script>
   <script src="tutorial-videos.js?v=20260706-video-before-onboarding-2"></script>
   <script src="onboarding.js?v=20260715-onboarding-draft-1"></script>
   <script src="master-users.js?v=20260716-fast-admin-menu-1"></script>

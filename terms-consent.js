@@ -71,8 +71,9 @@
     `;
   }
 
-  function showTermsModal(user) {
-    if (!user || user.terms?.accepted) return;
+  function showTermsModal(user, options = {}) {
+    const readOnly = !!options.readOnly;
+    if (!user || (user.terms?.accepted && !readOnly)) return;
     document.querySelector('#termsConsentModal')?.remove();
     const version = user.terms?.currentVersion || 'lgpd-2026-07-16';
     const modal = document.createElement('div');
@@ -81,20 +82,19 @@
     modal.innerHTML = `
       <section class="terms-consent-modal" role="dialog" aria-modal="true" aria-labelledby="termsConsentTitle">
         <div class="terms-consent-header">
-          <p class="eyebrow">PRIMEIRO ACESSO</p>
+          <p class="eyebrow">${readOnly ? 'CONSULTA' : 'PRIMEIRO ACESSO'}</p>
           <h2 id="termsConsentTitle">Termos de uso e privacidade</h2>
-          <p>Para continuar usando o Ai Prof., leia e aceite o termo baseado nas regras brasileiras de protecao de dados.</p>
+          <p>${readOnly ? 'Consulte novamente os termos aceitos para uso do Ai Prof.' : 'Para continuar usando o Ai Prof., leia e aceite o termo baseado nas regras brasileiras de protecao de dados.'}</p>
         </div>
         <div class="terms-consent-body">${termsText(user)}</div>
         <div class="terms-consent-footer">
-          <label class="terms-consent-check">
+          <label class="terms-consent-check" ${readOnly ? 'hidden' : ''}>
             <input id="termsConsentCheck" type="checkbox">
             <span>Li e aceito os termos de uso e privacidade do Ai Prof.</span>
           </label>
           <p id="termsConsentMessage" class="terms-consent-message"></p>
           <div class="terms-consent-actions">
-            <button class="secondary" type="button" data-terms-logout>Sair do sistema</button>
-            <button class="primary" type="button" data-terms-accept disabled>Aceitar e continuar</button>
+            ${readOnly ? '<button class="primary" type="button" data-terms-close>Fechar</button>' : '<button class="secondary" type="button" data-terms-logout>Sair do sistema</button><button class="primary" type="button" data-terms-accept disabled>Aceitar e continuar</button>'}
           </div>
         </div>
       </section>`;
@@ -103,6 +103,14 @@
     const checkbox = modal.querySelector('#termsConsentCheck');
     const acceptButton = modal.querySelector('[data-terms-accept]');
     const message = modal.querySelector('#termsConsentMessage');
+    modal.querySelector('[data-terms-close]')?.addEventListener('click', () => {
+      modal.remove();
+      document.body.classList.remove('terms-consent-lock');
+    });
+    if (readOnly) {
+      modal.querySelector('[data-terms-close]')?.focus();
+      return;
+    }
     checkbox.addEventListener('change', () => {
       acceptButton.disabled = !checkbox.checked;
       message.textContent = '';
@@ -132,4 +140,19 @@
 
   window.PortalTermsConsent = {show: showTermsModal};
   window.addEventListener('portal:user-ready', event => showTermsModal(event.detail));
+  document.addEventListener('DOMContentLoaded', () => {
+    const profileMenu = document.querySelector('.profile-menu');
+    if (!profileMenu || profileMenu.querySelector('[data-open-terms]')) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.openTerms = 'true';
+    button.className = 'terms-menu-link';
+    button.textContent = 'Termos de uso';
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      const user = window.PortalCurrentUser || window.PortalBootstrapUser;
+      showTermsModal(user, {readOnly: true});
+    });
+    profileMenu.append(button);
+  });
 })();

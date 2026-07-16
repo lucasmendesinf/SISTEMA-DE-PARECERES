@@ -120,6 +120,41 @@
       </article>`).join('') || '<p class="muted">Nenhum arquivo enviado ao Drive ainda.</p>';
   }
 
+  function renderDriveHistory() {
+    const list = document.querySelector('#driveHistoryList');
+    if (!list) return;
+    const labels = {uploaded: 'Enviado', error: 'Erro', queued: 'Na fila', uploading: 'Enviando'};
+    const groups = driveUploads.reduce((acc, item) => {
+      const student = item.student || 'Aluno nao informado';
+      if (!acc.has(student)) acc.set(student, []);
+      acc.get(student).push(item);
+      return acc;
+    }, new Map());
+    list.innerHTML = [...groups.entries()].map(([student, files], index) => `
+      <article class="drive-student-card ${index % 2 === 0 ? 'tinted' : ''}">
+        <header>
+          <div><p class="eyebrow">ALUNO</p><h3>${escapeHtml(student)}</h3></div>
+          <span>${files.length} ${files.length === 1 ? 'arquivo' : 'arquivos'}</span>
+        </header>
+        <div class="drive-student-files">
+          ${files.map(item => `
+            <div class="drive-file-row">
+              <div>
+                <strong>${escapeHtml(item.fileName)}</strong>
+                <p>${escapeHtml(item.folder || 'Pasta nao informada')} - ${escapeHtml(item.uploadedAt || item.createdAt || '-')}</p>
+                ${item.error ? `<p class="drive-error">${escapeHtml(item.error)}</p>` : ''}
+              </div>
+              <span class="drive-status ${escapeHtml(item.status)}">${escapeHtml(labels[item.status] || item.status)}</span>
+              <div class="drive-file-actions">
+                ${item.link ? `<a class="secondary" href="${escapeHtml(item.link)}" target="_blank" rel="noopener">Abrir</a><button class="secondary" type="button" data-drive-copy="${escapeHtml(item.link)}">Copiar link</button>` : ''}
+                ${item.status === 'error' ? `<button class="secondary" type="button" data-drive-retry="${item.id}">Reenviar</button>` : ''}
+                <button class="secondary danger" type="button" data-drive-remove="${item.id}">Excluir historico</button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </article>`).join('') || '<p class="muted">Nenhum arquivo enviado ao Drive ainda.</p>';
+  }
+
   function renderDriveConfig() {
     const config = document.querySelector('#configuracoes');
     if (!config || config.querySelector('#googleDrivePanel')) return;
@@ -283,6 +318,60 @@
     }
   }
 
+  function openDeliveryChoice(state) {
+    return new Promise(resolve => {
+      document.querySelector('#driveDeliveryChoice')?.remove();
+      const canDrive = !!state?.settings?.enabled && !!state?.connected;
+      const canConfigure = !!state?.settings?.enabled && !state?.connected;
+      const modal = document.createElement('div');
+      modal.id = 'driveDeliveryChoice';
+      modal.className = 'drive-choice-backdrop';
+      modal.innerHTML = `
+        <div class="drive-choice-modal" role="dialog" aria-modal="true" aria-labelledby="driveChoiceTitle">
+          <button class="drive-choice-close" type="button" data-choice="cancel" aria-label="Fechar">x</button>
+          <p class="eyebrow">FINALIZAR DOCUMENTO</p>
+          <h2 id="driveChoiceTitle">Como deseja salvar este documento?</h2>
+          <p>Escolha se quer enviar os arquivos para o Google Drive conectado ou baixar no computador.</p>
+          ${canConfigure ? '<p class="drive-choice-warning">Google Drive habilitado, mas ainda nao conectado nesta conta.</p>' : ''}
+          <div class="drive-choice-actions">
+            ${canDrive ? '<button class="primary" type="button" data-choice="drive">Salvar no Drive</button>' : ''}
+            <button class="secondary" type="button" data-choice="download">Baixar arquivos</button>
+            ${canConfigure ? '<button class="secondary" type="button" data-choice="config">Conectar Drive</button>' : ''}
+          </div>
+        </div>`;
+      document.body.append(modal);
+      const finish = choice => {
+        modal.remove();
+        resolve(choice);
+      };
+      modal.addEventListener('click', event => {
+        if (event.target === modal) return finish('cancel');
+        const button = event.target.closest('[data-choice]');
+        if (button) finish(button.dataset.choice);
+      });
+      modal.querySelector('[data-choice="drive"], [data-choice="download"], [data-choice="config"]')?.focus();
+    });
+  }
+
+  async function deliverReportWithoutDownload(report) {
+    window.cancelWizardDraftAutosave?.();
+    const databaseId = report?.databaseId || report?.id;
+    if (!databaseId) throw new Error('Este parecer ainda nao foi salvo no banco de dados.');
+    const response = await fetch('api.php?resource=reports', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({deliverId: databaseId})
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.error || 'Falha ao entregar.');
+    report.status = 'done';
+    report.deliveredAt = new Date().toISOString();
+    clearWizard?.();
+    wizardClose?.();
+    save?.();
+    setTimeout(() => loadReports?.(), 1200);
+  }
+
   function wrapDeliverReport() {
     const original = window.deliverReport;
     if (typeof original !== 'function' || original.__driveWrapped) return;
@@ -293,10 +382,24 @@
         document.querySelector('.nav-item[data-view="configuracoes"]')?.click();
         return null;
       }
-      const result = await original(id);
       const report = data.reports.find(item => String(item.id) === String(id) || String(item.databaseId) === String(id));
-      if (report) setTimeout(() => uploadReportToDrive(report), 900);
-      return result;
+      if (!state?.settings?.enabled) return original(id);
+      const choice = await openDeliveryChoice(state);
+      if (choice === 'cancel') return null;
+      if (choice === 'config') {
+        document.querySelector('.nav-item[data-view="configuracoes"]')?.click();
+        return null;
+      }
+      if (choice === 'download') return original(id);
+      if (!report) return original(id);
+      try {
+        await deliverReportWithoutDownload(report);
+        await uploadReportToDrive(report);
+      } catch (error) {
+        console.error(error);
+        alert(error.message || 'Nao foi possivel finalizar o documento.');
+      }
+      return null;
     };
     window.deliverReport.__driveWrapped = true;
   }

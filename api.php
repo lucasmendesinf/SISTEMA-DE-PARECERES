@@ -586,6 +586,21 @@ try {
             ['Content-Type: multipart/related; boundary=' . $boundary]
         );
     };
+    $shareDriveFileAsEditor = static function (string $accessToken, string $fileId) use ($googleApiRequest): void {
+        if ($fileId === '') return;
+        $permission = [
+            'type' => 'anyone',
+            'role' => 'writer',
+            'allowFileDiscovery' => false,
+        ];
+        $googleApiRequest(
+            'https://www.googleapis.com/drive/v3/files/' . rawurlencode($fileId) . '/permissions?' . http_build_query(['sendNotificationEmail' => 'false', 'fields' => 'id']),
+            $accessToken,
+            'POST',
+            json_encode($permission, JSON_UNESCAPED_UNICODE),
+            ['Content-Type: application/json']
+        );
+    };
     $mercadoPagoConfigured = static function () use ($getMercadoPagoSettings): bool {
         $mp = $getMercadoPagoSettings();
         return $mp['access_token'] !== '' && $mp['public_key'] !== '';
@@ -1312,6 +1327,7 @@ try {
                 $folder = $ensureDriveFolder((int) $user['id']);
                 $pdo->prepare('UPDATE google_drive_uploads SET status="uploading",error_message=NULL WHERE id=?')->execute([$id]);
                 $driveFile = $uploadBinaryToDrive($folder['account']['access_token_plain'], (string) $row['arquivo'], (string) $row['mime_type'], (string) $row['file_blob'], $folder['id']);
+                $shareDriveFileAsEditor($folder['account']['access_token_plain'], (string) ($driveFile['id'] ?? ''));
                 $pdo->prepare('UPDATE google_drive_uploads SET status="uploaded",file_blob=NULL,drive_file_id=?,drive_link=?,data_upload=NOW(),folder_id=?,folder_name=?,error_message=NULL WHERE id=?')->execute([(string) ($driveFile['id'] ?? ''), (string) ($driveFile['webViewLink'] ?? ''), $folder['id'], $folder['name'], $id]);
                 echo json_encode(['ok' => true, 'link' => $driveFile['webViewLink'] ?? ''], JSON_UNESCAPED_UNICODE);
                 exit;
@@ -1357,6 +1373,7 @@ try {
             $folder = $ensureDriveFolder((int) $user['id'], $context);
             $pdo->prepare('UPDATE google_drive_uploads SET status="uploading",folder_id=?,folder_name=? WHERE id=?')->execute([$folder['id'], $folder['name'], $uploadId]);
             $driveFile = $uploadBinaryToDrive($folder['account']['access_token_plain'], $fileName, $mime, $binary, $folder['id']);
+            $shareDriveFileAsEditor($folder['account']['access_token_plain'], (string) ($driveFile['id'] ?? ''));
             $pdo->prepare('UPDATE google_drive_uploads SET status="uploaded",file_blob=NULL,drive_file_id=?,drive_link=?,data_upload=NOW(),folder_id=?,folder_name=?,error_message=NULL WHERE id=?')->execute([(string) ($driveFile['id'] ?? ''), (string) ($driveFile['webViewLink'] ?? ''), $folder['id'], $folder['name'], $uploadId]);
             $googleDriveAudit((int) $user['id'], 'upload_success', $fileName);
             echo json_encode(['ok' => true, 'uploadId' => $uploadId, 'fileName' => $fileName, 'link' => $driveFile['webViewLink'] ?? '', 'status' => 'uploaded'], JSON_UNESCAPED_UNICODE);

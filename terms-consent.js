@@ -135,16 +135,13 @@
         message.textContent = 'Marque o aceite para continuar.';
         return;
       }
-      const optimisticUser = acceptedUser(user, version);
-      window.PortalCurrentUser = optimisticUser;
-      window.dispatchEvent(new CustomEvent('portal:terms-accepted', {detail: optimisticUser}));
-      modal.remove();
-      document.body.classList.remove('terms-consent-lock');
       acceptButton.disabled = true;
       acceptButton.textContent = 'Registrando aceite...';
       try {
         const updatedUser = await acceptTerms(version);
         window.PortalCurrentUser = updatedUser;
+        modal.remove();
+        document.body.classList.remove('terms-consent-lock');
         window.dispatchEvent(new CustomEvent('portal:terms-accepted', {detail: updatedUser}));
       } catch (error) {
         console.warn(error);

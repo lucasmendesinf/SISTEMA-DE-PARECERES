@@ -406,6 +406,7 @@
   async function start(user) {
     state.user = user || window.PortalCurrentUser;
     if (!state.user || state.user.role === 'master') return;
+    if (!state.user.terms?.accepted) return;
     if (state.starting || state.locked) return;
     state.starting = true;
     try {
@@ -422,6 +423,10 @@
     }
   }
 
-  window.addEventListener('portal:user-ready', event => start(event.detail));
+  window.addEventListener('portal:user-ready', event => {
+    const user = event.detail;
+    if (user?.terms?.accepted) start(user);
+  });
+  window.addEventListener('portal:terms-accepted', event => start(event.detail));
   if (window.PortalCurrentUser) start(window.PortalCurrentUser);
 })();

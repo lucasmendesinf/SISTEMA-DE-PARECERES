@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260716-official-email-files-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260716-terms-before-onboarding-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -12,7 +12,7 @@ const STATIC_ASSETS = [
   './user-profile.css?v=20260716-ai-provider-select-1',
   './billing-lock.css?v=20260703-billing-lock-3',
   './marketing-notice.css?v=20260702-marketing-notice-list-1',
-  './terms-consent.css?v=20260716-terms-link-1',
+  './terms-consent.css?v=20260716-terms-before-onboarding-1',
   './google-drive-integration.css?v=20260716-drive-pairs-1',
   './master-users.css?v=20260705-billing-cycles-1',
   './finance-admin.css?v=20260703-finance-due-filter-1',
@@ -21,8 +21,8 @@ const STATIC_ASSETS = [
   './document-style.css?v=20260706-paragraph-indent-1',
   './tutorial-videos.css?v=20260706-video-before-onboarding-2',
   './document-image-zoom.css?v=20260702-document-image-zoom-front-1',
-  './onboarding.css?v=20260703-initial-setup-lock-1',
-  './onboarding.js?v=20260715-onboarding-draft-1',
+  './onboarding.css?v=20260716-terms-before-onboarding-1',
+  './onboarding.js?v=20260716-terms-before-onboarding-1',
   './activities-edit.js?v=20260709-mobile-camera-only-1',
   './experience-fields.js?v=20260709-mobile-camera-only-1',
   './modal-controls.js?v=20260715-onboarding-draft-1',
@@ -31,13 +31,13 @@ const STATIC_ASSETS = [
   './document-style-settings.js?v=20260716-force-docx-font-1',
   './text-ai-review.js?v=20260716-email-no-ai-1',
   './director-email.js?v=20260716-official-email-files-1',
-  './terms-consent.js?v=20260716-terms-fast-accept-1',
+  './terms-consent.js?v=20260716-terms-before-onboarding-1',
   './auth-profile.js?v=20260716-fast-admin-menu-1',
-  './google-drive-integration.js?v=20260716-official-email-files-1',
+  './google-drive-integration.js?v=20260716-client-permissions-1',
   './tutorial-videos.js?v=20260706-video-before-onboarding-2',
   './manual-image-editor.js?v=20260709-activity-photos-30-1',
   './image-editor-flow.js?v=20260709-activity-photos-30-1',
-  './master-users.js?v=20260716-fast-admin-menu-1',
+  './master-users.js?v=20260716-client-permissions-1',
   './ai-usage-admin.js?v=20260716-ai-usage-1',
   './assets/ai-prof-logo-transparent.png',
   './assets/pwa/icon-192.png',

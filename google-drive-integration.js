@@ -5,6 +5,10 @@
   const historyApi = 'api.php?resource=google-drive-history';
   let driveState = null;
   let driveUploads = [];
+  const canUseDriveMenu = () => {
+    const user = window.PortalBootstrapUser || {};
+    return user.role === 'master' || (Array.isArray(user.permissions) && user.permissions.includes('drive'));
+  };
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'}[char]));
   const currentHeader = () => JSON.parse(localStorage.getItem(typeof HEADER_KEY !== 'undefined' ? HEADER_KEY : 'parecer-cabecalho-professora-v1') || '{}');
@@ -455,6 +459,7 @@
   }
 
   async function init() {
+    if (!canUseDriveMenu()) return;
     ensureDriveNav();
     ensureDriveView();
     renderDriveConfig();

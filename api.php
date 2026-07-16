@@ -252,6 +252,11 @@ try {
         'reports' => 'pareceres',
         'send-report-email' => 'pareceres',
         'ai-review' => 'pareceres',
+        'tutorial-videos' => 'tutoriais',
+        'google-drive' => 'drive',
+        'google-drive-history' => 'drive',
+        'google-drive-upload' => 'drive',
+        'google-drive-oauth' => 'drive',
         'experience-fields' => 'configuracoes',
         'header-settings' => 'configuracoes',
     ];
@@ -1369,8 +1374,7 @@ try {
         }
         if ($resource === 'header-settings') return;
         if ($resource === 'experience-fields') return;
-        if ($resource === 'tutorial-videos') return;
-        if (str_starts_with($resource, 'google-drive')) return;
+        if ($resource === 'google-drive-oauth' && ($_GET['action'] ?? '') === 'callback') return;
         $setupTables = ['children' => 'criancas', 'classes' => 'turmas', 'periods' => 'periodos_avaliativos'];
         if (isset($setupTables[$resource]) && $_SERVER['REQUEST_METHOD'] === 'GET') return;
         if (isset($setupTables[$resource]) && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -2249,7 +2253,7 @@ try {
     }
     if ($resource === 'users') {
         $masterUser = $requireMaster();
-        $allowedPermissions = ['alunos', 'turmas', 'periodos', 'atividades', 'pareceres', 'portfolio', 'configuracoes'];
+        $allowedPermissions = ['alunos', 'turmas', 'periodos', 'atividades', 'pareceres', 'portfolio', 'tutoriais', 'configuracoes', 'drive'];
         $normalizePermissions = static function (array $permissions) use ($allowedPermissions): array {
             return array_values(array_intersect($allowedPermissions, array_unique(array_map('strval', $permissions))));
         };

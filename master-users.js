@@ -10,7 +10,9 @@
     atividades: 'Atividades',
     pareceres: 'Pareceres',
     portfolio: 'Portfolio',
-    configuracoes: 'Configuracoes'
+    tutoriais: 'Tutoriais',
+    configuracoes: 'Configuracoes',
+    drive: 'Arquivos no Drive'
   };
   const editorLabels = {
     none: 'Nenhum editor',
@@ -27,7 +29,9 @@
     periodos: 'periodos',
     atividades: 'atividades',
     pareceres: 'pareceres',
-    configuracoes: 'configuracoes'
+    tutoriais: 'tutoriais',
+    configuracoes: 'configuracoes',
+    'drive-arquivos': 'drive'
   };
   let currentUser = null;
   let usersState = {users: [], currentUserId: 0, availablePermissions: Object.keys(labels)};
@@ -64,7 +68,7 @@
 
   function canAccess(view) {
     if (!currentUser || currentUser.role === 'master') return true;
-    if (view === 'configuracoes') return true;
+    if (view === 'inicio') return true;
     const permission = viewPermissions[view];
     if (!permission) return true;
     if (view === 'pareceres') {

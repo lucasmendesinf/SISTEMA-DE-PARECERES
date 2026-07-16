@@ -1391,13 +1391,27 @@ try {
                 $model = trim((string) ($provider['settings']['model'] ?? 'gemini-3.5-flash')) ?: 'gemini-3.5-flash';
                 if ($apiKey === '') throw new RuntimeException('Gemini API Key nao configurada.');
                 if (!function_exists('curl_init')) throw new RuntimeException('Extensao cURL do PHP nao habilitada.');
+                $model = preg_replace('/^models\//', '', $model) ?: 'gemini-3.5-flash';
                 $payload = json_encode([
-                    'model' => $model,
-                    'system_instruction' => 'Voce revisa textos pedagogicos em portugues do Brasil e retorna apenas o texto final.',
-                    'input' => $prompt,
-                    'generation_config' => ['temperature' => 0.2, 'thinking_level' => 'low'],
+                    'systemInstruction' => [
+                        'parts' => [
+                            ['text' => 'Voce revisa textos pedagogicos em portugues do Brasil e retorna apenas o texto final.'],
+                        ],
+                    ],
+                    'contents' => [
+                        [
+                            'role' => 'user',
+                            'parts' => [
+                                ['text' => $prompt],
+                            ],
+                        ],
+                    ],
+                    'generationConfig' => [
+                        'temperature' => 0.2,
+                        'maxOutputTokens' => 4096,
+                    ],
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                $curl = curl_init('https://generativelanguage.googleapis.com/v1beta/interactions');
+                $curl = curl_init('https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent');
                 curl_setopt_array($curl, [
                     CURLOPT_RETURNTRANSFER => true,
                     CURLOPT_POST => true,
@@ -1411,14 +1425,15 @@ try {
                 curl_close($curl);
                 if ($raw === false || $curlError !== '') throw new RuntimeException('Falha de conexao com o provedor de IA.');
                 $data = json_decode((string) $raw, true);
-                if ($status >= 400 || !is_array($data)) throw new RuntimeException('O provedor de IA recusou a solicitacao.');
-                $reviewed = trim((string) ($data['output_text'] ?? ''));
-                if ($reviewed === '' && is_array($data['steps'] ?? null)) {
+                if ($status >= 400 || !is_array($data)) {
+                    $apiMessage = is_array($data) ? (string) ($data['error']['message'] ?? '') : '';
+                    throw new RuntimeException($apiMessage !== '' ? 'Gemini: ' . $apiMessage : 'O provedor de IA recusou a solicitacao.');
+                }
+                $reviewed = trim((string) ($data['candidates'][0]['content']['parts'][0]['text'] ?? ''));
+                if ($reviewed === '' && is_array($data['candidates'][0]['content']['parts'] ?? null)) {
                     $parts = [];
-                    foreach ($data['steps'] as $step) {
-                        foreach (($step['content'] ?? []) as $content) {
-                            if (is_array($content) && isset($content['text'])) $parts[] = (string) $content['text'];
-                        }
+                    foreach ($data['candidates'][0]['content']['parts'] as $part) {
+                        if (is_array($part) && isset($part['text'])) $parts[] = (string) $part['text'];
                     }
                     $reviewed = trim(implode("\n", $parts));
                 }
@@ -1433,7 +1448,7 @@ try {
                 if (empty($settings['fallback_enabled'])) break;
             }
         }
-        throw new RuntimeException('Nao foi possivel revisar com IA agora. Tente novamente em instantes.');
+        throw new RuntimeException($lastError !== '' ? $lastError : 'Nao foi possivel revisar com IA agora. Tente novamente em instantes.');
     }
     if ($resource === 'google-drive') {
         $user = $loadCurrentUser();

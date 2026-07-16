@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260716-email-timeout-fix-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260716-email-no-abort-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -29,7 +29,7 @@ const STATIC_ASSETS = [
   './report-editor.js?v=20260715-deliver-keeps-done-1',
   './document-style-settings.js?v=20260716-force-docx-font-1',
   './text-ai-review.js?v=20260716-gemini-review-1',
-  './director-email.js?v=20260716-email-timeout-fix-1',
+  './director-email.js?v=20260716-email-no-abort-1',
   './terms-consent.js?v=20260716-terms-link-1',
   './auth-profile.js?v=20260716-fast-admin-menu-1',
   './google-drive-integration.js?v=20260716-drive-pairs-1',

@@ -93,9 +93,7 @@
   async function documentBlob(endpoint, fields) {
     const body = new URLSearchParams();
     Object.entries(fields).forEach(([key, value]) => body.set(key, value ?? ''));
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000);
-    const response = await fetch(endpoint, {method: 'POST', body, signal: controller.signal}).finally(() => clearTimeout(timeout));
+    const response = await fetch(endpoint, {method: 'POST', body});
     if (!response.ok) throw new Error(await response.text() || 'Falha ao gerar arquivo para anexo.');
     const blob = await response.blob();
     if (!blob || blob.size <= 0) throw new Error('O arquivo gerado para anexo ficou vazio.');
@@ -280,11 +278,8 @@
           content: await blobToBase64(attachments.pdf)
         }
       ];
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 90000);
       const response = await fetch('api.php?resource=send-report-email', {
         method: 'POST',
-        signal: controller.signal,
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           reportId,
@@ -292,7 +287,7 @@
           message,
           attachments: encodedAttachments
         })
-      }).finally(() => clearTimeout(timeout));
+      });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Nao foi possivel enviar o e-mail.');
       if (status) {
@@ -302,9 +297,10 @@
     } catch (error) {
       if (status) {
         status.classList.remove('email-send-loading');
-        status.textContent = error.name === 'AbortError'
-          ? 'O servidor demorou para enviar o e-mail. Tente novamente ou envie pelo Google Drive.'
-          : error.message;
+        const message = String(error?.message || '');
+        status.textContent = message.toLowerCase().includes('abort')
+          ? 'O envio foi interrompido pelo navegador ou servidor. Tente novamente com menos imagens ou envie pelo Google Drive.'
+          : message;
       }
     } finally {
       if (sendButton) {

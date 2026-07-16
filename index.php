@@ -176,7 +176,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="billing-cycles.js?v=20260705-billing-cycles-1"></script>
   <script src="text-ai-review.js?v=20260716-gemini-review-1"></script>
   <script src="document-button-fix.js"></script>
-  <script src="director-email.js?v=20260716-email-timeout-fix-1"></script>
+  <script src="director-email.js?v=20260716-email-no-abort-1"></script>
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
   <script src="terms-consent.js?v=20260716-terms-link-1"></script>
   <script src="auth-profile.js?v=20260716-fast-admin-menu-1"></script>

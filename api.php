@@ -43,9 +43,13 @@ try {
     $addColumnIfMissing($pdo, 'usuarios', 'billing_status', "billing_status ENUM('trial','pending','active','overdue','canceled','exempt') NOT NULL DEFAULT 'pending' AFTER billing_payment_method");
     $addColumnIfMissing($pdo, 'usuarios', 'billing_next_due_date', 'billing_next_due_date DATE NULL AFTER billing_status');
     $addColumnIfMissing($pdo, 'usuarios', 'billing_notes', 'billing_notes TEXT NULL AFTER billing_next_due_date');
+    $addColumnIfMissing($pdo, 'usuarios', 'billing_trial_days', 'billing_trial_days INT UNSIGNED NOT NULL DEFAULT 0 AFTER billing_notes');
     $addColumnIfMissing($pdo, 'usuarios', 'mercado_pago_customer_id', 'mercado_pago_customer_id VARCHAR(120) NULL AFTER billing_notes');
     $addColumnIfMissing($pdo, 'usuarios', 'mercado_pago_subscription_id', 'mercado_pago_subscription_id VARCHAR(120) NULL AFTER mercado_pago_customer_id');
     $addColumnIfMissing($pdo, 'usuarios', 'mercado_pago_last_payment_id', 'mercado_pago_last_payment_id VARCHAR(120) NULL AFTER mercado_pago_subscription_id');
+    $addColumnIfMissing($pdo, 'usuarios', 'terms_accepted_at', 'terms_accepted_at DATETIME NULL AFTER mercado_pago_last_payment_id');
+    $addColumnIfMissing($pdo, 'usuarios', 'terms_version', 'terms_version VARCHAR(40) NULL AFTER terms_accepted_at');
+    $addColumnIfMissing($pdo, 'usuarios', 'terms_ip', 'terms_ip VARCHAR(45) NULL AFTER terms_version');
     $addColumnIfMissing($pdo, 'turmas', 'usuario_id', 'usuario_id BIGINT UNSIGNED NULL AFTER id');
     $addColumnIfMissing($pdo, 'periodos_avaliativos', 'usuario_id', 'usuario_id BIGINT UNSIGNED NULL AFTER id');
     $addColumnIfMissing($pdo, 'criancas', 'usuario_id', 'usuario_id BIGINT UNSIGNED NULL AFTER id');
@@ -83,6 +87,47 @@ try {
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_billing_cycles_active (active, month_count, name)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS google_drive_accounts (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        usuario_id BIGINT UNSIGNED NOT NULL UNIQUE,
+        email_google VARCHAR(190) NULL,
+        access_token MEDIUMTEXT NULL,
+        refresh_token MEDIUMTEXT NULL,
+        token_expiration DATETIME NULL,
+        folder_id VARCHAR(190) NULL,
+        folder_name VARCHAR(255) NULL,
+        data_conexao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_google_drive_accounts_user (usuario_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS google_drive_uploads (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        usuario_id BIGINT UNSIGNED NOT NULL,
+        parecer_id BIGINT UNSIGNED NULL,
+        arquivo VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(120) NOT NULL,
+        file_blob LONGBLOB NULL,
+        drive_file_id VARCHAR(190) NULL,
+        drive_link TEXT NULL,
+        folder_id VARCHAR(190) NULL,
+        folder_name VARCHAR(255) NULL,
+        status ENUM('queued','uploading','uploaded','error') NOT NULL DEFAULT 'queued',
+        error_message TEXT NULL,
+        data_upload DATETIME NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_google_drive_uploads_user (usuario_id),
+        INDEX idx_google_drive_uploads_report (parecer_id),
+        INDEX idx_google_drive_uploads_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS google_drive_audit_logs (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        usuario_id BIGINT UNSIGNED NULL,
+        action VARCHAR(80) NOT NULL,
+        details TEXT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_google_drive_audit_user (usuario_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec("INSERT INTO billing_cycles (name,slug,month_count,amount,active) VALUES
         ('Mensal','monthly',1,0.00,1),
         ('Trimestral','quarterly',3,0.00,1),
@@ -110,7 +155,8 @@ try {
         'experience-fields' => 'configuracoes',
         'header-settings' => 'configuracoes',
     ];
-    $billingSelect = "billing_plan,billing_cycle,billing_cycle_id,billing_amount,billing_payment_method,billing_status,billing_next_due_date,billing_notes,mercado_pago_customer_id,mercado_pago_subscription_id,mercado_pago_last_payment_id,(SELECT name FROM billing_cycles bc WHERE bc.id=usuarios.billing_cycle_id LIMIT 1) AS billing_cycle_name,(SELECT month_count FROM billing_cycles bc WHERE bc.id=usuarios.billing_cycle_id LIMIT 1) AS billing_cycle_months";
+    $billingSelect = "billing_plan,billing_cycle,billing_cycle_id,billing_amount,billing_payment_method,billing_status,billing_next_due_date,billing_notes,billing_trial_days,mercado_pago_customer_id,mercado_pago_subscription_id,mercado_pago_last_payment_id,(SELECT name FROM billing_cycles bc WHERE bc.id=usuarios.billing_cycle_id LIMIT 1) AS billing_cycle_name,(SELECT month_count FROM billing_cycles bc WHERE bc.id=usuarios.billing_cycle_id LIMIT 1) AS billing_cycle_months";
+    $termsVersion = 'lgpd-2026-07-16';
     $currentUser = null;
     $billingDateFrom = static function (?string $value): ?DateTimeImmutable {
         $value = trim((string) $value);
@@ -224,7 +270,7 @@ try {
             http_response_code(401);
             throw new RuntimeException('Faça login para continuar.');
         }
-        $query = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect} FROM usuarios WHERE id=? LIMIT 1");
+        $query = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect},terms_accepted_at,terms_version,terms_ip FROM usuarios WHERE id=? LIMIT 1");
         $query->execute([(int) $_SESSION['user_id']]);
         $row = $query->fetch(PDO::FETCH_ASSOC);
         if (!$row || (int) $row['ativo'] !== 1) {
@@ -252,11 +298,13 @@ try {
         $currentUser = $row;
         return $currentUser;
     };
-    $publicUser = static function (array $row): array {
+    $publicUser = static function (array $row) use ($termsVersion): array {
         $legacyCycle = (string) ($row['billing_cycle'] ?? 'monthly');
         $cycleLabel = trim((string) ($row['billing_cycle_name'] ?? ''));
         if ($cycleLabel === '') $cycleLabel = $legacyCycle === 'annual' ? 'Anual' : 'Mensal';
         $cycleMonths = max(1, (int) ($row['billing_cycle_months'] ?? ($legacyCycle === 'annual' ? 12 : 1)));
+        $acceptedAt = trim((string) ($row['terms_accepted_at'] ?? ''));
+        $acceptedVersion = trim((string) ($row['terms_version'] ?? ''));
         return [
             'id' => (int) $row['id'],
             'name' => $row['nome'],
@@ -277,10 +325,17 @@ try {
                 'status' => $row['billing_status'] ?? 'pending',
                 'nextDueDate' => $row['billing_next_due_date'] ?? null,
                 'notes' => $row['billing_notes'] ?? '',
+                'trialDays' => (int) ($row['billing_trial_days'] ?? 0),
             ],
             'billingWarning' => $row['billing_warning'] ?? null,
             'billingAlert' => $row['billing_alert'] ?? null,
             'billingLock' => $row['billing_lock'] ?? null,
+            'terms' => [
+                'accepted' => $acceptedAt !== '' && $acceptedVersion === $termsVersion,
+                'acceptedAt' => $acceptedAt ?: null,
+                'version' => $acceptedVersion ?: null,
+                'currentVersion' => $termsVersion,
+            ],
         ];
     };
     $billingRequiresPayment = static function (array $row): bool {
@@ -301,6 +356,10 @@ try {
         $cycleAmount = (float) $registeredCycle['amount'];
         $finalAmount = $cycleAmount > 0 ? $cycleAmount : max(0, (float) $amount);
         $nextDueDate = trim((string) ($billing['nextDueDate'] ?? ''));
+        $trialDays = max(0, min(365, (int) ($billing['trialDays'] ?? 0)));
+        if ($trialDays > 0 && $status === 'trial' && $nextDueDate === '') {
+            $nextDueDate = (new DateTimeImmutable('today'))->modify('+' . $trialDays . ' days')->format('Y-m-d');
+        }
         return [
             'plan' => trim((string) ($billing['plan'] ?? 'Basico')) ?: 'Basico',
             'cycleId' => $registeredCycle['id'],
@@ -310,6 +369,7 @@ try {
             'status' => $status,
             'nextDueDate' => $billingDateValue($nextDueDate),
             'notes' => trim((string) ($billing['notes'] ?? '')),
+            'trialDays' => $trialDays,
         ];
     };
     $getMercadoPagoSettings = static function () use ($pdo, $config): array {
@@ -332,6 +392,190 @@ try {
         $end = strlen($value) > 10 ? substr($value, -4) : '';
         return $start . str_repeat('*', 8) . $end;
     };
+    $cryptoKey = hash('sha256', __DIR__ . '|' . ($config['database'] ?? '') . '|' . ($config['username'] ?? '') . '|' . ($config['password'] ?? ''), true);
+    $encryptSecret = static function (string $value) use ($cryptoKey): string {
+        if ($value === '') return '';
+        if (!function_exists('openssl_encrypt')) return base64_encode($value);
+        $iv = random_bytes(16);
+        $cipher = openssl_encrypt($value, 'AES-256-CBC', $cryptoKey, OPENSSL_RAW_DATA, $iv);
+        return $cipher === false ? '' : 'v1:' . base64_encode($iv . $cipher);
+    };
+    $decryptSecret = static function (?string $value) use ($cryptoKey): string {
+        $value = (string) $value;
+        if ($value === '') return '';
+        if (!str_starts_with($value, 'v1:')) return base64_decode($value, true) ?: $value;
+        if (!function_exists('openssl_decrypt')) return '';
+        $raw = base64_decode(substr($value, 3), true);
+        if ($raw === false || strlen($raw) <= 16) return '';
+        $iv = substr($raw, 0, 16);
+        $cipher = substr($raw, 16);
+        $plain = openssl_decrypt($cipher, 'AES-256-CBC', $cryptoKey, OPENSSL_RAW_DATA, $iv);
+        return is_string($plain) ? $plain : '';
+    };
+    $googleDriveDefaults = [
+        'enabled' => false,
+        'required' => false,
+        'client_id' => '',
+        'client_secret' => '',
+        'folder_template' => "AiProf\n{Escola}\n{Ano}\n{Turma}\n{Aluno}",
+        'filename_template' => '{Tipo} - {Aluno} - {Turma} - {Mes} {Ano}',
+    ];
+    $getGoogleDriveSettings = static function () use ($pdo, $googleDriveDefaults): array {
+        $query = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key='google_drive' LIMIT 1");
+        $query->execute();
+        $saved = json_decode((string) ($query->fetchColumn() ?: '{}'), true);
+        return array_merge($googleDriveDefaults, is_array($saved) ? $saved : []);
+    };
+    $publicGoogleDriveSettings = static function (array $settings): array {
+        return [
+            'enabled' => !empty($settings['enabled']),
+            'required' => !empty($settings['required']),
+            'configured' => trim((string) ($settings['client_id'] ?? '')) !== '' && trim((string) ($settings['client_secret'] ?? '')) !== '',
+            'clientIdMasked' => trim((string) ($settings['client_id'] ?? '')) !== '' ? substr((string) $settings['client_id'], 0, 12) . '...' : '',
+            'folderTemplate' => (string) ($settings['folder_template'] ?? ''),
+            'filenameTemplate' => (string) ($settings['filename_template'] ?? ''),
+            'scope' => 'https://www.googleapis.com/auth/drive.file',
+        ];
+    };
+    $googleDriveAudit = static function (?int $userId, string $action, string $details = '') use ($pdo): void {
+        $stmt = $pdo->prepare('INSERT INTO google_drive_audit_logs (usuario_id,action,details) VALUES (?,?,?)');
+        $stmt->execute([$userId ?: null, $action, mb_substr($details, 0, 2000, 'UTF-8')]);
+    };
+    $currentApiUrl = static function (string $resource, array $params = []): string {
+        $host = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
+        $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+        $basePath = rtrim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/'))), '/');
+        $query = http_build_query(array_merge(['resource' => $resource], $params));
+        return ($https ? 'https://' : 'http://') . $host . ($basePath === '' ? '' : $basePath) . '/api.php?' . $query;
+    };
+    $googleTokenRequest = static function (array $payload): array {
+        if (!function_exists('curl_init')) throw new RuntimeException('Extensao cURL do PHP nao habilitada.');
+        $ch = curl_init('https://oauth2.googleapis.com/token');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query($payload),
+            CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
+            CURLOPT_TIMEOUT => 25,
+        ]);
+        $body = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        $data = json_decode((string) $body, true);
+        if ($status < 200 || $status >= 300 || !is_array($data)) throw new RuntimeException($error ?: (string) ($data['error_description'] ?? $data['error'] ?? 'Falha na autenticacao Google.'));
+        return $data;
+    };
+    $googleApiRequest = static function (string $url, string $accessToken, string $method = 'GET', $body = null, array $headers = []): array {
+        if (!function_exists('curl_init')) throw new RuntimeException('Extensao cURL do PHP nao habilitada.');
+        $headers[] = 'Authorization: Bearer ' . $accessToken;
+        $ch = curl_init($url);
+        $options = [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => $method, CURLOPT_HTTPHEADER => $headers, CURLOPT_TIMEOUT => 45];
+        if ($body !== null) $options[CURLOPT_POSTFIELDS] = $body;
+        curl_setopt_array($ch, $options);
+        $response = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        $data = json_decode((string) $response, true);
+        if ($status < 200 || $status >= 300) throw new RuntimeException($error ?: (string) ($data['error']['message'] ?? 'Falha na comunicacao com Google Drive.'));
+        return is_array($data) ? $data : [];
+    };
+    $loadGoogleDriveAccount = static function (int $userId) use ($pdo, $decryptSecret, $encryptSecret, $getGoogleDriveSettings, $googleTokenRequest): ?array {
+        $query = $pdo->prepare('SELECT * FROM google_drive_accounts WHERE usuario_id=? LIMIT 1');
+        $query->execute([$userId]);
+        $account = $query->fetch(PDO::FETCH_ASSOC) ?: null;
+        if (!$account) return null;
+        $accessToken = $decryptSecret($account['access_token'] ?? '');
+        $refreshToken = $decryptSecret($account['refresh_token'] ?? '');
+        $expiration = strtotime((string) ($account['token_expiration'] ?? '')) ?: 0;
+        if ($refreshToken !== '' && ($accessToken === '' || $expiration < time() + 120)) {
+            $settings = $getGoogleDriveSettings();
+            $token = $googleTokenRequest([
+                'client_id' => $settings['client_id'],
+                'client_secret' => $settings['client_secret'],
+                'refresh_token' => $refreshToken,
+                'grant_type' => 'refresh_token',
+            ]);
+            $accessToken = (string) ($token['access_token'] ?? '');
+            $expires = (new DateTimeImmutable())->modify('+' . max(300, (int) ($token['expires_in'] ?? 3600)) . ' seconds')->format('Y-m-d H:i:s');
+            $pdo->prepare('UPDATE google_drive_accounts SET access_token=?,token_expiration=? WHERE usuario_id=?')->execute([$encryptSecret($accessToken), $expires, $userId]);
+            $account['token_expiration'] = $expires;
+        }
+        $account['access_token_plain'] = $accessToken;
+        $account['refresh_token_plain'] = $refreshToken;
+        return $account;
+    };
+    $driveEscape = static fn(string $value): string => str_replace(["\\", "'"], ["\\\\", "\\'"], $value);
+    $driveFindFolder = static function (string $accessToken, string $name, ?string $parentId = null) use ($googleApiRequest, $driveEscape): ?array {
+        $q = "mimeType='application/vnd.google-apps.folder' and trashed=false and name='" . $driveEscape($name) . "'";
+        if ($parentId) $q .= " and '" . $driveEscape($parentId) . "' in parents";
+        $url = 'https://www.googleapis.com/drive/v3/files?' . http_build_query(['q' => $q, 'fields' => 'files(id,name,webViewLink)', 'pageSize' => 1]);
+        $result = $googleApiRequest($url, $accessToken);
+        return $result['files'][0] ?? null;
+    };
+    $driveCreateFolder = static function (string $accessToken, string $name, ?string $parentId = null) use ($googleApiRequest): array {
+        $metadata = ['name' => $name, 'mimeType' => 'application/vnd.google-apps.folder'];
+        if ($parentId) $metadata['parents'] = [$parentId];
+        return $googleApiRequest('https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink', $accessToken, 'POST', json_encode($metadata, JSON_UNESCAPED_UNICODE), ['Content-Type: application/json']);
+    };
+    $replaceDriveTokens = static function (string $template, array $context): string {
+        $months = ['01' => 'Janeiro', '02' => 'Fevereiro', '03' => 'Marco', '04' => 'Abril', '05' => 'Maio', '06' => 'Junho', '07' => 'Julho', '08' => 'Agosto', '09' => 'Setembro', '10' => 'Outubro', '11' => 'Novembro', '12' => 'Dezembro'];
+        $now = new DateTimeImmutable();
+        $values = [
+            '{Aluno}' => $context['student'] ?? '',
+            '{Turma}' => $context['class'] ?? '',
+            '{Professor}' => $context['teacher'] ?? '',
+            '{Escola}' => $context['school'] ?? '',
+            '{Ano}' => $context['year'] ?? $now->format('Y'),
+            '{Mes}' => $months[$now->format('m')] ?? $now->format('m'),
+            '{Mês}' => $months[$now->format('m')] ?? $now->format('m'),
+            '{Data}' => $now->format('d-m-Y'),
+            '{Tipo}' => $context['type'] ?? 'Parecer',
+        ];
+        return trim(strtr($template, $values));
+    };
+    $sanitizeDriveName = static function (string $value, string $fallback = 'Documento'): string {
+        $value = trim(preg_replace('/[\\\\\\/:*?"<>|]+/u', '-', $value) ?: '');
+        $value = preg_replace('/\s+/u', ' ', $value) ?: '';
+        return mb_substr($value !== '' ? $value : $fallback, 0, 180, 'UTF-8');
+    };
+    $ensureDriveFolder = static function (int $userId, array $context = []) use ($pdo, $getGoogleDriveSettings, $loadGoogleDriveAccount, $replaceDriveTokens, $sanitizeDriveName, $driveFindFolder, $driveCreateFolder): array {
+        $account = $loadGoogleDriveAccount($userId);
+        if (!$account || empty($account['access_token_plain'])) throw new RuntimeException('Conecte sua conta Google Drive antes de enviar arquivos.');
+        if (!empty($account['folder_id'])) return ['id' => $account['folder_id'], 'name' => $account['folder_name'] ?: 'Google Drive', 'account' => $account];
+        $settings = $getGoogleDriveSettings();
+        $parts = preg_split('/\R+|\/+/u', (string) ($settings['folder_template'] ?? 'AiProf')) ?: [];
+        $parentId = null;
+        $folder = null;
+        foreach ($parts as $part) {
+            $name = $sanitizeDriveName($replaceDriveTokens($part, $context), 'AiProf');
+            if ($name === '') continue;
+            $folder = $driveFindFolder($account['access_token_plain'], $name, $parentId) ?: $driveCreateFolder($account['access_token_plain'], $name, $parentId);
+            $parentId = $folder['id'] ?? $parentId;
+        }
+        if (!$folder || empty($folder['id'])) throw new RuntimeException('Nao foi possivel criar a pasta no Google Drive.');
+        $pdo->prepare('UPDATE google_drive_accounts SET folder_id=?,folder_name=? WHERE usuario_id=?')->execute([$folder['id'], $folder['name'] ?? 'AiProf', $userId]);
+        return ['id' => $folder['id'], 'name' => $folder['name'] ?? 'AiProf', 'account' => $account];
+    };
+    $uploadBinaryToDrive = static function (string $accessToken, string $fileName, string $mimeType, string $binary, string $folderId) use ($googleApiRequest): array {
+        $boundary = 'aiprof_' . bin2hex(random_bytes(12));
+        $metadata = ['name' => $fileName, 'parents' => [$folderId]];
+        $body = "--{$boundary}\r\n";
+        $body .= "Content-Type: application/json; charset=UTF-8\r\n\r\n";
+        $body .= json_encode($metadata, JSON_UNESCAPED_UNICODE) . "\r\n";
+        $body .= "--{$boundary}\r\n";
+        $body .= "Content-Type: {$mimeType}\r\n\r\n";
+        $body .= $binary . "\r\n";
+        $body .= "--{$boundary}--";
+        return $googleApiRequest(
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',
+            $accessToken,
+            'POST',
+            $body,
+            ['Content-Type: multipart/related; boundary=' . $boundary]
+        );
+    };
     $mercadoPagoConfigured = static function () use ($getMercadoPagoSettings): bool {
         $mp = $getMercadoPagoSettings();
         return $mp['access_token'] !== '' && $mp['public_key'] !== '';
@@ -349,6 +593,49 @@ try {
         if ($method === 'card') return ['card'];
         if ($method === 'manual') return ['pix', 'card'];
         return ['pix', 'card'];
+    };
+    $activeBillingCycles = static function () use ($pdo): array {
+        $rows = $pdo->query('SELECT id,name,slug,month_count,amount,active FROM billing_cycles WHERE active=1 ORDER BY month_count, name')->fetchAll(PDO::FETCH_ASSOC);
+        return array_map(static fn(array $row): array => [
+            'id' => (int) $row['id'],
+            'name' => $row['name'],
+            'slug' => $row['slug'],
+            'months' => max(1, (int) $row['month_count']),
+            'amount' => (float) $row['amount'],
+        ], $rows);
+    };
+    $applyBillingChoice = static function (array $row, array $input) use ($pdo, $loadBillingCycle, $legacyCycleFromMonths, $billingSelect): array {
+        $cycleId = (int) ($input['cycleId'] ?? 0);
+        $plan = trim((string) ($input['plan'] ?? ''));
+        $updates = [];
+        $params = [];
+        if ($plan !== '') {
+            $updates[] = 'billing_plan=?';
+            $params[] = mb_substr($plan, 0, 80, 'UTF-8');
+        }
+        if ($cycleId > 0) {
+            $cycle = $loadBillingCycle($cycleId);
+            if (empty($cycle['active'])) throw new RuntimeException('Periodo de cobranca indisponivel.');
+            $updates[] = 'billing_cycle=?';
+            $params[] = $legacyCycleFromMonths((int) $cycle['months']);
+            $updates[] = 'billing_cycle_id=?';
+            $params[] = $cycle['id'];
+            $updates[] = 'billing_amount=?';
+            $params[] = number_format((float) $cycle['amount'], 2, '.', '');
+        }
+        if (!empty($updates)) {
+            if (in_array((string) ($row['billing_status'] ?? 'pending'), ['trial', 'overdue', 'pending'], true)) {
+                $updates[] = "billing_status='pending'";
+            }
+            $params[] = (int) $row['id'];
+            $pdo->prepare('UPDATE usuarios SET ' . implode(',', $updates) . ' WHERE id=?')->execute($params);
+            $query = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect},terms_accepted_at,terms_version,terms_ip FROM usuarios WHERE id=? LIMIT 1");
+            $query->execute([(int) $row['id']]);
+            $row = $query->fetch(PDO::FETCH_ASSOC) ?: $row;
+            $permissions = json_decode((string) ($row['permissoes'] ?? '[]'), true);
+            $row['permissions'] = is_array($permissions) ? $permissions : [];
+        }
+        return $row;
     };
     $mercadoPagoErrorMessage = static function (array $data): string {
         $message = (string) ($data['message'] ?? $data['error'] ?? 'Mercado Pago recusou a solicitacao.');
@@ -750,6 +1037,7 @@ try {
         if ($resource === 'header-settings') return;
         if ($resource === 'experience-fields') return;
         if ($resource === 'tutorial-videos') return;
+        if (str_starts_with($resource, 'google-drive')) return;
         $setupTables = ['children' => 'criancas', 'classes' => 'turmas', 'periods' => 'periodos_avaliativos'];
         if (isset($setupTables[$resource]) && $_SERVER['REQUEST_METHOD'] === 'GET') return;
         if (isset($setupTables[$resource]) && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -794,6 +1082,7 @@ try {
             http_response_code(501);
             throw new RuntimeException('Mercado Pago ainda nao configurado. Informe access_token e public_key para habilitar Pix e cartao recorrente.');
         }
+        $row = $applyBillingChoice($row, $input);
         echo json_encode($createMercadoPagoPayment($row, $method), JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -803,7 +1092,7 @@ try {
         if ($action === 'login') {
             $email = trim((string) ($input['email'] ?? ''));
             $password = (string) ($input['password'] ?? '');
-            $user = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect},senha_hash FROM usuarios WHERE email=? LIMIT 1");
+            $user = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect},terms_accepted_at,terms_version,terms_ip,senha_hash FROM usuarios WHERE email=? LIMIT 1");
             $user->execute([$email]);
             $row = $user->fetch(PDO::FETCH_ASSOC);
             if (!$row || !password_verify($password, $row['senha_hash'])) {
@@ -828,10 +1117,26 @@ try {
             echo json_encode(['ok' => true]);
             exit;
         }
+        if ($action === 'accept_terms') {
+            if (empty($_SESSION['user_id'])) { http_response_code(401); throw new RuntimeException('Sessão expirada.'); }
+            $acceptedVersion = trim((string) ($input['version'] ?? ''));
+            if ($acceptedVersion !== $termsVersion) throw new RuntimeException('Versão do termo inválida. Atualize a página e tente novamente.');
+            $ip = substr((string) ($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45);
+            $pdo->prepare('UPDATE usuarios SET terms_accepted_at=NOW(), terms_version=?, terms_ip=? WHERE id=?')->execute([$termsVersion, $ip ?: null, (int) $_SESSION['user_id']]);
+            $user = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect},terms_accepted_at,terms_version,terms_ip FROM usuarios WHERE id=? LIMIT 1");
+            $user->execute([(int) $_SESSION['user_id']]);
+            $row = $user->fetch(PDO::FETCH_ASSOC);
+            if (!$row) { http_response_code(401); throw new RuntimeException('Usuário não encontrado.'); }
+            $permissions = json_decode((string) ($row['permissoes'] ?? '[]'), true);
+            $row['permissions'] = is_array($permissions) ? $permissions : [];
+            $row = $auditBillingAccess($row);
+            echo json_encode(['ok' => true, 'user' => $publicUser($row)], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
     }
     if ($resource === 'auth' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         if (empty($_SESSION['user_id'])) { http_response_code(401); throw new RuntimeException('Sessão expirada.'); }
-        $user = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect} FROM usuarios WHERE id=?");
+        $user = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect},terms_accepted_at,terms_version,terms_ip FROM usuarios WHERE id=?");
         $user->execute([(int) $_SESSION['user_id']]);
         $row = $user->fetch(PDO::FETCH_ASSOC);
         if (!$row) { session_destroy(); http_response_code(401); throw new RuntimeException('Usuário não encontrado.'); }
@@ -877,11 +1182,16 @@ try {
         exit;
     }
     if (empty($_SESSION['user_id'])) { http_response_code(401); throw new RuntimeException('Faça login para continuar.'); }
+    $termsGuardUser = $loadCurrentUser();
+    if (trim((string) ($termsGuardUser['terms_accepted_at'] ?? '')) === '' || trim((string) ($termsGuardUser['terms_version'] ?? '')) !== $termsVersion) {
+        http_response_code(428);
+        throw new RuntimeException('Aceite os termos de uso e privacidade para continuar.');
+    }
     if ($resource === 'billing') {
         $loggedUser = $loadCurrentUser();
         $billing = $publicUser($loggedUser)['billing'];
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-            echo json_encode(['billing' => $billing, 'paymentMethods' => $paymentMethodsAvailable($billing)], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['billing' => $billing, 'paymentMethods' => $paymentMethodsAvailable($billing), 'cycles' => $activeBillingCycles()], JSON_UNESCAPED_UNICODE);
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -892,7 +1202,149 @@ try {
                 http_response_code(501);
                 throw new RuntimeException('Mercado Pago ainda nao configurado. Informe access_token e public_key para habilitar Pix e cartao recorrente.');
             }
+            $loggedUser = $applyBillingChoice($loggedUser, $input);
             echo json_encode($createMercadoPagoPayment($loggedUser, $method), JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    }
+    if ($resource === 'google-drive') {
+        $user = $loadCurrentUser();
+        $settings = $getGoogleDriveSettings();
+        $accountQuery = $pdo->prepare('SELECT id,email_google,folder_id,folder_name,token_expiration,data_conexao FROM google_drive_accounts WHERE usuario_id=? LIMIT 1');
+        $accountQuery->execute([(int) $user['id']]);
+        $account = $accountQuery->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            echo json_encode([
+                'settings' => $publicGoogleDriveSettings($settings),
+                'connected' => (bool) $account,
+                'account' => $account ? [
+                    'email' => $account['email_google'],
+                    'folderId' => $account['folder_id'],
+                    'folderName' => $account['folder_name'],
+                    'connectedAt' => $account['data_conexao'],
+                ] : null,
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+            $action = (string) ($input['action'] ?? '');
+            if ($action === 'disconnect') {
+                $pdo->prepare('DELETE FROM google_drive_accounts WHERE usuario_id=?')->execute([(int) $user['id']]);
+                $googleDriveAudit((int) $user['id'], 'disconnected', 'Google Drive disconnected.');
+                echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            if ($action === 'set_folder') {
+                $folderName = trim((string) ($input['folderName'] ?? ''));
+                $folderId = trim((string) ($input['folderId'] ?? ''));
+                if ($folderName === '' && $folderId === '') throw new RuntimeException('Informe o nome da pasta ou ID da pasta.');
+                if ($folderId === '') {
+                    $account = $loadGoogleDriveAccount((int) $user['id']);
+                    if (!$account || empty($account['access_token_plain'])) throw new RuntimeException('Conecte sua conta Google Drive antes de escolher a pasta.');
+                    $safeFolderName = $sanitizeDriveName($folderName, 'AiProf');
+                    $folder = $driveFindFolder($account['access_token_plain'], $safeFolderName) ?: $driveCreateFolder($account['access_token_plain'], $safeFolderName);
+                    $folderId = $folder['id'];
+                    $folderName = $folder['name'];
+                }
+                $pdo->prepare('UPDATE google_drive_accounts SET folder_id=?,folder_name=? WHERE usuario_id=?')->execute([$folderId, $folderName ?: 'Google Drive', (int) $user['id']]);
+                echo json_encode(['ok' => true, 'folderId' => $folderId, 'folderName' => $folderName], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+        }
+    }
+    if ($resource === 'google-drive-history') {
+        $user = $loadCurrentUser();
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            $query = $pdo->prepare("SELECT gu.id,gu.parecer_id,gu.arquivo,gu.drive_file_id,gu.drive_link,gu.folder_name,gu.status,gu.error_message,gu.data_upload,gu.created_at,c.nome AS aluno FROM google_drive_uploads gu LEFT JOIN pareceres p ON p.id=gu.parecer_id LEFT JOIN criancas c ON c.id=p.crianca_id WHERE gu.usuario_id=? ORDER BY gu.created_at DESC LIMIT 200");
+            $query->execute([(int) $user['id']]);
+            echo json_encode(['uploads' => array_map(static fn(array $row): array => [
+                'id' => (int) $row['id'],
+                'reportId' => isset($row['parecer_id']) ? (int) $row['parecer_id'] : null,
+                'fileName' => $row['arquivo'],
+                'student' => $row['aluno'] ?? '',
+                'folder' => $row['folder_name'] ?? '',
+                'link' => $row['drive_link'] ?? '',
+                'status' => $row['status'],
+                'error' => $row['error_message'] ?? '',
+                'uploadedAt' => $row['data_upload'],
+                'createdAt' => $row['created_at'],
+            ], $query->fetchAll(PDO::FETCH_ASSOC))], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+            $id = (int) ($_GET['id'] ?? 0);
+            if ($id <= 0) throw new RuntimeException('Historico invalido.');
+            $pdo->prepare('DELETE FROM google_drive_uploads WHERE id=? AND usuario_id=?')->execute([$id, (int) $user['id']]);
+            echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+            $id = (int) ($input['id'] ?? 0);
+            if ($id <= 0) throw new RuntimeException('Historico invalido.');
+            $query = $pdo->prepare('SELECT * FROM google_drive_uploads WHERE id=? AND usuario_id=? LIMIT 1');
+            $query->execute([$id, (int) $user['id']]);
+            $row = $query->fetch(PDO::FETCH_ASSOC);
+            if (!$row || empty($row['file_blob'])) throw new RuntimeException('Arquivo original nao esta mais disponivel para reenvio.');
+            try {
+                $folder = $ensureDriveFolder((int) $user['id']);
+                $pdo->prepare('UPDATE google_drive_uploads SET status="uploading",error_message=NULL WHERE id=?')->execute([$id]);
+                $driveFile = $uploadBinaryToDrive($folder['account']['access_token_plain'], (string) $row['arquivo'], (string) $row['mime_type'], (string) $row['file_blob'], $folder['id']);
+                $pdo->prepare('UPDATE google_drive_uploads SET status="uploaded",file_blob=NULL,drive_file_id=?,drive_link=?,data_upload=NOW(),folder_id=?,folder_name=?,error_message=NULL WHERE id=?')->execute([(string) ($driveFile['id'] ?? ''), (string) ($driveFile['webViewLink'] ?? ''), $folder['id'], $folder['name'], $id]);
+                echo json_encode(['ok' => true, 'link' => $driveFile['webViewLink'] ?? ''], JSON_UNESCAPED_UNICODE);
+                exit;
+            } catch (Throwable $e) {
+                $pdo->prepare('UPDATE google_drive_uploads SET status="error",error_message=? WHERE id=?')->execute([$e->getMessage(), $id]);
+                throw $e;
+            }
+        }
+    }
+    if ($resource === 'google-drive-upload' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $user = $loadCurrentUser();
+        $settings = $getGoogleDriveSettings();
+        if (empty($settings['enabled'])) throw new RuntimeException('Integracao com Google Drive desabilitada.');
+        $reportId = (int) ($_POST['reportId'] ?? 0);
+        $fileType = (string) ($_POST['fileType'] ?? '');
+        $context = [
+            'student' => (string) ($_POST['studentName'] ?? ''),
+            'class' => (string) ($_POST['className'] ?? ''),
+            'teacher' => (string) ($user['nome'] ?? ''),
+            'school' => (string) ($_POST['schoolName'] ?? ''),
+            'year' => (string) ($_POST['year'] ?? date('Y')),
+            'type' => (string) ($_POST['documentLabel'] ?? 'Parecer'),
+        ];
+        if ($reportId <= 0 || empty($_FILES['file']['tmp_name']) || !is_uploaded_file($_FILES['file']['tmp_name'])) throw new RuntimeException('Arquivo invalido para envio ao Drive.');
+        $ownerCheck = $pdo->prepare('SELECT p.id FROM pareceres p JOIN criancas c ON c.id=p.crianca_id WHERE p.id=? AND c.usuario_id=? LIMIT 1');
+        $ownerCheck->execute([$reportId, (int) $user['id']]);
+        if (!$ownerCheck->fetchColumn()) throw new RuntimeException('Documento nao encontrado para este login.');
+        $binary = file_get_contents($_FILES['file']['tmp_name']);
+        if (!is_string($binary) || $binary === '') throw new RuntimeException('Arquivo vazio para upload.');
+        $mime = $fileType === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        $extension = $fileType === 'pdf' ? '.pdf' : '.docx';
+        $baseName = $sanitizeDriveName($replaceDriveTokens((string) ($settings['filename_template'] ?? '{Tipo} - {Aluno}'), $context), 'Documento');
+        $fileName = $baseName . $extension;
+        $insert = $pdo->prepare('INSERT INTO google_drive_uploads (usuario_id,parecer_id,arquivo,mime_type,file_blob,status) VALUES (?,?,?,?,?,"queued")');
+        $insert->bindValue(1, (int) $user['id'], PDO::PARAM_INT);
+        $insert->bindValue(2, $reportId, PDO::PARAM_INT);
+        $insert->bindValue(3, $fileName);
+        $insert->bindValue(4, $mime);
+        $insert->bindValue(5, $binary, PDO::PARAM_LOB);
+        $insert->execute();
+        $uploadId = (int) $pdo->lastInsertId();
+        try {
+            $folder = $ensureDriveFolder((int) $user['id'], $context);
+            $pdo->prepare('UPDATE google_drive_uploads SET status="uploading",folder_id=?,folder_name=? WHERE id=?')->execute([$folder['id'], $folder['name'], $uploadId]);
+            $driveFile = $uploadBinaryToDrive($folder['account']['access_token_plain'], $fileName, $mime, $binary, $folder['id']);
+            $pdo->prepare('UPDATE google_drive_uploads SET status="uploaded",file_blob=NULL,drive_file_id=?,drive_link=?,data_upload=NOW(),folder_id=?,folder_name=?,error_message=NULL WHERE id=?')->execute([(string) ($driveFile['id'] ?? ''), (string) ($driveFile['webViewLink'] ?? ''), $folder['id'], $folder['name'], $uploadId]);
+            $googleDriveAudit((int) $user['id'], 'upload_success', $fileName);
+            echo json_encode(['ok' => true, 'uploadId' => $uploadId, 'fileName' => $fileName, 'link' => $driveFile['webViewLink'] ?? '', 'status' => 'uploaded'], JSON_UNESCAPED_UNICODE);
+            exit;
+        } catch (Throwable $e) {
+            $pdo->prepare('UPDATE google_drive_uploads SET status="error",error_message=? WHERE id=?')->execute([$e->getMessage(), $uploadId]);
+            $googleDriveAudit((int) $user['id'], 'upload_error', $e->getMessage());
+            http_response_code(202);
+            echo json_encode(['ok' => false, 'queued' => true, 'uploadId' => $uploadId, 'fileName' => $fileName, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
             exit;
         }
     }
@@ -1080,7 +1532,7 @@ try {
             $rows = $pdo->query("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect},created_at FROM usuarios ORDER BY perfil DESC, nome")->fetchAll(PDO::FETCH_ASSOC);
             $users = array_map(static function (array $row): array {
                 $permissions = json_decode((string) ($row['permissoes'] ?? '[]'), true);
-                return ['id' => (int) $row['id'], 'name' => $row['nome'], 'email' => $row['email'], 'phone' => $row['telefone'], 'role' => $row['perfil'], 'permissions' => is_array($permissions) ? $permissions : [], 'active' => (bool) $row['ativo'], 'imageEditorPermission' => $row['image_editor_permission'] ?? 'none', 'billing' => ['plan' => $row['billing_plan'] ?? 'Basico', 'cycle' => $row['billing_cycle'] ?? 'monthly', 'cycleId' => isset($row['billing_cycle_id']) ? (int) $row['billing_cycle_id'] : null, 'cycleLabel' => trim((string) ($row['billing_cycle_name'] ?? '')) ?: (($row['billing_cycle'] ?? 'monthly') === 'annual' ? 'Anual' : 'Mensal'), 'cycleMonths' => max(1, (int) ($row['billing_cycle_months'] ?? (($row['billing_cycle'] ?? 'monthly') === 'annual' ? 12 : 1))), 'amount' => (float) ($row['billing_amount'] ?? 0), 'paymentMethod' => $row['billing_payment_method'] ?? 'both', 'status' => $row['billing_status'] ?? 'pending', 'nextDueDate' => $row['billing_next_due_date'] ?? null, 'notes' => $row['billing_notes'] ?? ''], 'createdAt' => $row['created_at']];
+                return ['id' => (int) $row['id'], 'name' => $row['nome'], 'email' => $row['email'], 'phone' => $row['telefone'], 'role' => $row['perfil'], 'permissions' => is_array($permissions) ? $permissions : [], 'active' => (bool) $row['ativo'], 'imageEditorPermission' => $row['image_editor_permission'] ?? 'none', 'billing' => ['plan' => $row['billing_plan'] ?? 'Basico', 'cycle' => $row['billing_cycle'] ?? 'monthly', 'cycleId' => isset($row['billing_cycle_id']) ? (int) $row['billing_cycle_id'] : null, 'cycleLabel' => trim((string) ($row['billing_cycle_name'] ?? '')) ?: (($row['billing_cycle'] ?? 'monthly') === 'annual' ? 'Anual' : 'Mensal'), 'cycleMonths' => max(1, (int) ($row['billing_cycle_months'] ?? (($row['billing_cycle'] ?? 'monthly') === 'annual' ? 12 : 1))), 'amount' => (float) ($row['billing_amount'] ?? 0), 'paymentMethod' => $row['billing_payment_method'] ?? 'both', 'status' => $row['billing_status'] ?? 'pending', 'nextDueDate' => $row['billing_next_due_date'] ?? null, 'notes' => $row['billing_notes'] ?? '', 'trialDays' => (int) ($row['billing_trial_days'] ?? 0)], 'createdAt' => $row['created_at']];
             }, $rows);
             echo json_encode(['users' => $users, 'currentUserId' => (int) $masterUser['id'], 'availablePermissions' => $allowedPermissions], JSON_UNESCAPED_UNICODE);
             exit;
@@ -1101,8 +1553,8 @@ try {
             if ($userId <= 0 && strlen($password) < 6) throw new RuntimeException('A senha inicial deve ter pelo menos 6 caracteres.');
             if ($userId > 0 && $userId === (int) $masterUser['id'] && ($role !== 'master' || $active !== 1)) throw new RuntimeException('Você não pode remover o acesso master da sua própria conta.');
             if ($userId > 0) {
-                $sql = 'UPDATE usuarios SET nome=?,email=?,telefone=?,perfil=?,permissoes=?,ativo=?,image_editor_permission=?,billing_plan=?,billing_cycle=?,billing_cycle_id=?,billing_amount=?,billing_payment_method=?,billing_status=?,billing_next_due_date=?,billing_notes=?' . ($password !== '' ? ',senha_hash=?' : '') . ' WHERE id=?';
-                $params = [$name, $email, $phone ?: null, $role, json_encode($permissions, JSON_UNESCAPED_UNICODE), $active, $editorPermission, $billing['plan'], $billing['cycle'], $billing['cycleId'], $billing['amount'], $billing['paymentMethod'], $billing['status'], $billing['nextDueDate'], $billing['notes']];
+                $sql = 'UPDATE usuarios SET nome=?,email=?,telefone=?,perfil=?,permissoes=?,ativo=?,image_editor_permission=?,billing_plan=?,billing_cycle=?,billing_cycle_id=?,billing_amount=?,billing_payment_method=?,billing_status=?,billing_next_due_date=?,billing_notes=?,billing_trial_days=?' . ($password !== '' ? ',senha_hash=?' : '') . ' WHERE id=?';
+                $params = [$name, $email, $phone ?: null, $role, json_encode($permissions, JSON_UNESCAPED_UNICODE), $active, $editorPermission, $billing['plan'], $billing['cycle'], $billing['cycleId'], $billing['amount'], $billing['paymentMethod'], $billing['status'], $billing['nextDueDate'], $billing['notes'], $billing['trialDays']];
                 if ($password !== '') {
                     if (strlen($password) < 6) throw new RuntimeException('A nova senha deve ter pelo menos 6 caracteres.');
                     $params[] = password_hash($password, PASSWORD_DEFAULT);
@@ -1110,8 +1562,8 @@ try {
                 $params[] = $userId;
                 $pdo->prepare($sql)->execute($params);
             } else {
-                $insert = $pdo->prepare('INSERT INTO usuarios (nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,billing_plan,billing_cycle,billing_cycle_id,billing_amount,billing_payment_method,billing_status,billing_next_due_date,billing_notes,senha_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-                $insert->execute([$name, $email, $phone ?: null, $role, json_encode($permissions, JSON_UNESCAPED_UNICODE), $active, $editorPermission, $billing['plan'], $billing['cycle'], $billing['cycleId'], $billing['amount'], $billing['paymentMethod'], $billing['status'], $billing['nextDueDate'], $billing['notes'], password_hash($password, PASSWORD_DEFAULT)]);
+                $insert = $pdo->prepare('INSERT INTO usuarios (nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,billing_plan,billing_cycle,billing_cycle_id,billing_amount,billing_payment_method,billing_status,billing_next_due_date,billing_notes,billing_trial_days,senha_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+                $insert->execute([$name, $email, $phone ?: null, $role, json_encode($permissions, JSON_UNESCAPED_UNICODE), $active, $editorPermission, $billing['plan'], $billing['cycle'], $billing['cycleId'], $billing['amount'], $billing['paymentMethod'], $billing['status'], $billing['nextDueDate'], $billing['notes'], $billing['trialDays'], password_hash($password, PASSWORD_DEFAULT)]);
                 $userId = (int) $pdo->lastInsertId();
             }
             echo json_encode(['id' => $userId], JSON_UNESCAPED_UNICODE);
@@ -1422,6 +1874,85 @@ try {
         http_response_code(405);
         throw new RuntimeException('Metodo nao permitido.');
     }
+    if ($resource === 'google-drive-settings') {
+        $masterUser = $requireMaster();
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            echo json_encode($publicGoogleDriveSettings($getGoogleDriveSettings()), JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+            $previous = $getGoogleDriveSettings();
+            $settings = [
+                'enabled' => !empty($input['enabled']),
+                'required' => !empty($input['required']),
+                'client_id' => trim((string) ($input['clientId'] ?? '')) ?: (string) ($previous['client_id'] ?? ''),
+                'client_secret' => trim((string) ($input['clientSecret'] ?? '')) ?: (string) ($previous['client_secret'] ?? ''),
+                'folder_template' => trim((string) ($input['folderTemplate'] ?? '')) ?: $googleDriveDefaults['folder_template'],
+                'filename_template' => trim((string) ($input['filenameTemplate'] ?? '')) ?: $googleDriveDefaults['filename_template'],
+            ];
+            if ($settings['enabled'] && ($settings['client_id'] === '' || $settings['client_secret'] === '')) throw new RuntimeException('Informe Client ID e Client Secret do Google.');
+            $save = $pdo->prepare('INSERT INTO app_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
+            $save->execute(['google_drive', json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+            $googleDriveAudit((int) $masterUser['id'], 'settings_saved', 'Google Drive settings updated.');
+            echo json_encode(['ok' => true, 'settings' => $publicGoogleDriveSettings($settings)], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        http_response_code(405);
+        throw new RuntimeException('Metodo nao permitido.');
+    }
+    if ($resource === 'google-drive-oauth') {
+        $settings = $getGoogleDriveSettings();
+        if (empty($settings['enabled']) || trim((string) $settings['client_id']) === '' || trim((string) $settings['client_secret']) === '') throw new RuntimeException('Google Drive nao configurado pelo administrador.');
+        $action = (string) ($_GET['action'] ?? 'start');
+        if ($action === 'start') {
+            $user = $loadCurrentUser();
+            $state = bin2hex(random_bytes(16));
+            $_SESSION['google_drive_oauth_state'] = $state;
+            $_SESSION['google_drive_oauth_user'] = (int) $user['id'];
+            $params = [
+                'client_id' => $settings['client_id'],
+                'redirect_uri' => $currentApiUrl('google-drive-oauth', ['action' => 'callback']),
+                'response_type' => 'code',
+                'scope' => 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email',
+                'access_type' => 'offline',
+                'prompt' => 'consent',
+                'include_granted_scopes' => 'true',
+                'state' => $state,
+            ];
+            header('Location: https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query($params));
+            exit;
+        }
+        if ($action === 'callback') {
+            $state = (string) ($_GET['state'] ?? '');
+            $code = (string) ($_GET['code'] ?? '');
+            $userId = (int) ($_SESSION['google_drive_oauth_user'] ?? 0);
+            if ($state === '' || $state !== ($_SESSION['google_drive_oauth_state'] ?? '') || $userId <= 0 || $code === '') throw new RuntimeException('Retorno do Google invalido.');
+            $token = $googleTokenRequest([
+                'code' => $code,
+                'client_id' => $settings['client_id'],
+                'client_secret' => $settings['client_secret'],
+                'redirect_uri' => $currentApiUrl('google-drive-oauth', ['action' => 'callback']),
+                'grant_type' => 'authorization_code',
+            ]);
+            $accessToken = (string) ($token['access_token'] ?? '');
+            $refreshToken = (string) ($token['refresh_token'] ?? '');
+            if ($accessToken === '') throw new RuntimeException('Google nao retornou access token.');
+            $profile = $googleApiRequest('https://www.googleapis.com/oauth2/v2/userinfo', $accessToken);
+            $emailGoogle = (string) ($profile['email'] ?? '');
+            $expires = (new DateTimeImmutable())->modify('+' . max(300, (int) ($token['expires_in'] ?? 3600)) . ' seconds')->format('Y-m-d H:i:s');
+            $existing = $pdo->prepare('SELECT refresh_token FROM google_drive_accounts WHERE usuario_id=? LIMIT 1');
+            $existing->execute([$userId]);
+            $currentRefresh = $decryptSecret((string) ($existing->fetchColumn() ?: ''));
+            if ($refreshToken === '') $refreshToken = $currentRefresh;
+            $save = $pdo->prepare('INSERT INTO google_drive_accounts (usuario_id,email_google,access_token,refresh_token,token_expiration,data_conexao) VALUES (?,?,?,?,?,NOW()) ON DUPLICATE KEY UPDATE email_google=VALUES(email_google),access_token=VALUES(access_token),refresh_token=VALUES(refresh_token),token_expiration=VALUES(token_expiration),updated_at=NOW()');
+            $save->execute([$userId, $emailGoogle, $encryptSecret($accessToken), $encryptSecret($refreshToken), $expires]);
+            unset($_SESSION['google_drive_oauth_state'], $_SESSION['google_drive_oauth_user']);
+            $googleDriveAudit($userId, 'connected', 'Google account connected: ' . $emailGoogle);
+            header('Location: index.php#configuracoes');
+            exit;
+        }
+    }
     if ($resource === 'children' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         $query=$pdo->prepare('SELECT id,turma_id,nome,data_nascimento,foto,foto_mime FROM criancas WHERE usuario_id=? ORDER BY nome');
         $query->execute([$ownerId]);
@@ -1728,7 +2259,7 @@ try {
         if (!$periodId) { $periodQuery=$pdo->prepare('SELECT id FROM periodos_avaliativos WHERE usuario_id=? ORDER BY id DESC LIMIT 1');$periodQuery->execute([$ownerId]);$periodId=(int)$periodQuery->fetchColumn(); }
         $useFinalText = !empty($input['useFinalText']) ? 1 : 0;
         $finalText = trim((string) ($input['finalText'] ?? ''));
-        $upsert=$pdo->prepare("INSERT INTO pareceres (crianca_id,periodo_id,texto,usar_texto_final,texto_final,tipo_documento,status) VALUES (?,?,?,?,?,?,'rascunho') ON DUPLICATE KEY UPDATE texto=VALUES(texto),usar_texto_final=VALUES(usar_texto_final),texto_final=VALUES(texto_final),tipo_documento=VALUES(tipo_documento),status='rascunho'"); $upsert->execute([$childId,$periodId,$text,$useFinalText,$finalText,$documentType]);
+        $upsert=$pdo->prepare("INSERT INTO pareceres (crianca_id,periodo_id,texto,usar_texto_final,texto_final,tipo_documento,status) VALUES (?,?,?,?,?,?,'rascunho') ON DUPLICATE KEY UPDATE texto=VALUES(texto),usar_texto_final=VALUES(usar_texto_final),texto_final=VALUES(texto_final),tipo_documento=VALUES(tipo_documento),status=IF(status='concluido','concluido','rascunho')"); $upsert->execute([$childId,$periodId,$text,$useFinalText,$finalText,$documentType]);
         $reportId=(int)$pdo->lastInsertId(); if(!$reportId){$find=$pdo->prepare('SELECT id FROM pareceres WHERE crianca_id=? AND periodo_id=? AND tipo_documento=?');$find->execute([$childId,$periodId,$documentType]);$reportId=(int)$find->fetchColumn();}
         $ownedActivities=[];
         $activityOwnerCheck=$pdo->prepare('SELECT id FROM atividades WHERE id=? AND usuario_id=?');
@@ -1822,7 +2353,7 @@ try {
     $area = trim((string) ($input['area'] ?? ''));
     $note = trim((string) ($input['note'] ?? ''));
     $photos = $input['photos'] ?? [];
-    if ($title === '' || $area === '' || !is_array($photos) || count($photos) > 3) {
+    if ($title === '' || $area === '' || !is_array($photos) || count($photos) > 30) {
         http_response_code(422);
         throw new RuntimeException('Dados da atividade inválidos.');
     }

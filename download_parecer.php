@@ -34,9 +34,38 @@ function ensureRunFonts(DOMDocument $document, DOMElement $properties, string $f
     foreach (['ascii', 'hAnsi', 'eastAsia', 'cs'] as $type) {
         $fonts->setAttributeNS($wordNs, 'w:' . $type, $fontName);
     }
+    $fonts->setAttributeNS($wordNs, 'w:hint', 'default');
     foreach (['asciiTheme', 'hAnsiTheme', 'eastAsiaTheme', 'csTheme'] as $themeAttribute) {
         $fonts->removeAttributeNS($wordNs, $themeAttribute);
     }
+}
+
+function removeNodesByXPath(DOMDocument $document, DOMXPath $xpath, array $queries): void
+{
+    foreach ($queries as $query) {
+        foreach (iterator_to_array($xpath->query($query)) as $node) {
+            $node->parentNode?->removeChild($node);
+        }
+    }
+}
+
+function unwrapContentControls(DOMDocument $document, DOMXPath $xpath): void
+{
+    do {
+        $controls = iterator_to_array($xpath->query('//w:sdt'));
+        foreach ($controls as $control) {
+            $content = $xpath->query('./w:sdtContent', $control)->item(0);
+            $parent = $control->parentNode;
+            if (!$content || !$parent) {
+                $parent?->removeChild($control);
+                continue;
+            }
+            foreach (iterator_to_array($content->childNodes) as $child) {
+                $parent->insertBefore($child->cloneNode(true), $control);
+            }
+            $parent->removeChild($control);
+        }
+    } while (!empty($controls));
 }
 
 function paragraph(DOMDocument $document, string $value, array $options = []): DOMElement
@@ -82,6 +111,16 @@ function paragraph(DOMDocument $document, string $value, array $options = []): D
     $run->appendChild(xmlText($document, $value));
     $p->appendChild($run);
     return $p;
+}
+
+function appendTextParagraphs(DOMElement $body, DOMDocument $document, string $text, array $options = []): void
+{
+    foreach (preg_split('/\R+/u', trim($text)) ?: [] as $block) {
+        $block = trim(preg_replace('/[ \t]+/u', ' ', $block));
+        if ($block !== '') {
+            $body->appendChild(paragraph($document, $block, $options));
+        }
+    }
 }
 
 function imageParagraph(DOMDocument $document, string $relationshipId, int $imageId, string $name, int $cx, int $cy): DOMNode
@@ -149,9 +188,9 @@ function addImageToDocx(ZipArchive $zip, string $dataUrl, int $imageId): ?array
 function forceFontInDocxPackage(ZipArchive $zip, string $fontName): void
 {
     $wordNs = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-    $stylesXml = $zip->getFromName('word/styles.xml');
-
-    if ($stylesXml !== false) {
+    foreach (['word/styles.xml', 'word/stylesWithEffects.xml'] as $stylesPartName) {
+        $stylesXml = $zip->getFromName($stylesPartName);
+        if ($stylesXml === false) continue;
         $styles = new DOMDocument('1.0', 'UTF-8');
         $styles->preserveWhiteSpace = false;
         if ($styles->loadXML($stylesXml)) {
@@ -184,7 +223,13 @@ function forceFontInDocxPackage(ZipArchive $zip, string $fontName): void
             foreach ($xpath->query('//w:rPr') as $properties) {
                 ensureRunFonts($styles, $properties, $fontName);
             }
-            $zip->addFromString('word/styles.xml', $styles->saveXML());
+            removeNodesByXPath($styles, $xpath, [
+                '//w:locked',
+                '//w:semiHidden',
+                '//w:styleLockQFSet',
+                '//w:styleLockTheme',
+            ]);
+            $zip->addFromString($stylesPartName, $styles->saveXML());
         }
     }
 
@@ -223,7 +268,7 @@ function forceFontInDocxPackage(ZipArchive $zip, string $fontName): void
     $partNames = [];
     for ($index = 0; $index < $zip->numFiles; $index++) {
         $name = $zip->statIndex($index)['name'] ?? '';
-        if (preg_match('#^word/(header|footer|footnotes|endnotes|comments)\d*\.xml$#', $name)) {
+        if (preg_match('#^word/(header|footer|footnotes|endnotes|comments)\d*\.xml$#', $name) || $name === 'word/numbering.xml') {
             $partNames[] = $name;
         }
     }
@@ -233,6 +278,7 @@ function forceFontInDocxPackage(ZipArchive $zip, string $fontName): void
         $part = new DOMDocument('1.0', 'UTF-8');
         $part->preserveWhiteSpace = false;
         if (!$part->loadXML($partXml)) continue;
+        removeWordProtectionFromDocumentPart($part);
         forceFontInDocumentPart($part, $fontName);
         $zip->addFromString($partName, $part->saveXML());
     }
@@ -249,11 +295,20 @@ function removeWordProtectionFromPackage(ZipArchive $zip): void
         if (!$document->loadXML($xml)) continue;
         $xpath = new DOMXPath($document);
         $xpath->registerNamespace('w', $wordNs);
-        foreach (['//w:documentProtection', '//w:writeProtection', '//w:permStart', '//w:permEnd', '//w:lock'] as $query) {
-            foreach (iterator_to_array($xpath->query($query)) as $node) {
-                $node->parentNode?->removeChild($node);
-            }
-        }
+        removeNodesByXPath($document, $xpath, [
+            '//w:documentProtection',
+            '//w:writeProtection',
+            '//w:permStart',
+            '//w:permEnd',
+            '//w:lock',
+            '//w:styleLockQFSet',
+            '//w:styleLockTheme',
+            '//w:formsDesign',
+            '//w:formProt',
+            '//w:readOnlyRecommended',
+            '//w:trackRevisions',
+            '//w:revisionView',
+        ]);
         $zip->addFromString($partName, $document->saveXML());
     }
 }
@@ -278,14 +333,25 @@ function removeWordProtectionFromDocumentPart(DOMDocument $document): void
     $wordNs = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
     $xpath = new DOMXPath($document);
     $xpath->registerNamespace('w', $wordNs);
-    foreach (['//w:permStart', '//w:permEnd', '//w:lock'] as $query) {
-        foreach (iterator_to_array($xpath->query($query)) as $node) {
-            $node->parentNode?->removeChild($node);
-        }
-    }
+    unwrapContentControls($document, $xpath);
+    removeNodesByXPath($document, $xpath, [
+        '//w:documentProtection',
+        '//w:writeProtection',
+        '//w:permStart',
+        '//w:permEnd',
+        '//w:lock',
+        '//w:locked',
+        '//w:styleLockQFSet',
+        '//w:styleLockTheme',
+        '//w:formsDesign',
+        '//w:formProt',
+        '//w:readOnlyRecommended',
+        '//w:trackRevisions',
+        '//w:revisionView',
+    ]);
 }
 
-$template = __DIR__ . '/templates/parecer-modelo.docx';
+$template = __DIR__ . '/templates/parecer-base-limpa.docx';
 if (!extension_loaded('zip') || !is_file($template)) {
     http_response_code(500);
     exit('Modelo de parecer indisponível.');
@@ -370,7 +436,7 @@ foreach (preg_split('/\R{2,}/u', $text) as $block) {
 }
 foreach ($entries as $entry) {
     $note = trim((string) ($entry['photoNote'] ?? ''));
-    if ($note !== '') $body->appendChild(paragraph($document, $note, ['align' => 'both', 'indent' => true, 'after' => 120, 'size' => $documentFontSize]));
+    if ($note !== '') appendTextParagraphs($body, $document, $note, ['align' => 'both', 'indent' => true, 'after' => 120, 'size' => $documentFontSize]);
     $row = [];
     foreach (($entry['photos'] ?? []) as $photo) if (($image = addImageToDocx($zip, (string) $photo, $imageCounter))) {
         $scale = min(1651000 / $image['cx'], 2600000 / $image['cy']);

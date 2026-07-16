@@ -74,18 +74,20 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=20260706-floating-help-2">
-  <link rel="stylesheet" href="mobile-menu.css?v=20260705-mobile-scroll-1">
+  <link rel="stylesheet" href="style.css?v=20260709-camera-touch-only-1">
+  <link rel="stylesheet" href="mobile-menu.css?v=20260709-sidebar-scroll-1">
   <link rel="stylesheet" href="activity-pagination.css">
   <link rel="stylesheet" href="report-type-badge.css">
   <link rel="stylesheet" href="experience-fields.css">
   <link rel="stylesheet" href="brand-logo.css">
-  <link rel="stylesheet" href="user-profile.css?v=20260706-profile-menu-1">
+  <link rel="stylesheet" href="user-profile.css?v=20260716-trial-plan-choice-1">
   <link rel="stylesheet" href="billing-lock.css?v=20260703-billing-lock-3">
   <link rel="stylesheet" href="marketing-notice.css?v=20260702-marketing-notice-list-1">
+  <link rel="stylesheet" href="terms-consent.css?v=20260716-lgpd-terms-1">
+  <link rel="stylesheet" href="google-drive-integration.css?v=20260716-google-drive-1">
   <link rel="stylesheet" href="master-users.css?v=20260705-billing-cycles-1">
   <link rel="stylesheet" href="finance-admin.css?v=20260703-finance-due-filter-1">
-  <link rel="stylesheet" href="image-editors.css?v=20260706-crop-hidden-canvas-1">
+  <link rel="stylesheet" href="image-editors.css?v=20260709-activity-photo-picker-front-1">
   <link rel="stylesheet" href="document-style.css?v=20260706-paragraph-indent-1">
   <link rel="stylesheet" href="tutorial-videos.css?v=20260706-video-before-onboarding-2">
   <link rel="stylesheet" href="document-image-zoom.css?v=20260702-document-image-zoom-front-1">
@@ -144,35 +146,37 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
 
   <dialog id="modal"><form method="dialog" id="modalForm" novalidate><button class="close" type="button" formnovalidate aria-label="Fechar" onclick="event.preventDefault();event.stopPropagation();this.closest('dialog').close();return false;">×</button><div id="modalContent"></div></form></dialog>
   <script>window.PortalBootstrapUser = <?= json_encode($bootstrapUser, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;</script>
-  <script src="app.js?v=20260706-fast-menu-1"></script>
+  <script src="app.js?v=20260715-keep-current-menu-1"></script>
   <script src="document-type.js?v=20260704-pdf-image-compress-1"></script>
   <script src="mobile-menu.js"></script>
   <script src="draft-delete.js"></script>
   <script src="periods.js"></script>
   <script src="activity-pagination.js"></script>
   <script src="classes-student-edit.js"></script>
-  <script src="activities-edit.js?v=20260702-activity-photos-2"></script>
-  <script src="experience-fields.js?v=20260702-activity-photos-2"></script>
-  <script src="modal-controls.js"></script>
+  <script src="activities-edit.js?v=20260709-mobile-camera-only-1"></script>
+  <script src="experience-fields.js?v=20260709-mobile-camera-only-1"></script>
+  <script src="modal-controls.js?v=20260715-onboarding-draft-1"></script>
   <script src="report-type-badge.js"></script>
-  <script src="report-editor.js?v=20260706-final-people-label-1"></script>
+  <script src="report-editor.js?v=20260715-deliver-keeps-done-1"></script>
   <script src="performance-optimizations.js"></script>
-  <script src="document-style-settings.js?v=20260706-document-style-save-1"></script>
+  <script src="document-style-settings.js?v=20260716-force-docx-font-1"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
   <script src="billing-cycles.js?v=20260705-billing-cycles-1"></script>
   <script src="text-ai-review.js?v=20260703-portuguese-review-3"></script>
   <script src="document-button-fix.js"></script>
   <script src="director-email.js?v=20260706-document-style-save-1"></script>
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
-  <script src="auth-profile.js?v=20260706-profile-menu-1"></script>
+  <script src="terms-consent.js?v=20260716-lgpd-terms-1"></script>
+  <script src="auth-profile.js?v=20260716-trial-plan-choice-1"></script>
+  <script src="google-drive-integration.js?v=20260716-google-drive-1"></script>
   <script src="tutorial-videos.js?v=20260706-video-before-onboarding-2"></script>
-  <script src="onboarding.js?v=20260706-video-before-onboarding-2"></script>
-  <script src="master-users.js?v=20260706-fast-menu-1"></script>
+  <script src="onboarding.js?v=20260715-onboarding-draft-1"></script>
+  <script src="master-users.js?v=20260716-trial-plan-choice-1"></script>
   <script src="finance-admin.js?v=20260706-fast-menu-1"></script>
   <script src="image-editor-permissions.js?v=20260702-combined-image-editor-1"></script>
-  <script src="manual-image-editor.js?v=20260706-crop-hidden-canvas-1"></script>
+  <script src="manual-image-editor.js?v=20260709-activity-photos-30-1"></script>
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>
-  <script src="image-editor-flow.js?v=20260703-report-activity-import-1"></script>
+  <script src="image-editor-flow.js?v=20260709-activity-photos-30-1"></script>
   <script src="document-image-zoom.js?v=20260702-document-image-zoom-front-1"></script>
   <script src="pwa.js?v=20260705-pwa-1"></script>
 </body>

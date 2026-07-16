@@ -4,6 +4,10 @@
 .linked-activity.is-importing::after{content:"Abrindo editor...";margin-left:auto;color:#236b52;font-size:12px;font-weight:700}
 .final-text-option{display:inline-flex;align-items:center;gap:7px;color:#33463b;font:600 12px Arial,sans-serif}
 .final-text-option input{width:auto}
+.activity-upload-actions{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 10px}.activity-upload-button{display:inline-flex;align-items:center;justify-content:center;min-height:38px;text-decoration:none;cursor:pointer}.activity-camera-button{display:none}.activity-file-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}@media(hover:none) and (pointer:coarse){.activity-camera-button{display:inline-flex}}
+.sidebar{height:100dvh;max-height:100dvh;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-gutter:stable;padding-bottom:calc(38px + env(safe-area-inset-bottom))}
+.sidebar nav,.sidebar-bottom{flex:0 0 auto}
+.sidebar-bottom{margin-top:auto}
 @media(max-width:650px){
   #pareceres .panel{padding:16px}
   #pareceres .tabs{gap:10px;overflow-x:auto;padding-bottom:2px}

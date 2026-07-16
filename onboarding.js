@@ -8,6 +8,7 @@
     students: [],
     step: 0,
     studentDrafts: [],
+    draft: {},
     locked: false,
     starting: false,
   };
@@ -59,6 +60,35 @@
     return state.user && state.user.role !== 'master' && missingSteps().some(Boolean);
   }
 
+  function draftKey() {
+    const id = state.user?.id || state.user?.email || state.user?.name || 'current';
+    return `portal-onboarding-draft-v1-${id}`;
+  }
+
+  function loadDraft() {
+    try {
+      state.draft = JSON.parse(localStorage.getItem(draftKey()) || '{}') || {};
+      state.studentDrafts = Array.isArray(state.draft.studentDrafts) ? state.draft.studentDrafts : [];
+    } catch (_) {
+      state.draft = {};
+      state.studentDrafts = [];
+    }
+  }
+
+  function persistDraft() {
+    try {
+      localStorage.setItem(draftKey(), JSON.stringify({...state.draft, studentDrafts: state.studentDrafts}));
+    } catch (error) {
+      console.warn('Nao foi possivel salvar o rascunho do cadastro inicial.', error);
+    }
+  }
+
+  function clearDraft() {
+    localStorage.removeItem(draftKey());
+    state.draft = {};
+    state.studentDrafts = [];
+  }
+
   function ensureDialog() {
     let dialog = $('#onboardingModal');
     if (dialog) return dialog;
@@ -66,6 +96,11 @@
     dialog.id = 'onboardingModal';
     dialog.className = 'onboarding-dialog';
     dialog.addEventListener('cancel', event => event.preventDefault());
+    dialog.addEventListener('click', event => {
+      const bounds = dialog.getBoundingClientRect();
+      const clickedBackdrop = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+      if (clickedBackdrop) event.preventDefault();
+    });
     dialog.addEventListener('close', () => {
       if (!state.locked || !shouldRun()) return;
       setTimeout(render, 0);
@@ -84,43 +119,46 @@
   }
 
   function stepSchool() {
+    const header = {...state.header, ...(state.draft.header || {})};
     return `<section class="onboarding-step">
       <p class="wizard-step">CADASTRO INICIAL</p>
       <h2 class="modal-title">Dados da escola</h2>
       <p class="modal-subtitle">Preencha o cabecalho que aparecera nos pareceres e portfolios.</p>
       <div class="form-grid">
-        <div class="field"><label>Nome da rede ou secretaria</label><input id="onboardNetwork" value="${esc(state.header.network)}" placeholder="Ex.: Secretaria Municipal de Educacao"></div>
-        <div class="field"><label>Unidade escolar</label><input id="onboardSchool" value="${esc(state.header.school)}" placeholder="Ex.: CMEI Nome da Unidade"></div>
-        <div class="field"><label>Endereco e contato</label><textarea id="onboardContact" rows="3" placeholder="Endereco, telefone e e-mail">${esc(state.header.contact)}</textarea></div>
-        <div class="field"><label>Logo institucional <span class="muted">(opcional)</span></label><input id="onboardLogo" type="file" accept="image/*"><div id="onboardLogoPreview" class="image-previews">${state.header.logo ? `<img src="${state.header.logo}" alt="Logo">` : ''}</div></div>
+        <div class="field"><label>Nome da rede ou secretaria</label><input id="onboardNetwork" value="${esc(header.network)}" placeholder="Ex.: Secretaria Municipal de Educacao"></div>
+        <div class="field"><label>Unidade escolar</label><input id="onboardSchool" value="${esc(header.school)}" placeholder="Ex.: CMEI Nome da Unidade"></div>
+        <div class="field"><label>Endereco e contato</label><textarea id="onboardContact" rows="3" placeholder="Endereco, telefone e e-mail">${esc(header.contact)}</textarea></div>
+        <div class="field"><label>Logo institucional <span class="muted">(opcional)</span></label><input id="onboardLogo" type="file" accept="image/*"><div id="onboardLogoPreview" class="image-previews">${header.logo ? `<img src="${header.logo}" alt="Logo">` : ''}</div></div>
       </div>
       ${footerHtml()}
     </section>`;
   }
 
   function stepPeriod() {
+    const period = state.draft.period || {};
     return `<section class="onboarding-step">
       <p class="wizard-step">ORGANIZACAO ESCOLAR</p>
       <h2 class="modal-title">Periodo avaliativo</h2>
       <p class="modal-subtitle">Cadastre o periodo que sera usado nos primeiros pareceres.</p>
       <div class="form-grid">
-        <div class="field"><label>Nome do periodo</label><input id="onboardPeriodName" placeholder="Ex.: 2o semestre de 2026"></div>
-        <div class="field"><label>Data de inicio</label><input id="onboardPeriodStart" type="date"></div>
-        <div class="field"><label>Data de termino</label><input id="onboardPeriodEnd" type="date"></div>
+        <div class="field"><label>Nome do periodo</label><input id="onboardPeriodName" value="${esc(period.name)}" placeholder="Ex.: 2o semestre de 2026"></div>
+        <div class="field"><label>Data de inicio</label><input id="onboardPeriodStart" type="date" value="${esc(period.start)}"></div>
+        <div class="field"><label>Data de termino</label><input id="onboardPeriodEnd" type="date" value="${esc(period.end)}"></div>
       </div>
       ${footerHtml()}
     </section>`;
   }
 
   function stepClass() {
+    const classDraft = state.draft.class || {};
     return `<section class="onboarding-step">
       <p class="wizard-step">ORGANIZACAO ESCOLAR</p>
       <h2 class="modal-title">Turma</h2>
       <p class="modal-subtitle">Cadastre a primeira turma antes de incluir os alunos.</p>
       <div class="form-grid">
-        <div class="field"><label>Nome da turma</label><input id="onboardClassName" placeholder="Ex.: Jardim I B"></div>
-        <div class="field"><label>Etapa</label><select id="onboardClassStage"><option>Educacao Infantil</option><option>Creche</option><option>Pre-escola</option></select></div>
-        <div class="field"><label>Turno</label><select id="onboardClassShift"><option>Manha</option><option>Tarde</option><option>Integral</option></select></div>
+        <div class="field"><label>Nome da turma</label><input id="onboardClassName" value="${esc(classDraft.name)}" placeholder="Ex.: Jardim I B"></div>
+        <div class="field"><label>Etapa</label><select id="onboardClassStage"><option ${classDraft.stage === 'Educacao Infantil' ? 'selected' : ''}>Educacao Infantil</option><option ${classDraft.stage === 'Creche' ? 'selected' : ''}>Creche</option><option ${classDraft.stage === 'Pre-escola' ? 'selected' : ''}>Pre-escola</option></select></div>
+        <div class="field"><label>Turno</label><select id="onboardClassShift"><option ${classDraft.shift === 'Manha' ? 'selected' : ''}>Manha</option><option ${classDraft.shift === 'Tarde' ? 'selected' : ''}>Tarde</option><option ${classDraft.shift === 'Integral' ? 'selected' : ''}>Integral</option></select></div>
       </div>
       ${footerHtml()}
     </section>`;
@@ -132,14 +170,15 @@
   }
 
   function stepStudents() {
-    const options = state.classes.map(item => `<option value="${item.id}">${esc(item.name)} - ${esc(item.shift)}</option>`).join('');
+    const studentInput = state.draft.studentInput || {};
+    const options = state.classes.map(item => `<option value="${item.id}" ${String(studentInput.classId || '') === String(item.id) ? 'selected' : ''}>${esc(item.name)} - ${esc(item.shift)}</option>`).join('');
     return `<section class="onboarding-step">
       <p class="wizard-step">ALUNOS</p>
       <h2 class="modal-title">Primeiros alunos</h2>
       <p class="modal-subtitle">Inclua pelo menos um aluno para liberar o uso do sistema. Voce pode cadastrar os demais depois.</p>
       <div class="form-grid">
-        <div class="field"><label>Nome completo</label><input id="onboardStudentName" placeholder="Ex.: Beatriz Souza"></div>
-        <div class="field"><label>Data de nascimento</label><input id="onboardStudentBirth" type="date"></div>
+        <div class="field"><label>Nome completo</label><input id="onboardStudentName" value="${esc(studentInput.name)}" placeholder="Ex.: Beatriz Souza"></div>
+        <div class="field"><label>Data de nascimento</label><input id="onboardStudentBirth" type="date" value="${esc(studentInput.birthDate)}"></div>
         <div class="field"><label>Turma</label><select id="onboardStudentClass">${options}</select></div>
         <div class="field"><label>Foto do aluno <span class="muted">(opcional)</span></label><input id="onboardStudentPhoto" type="file" accept="image/*"></div>
       </div>
@@ -150,6 +189,7 @@
   }
 
   function render() {
+    persistDraft();
     const dialog = ensureDialog();
     const steps = [stepSchool, stepPeriod, stepClass, stepStudents];
     dialog.innerHTML = `<div class="onboarding-shell">${progressHtml()}${steps[state.step]()}</div>`;
@@ -200,8 +240,10 @@
     if (!network) { $('#onboardNetwork').focus(); throw new Error('Informe o nome da rede ou secretaria.'); }
     if (!school) { $('#onboardSchool').focus(); throw new Error('Informe a unidade escolar.'); }
     if (!contact) { $('#onboardContact').focus(); throw new Error('Informe o endereco e contato da escola.'); }
-    const logo = await fileAsDataUrl($('#onboardLogo').files[0]) || state.header.logo || '';
+    const logo = await fileAsDataUrl($('#onboardLogo').files[0]) || state.draft.header?.logo || state.header.logo || '';
     state.header = {network, school, contact, logo};
+    state.draft.header = state.header;
+    persistDraft();
     await request('header-settings', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(state.header)});
     localStorage.setItem('parecer-cabecalho-professora-v1', JSON.stringify(state.header));
     if (typeof loadHeaderSettings === 'function') loadHeaderSettings();
@@ -210,6 +252,8 @@
   async function savePeriod() {
     const name = $('#onboardPeriodName').value.trim();
     if (!name) { $('#onboardPeriodName').focus(); throw new Error('Informe o nome do periodo.'); }
+    state.draft.period = {name, start: $('#onboardPeriodStart').value, end: $('#onboardPeriodEnd').value};
+    persistDraft();
     await request('periods', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, start: $('#onboardPeriodStart').value, end: $('#onboardPeriodEnd').value})});
     if (typeof loadPeriods === 'function') await loadPeriods();
   }
@@ -217,6 +261,8 @@
   async function saveClass() {
     const name = $('#onboardClassName').value.trim();
     if (!name) { $('#onboardClassName').focus(); throw new Error('Informe o nome da turma.'); }
+    state.draft.class = {name, stage: $('#onboardClassStage').value, shift: $('#onboardClassShift').value};
+    persistDraft();
     await request('classes', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, stage: $('#onboardClassStage').value, shift: $('#onboardClassShift').value})});
     if (typeof loadClasses === 'function') await loadClasses();
   }
@@ -229,6 +275,8 @@
     if (!birthDate) { $('#onboardStudentBirth').focus(); throw new Error('Informe a data de nascimento do aluno.'); }
     const photo = await fileAsDataUrl($('#onboardStudentPhoto').files[0]);
     state.studentDrafts.push({name, birthDate, classId, photo});
+    state.draft.studentInput = {};
+    persistDraft();
     render();
   }
 
@@ -241,6 +289,8 @@
       await request('children', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(student)});
     }
     state.studentDrafts = [];
+    state.draft.studentInput = {};
+    persistDraft();
     if (typeof loadChildren === 'function') await loadChildren();
     return true;
   }
@@ -265,6 +315,7 @@
       }
       if (!shouldRun()) {
         state.locked = false;
+        clearDraft();
         document.body.classList.remove('onboarding-locked');
         ensureDialog().close();
         return;
@@ -279,6 +330,7 @@
   }
 
   function back() {
+    captureCurrentDraft();
     if (state.step <= 0) return;
     state.step -= 1;
     render();
@@ -297,18 +349,58 @@
     $('#onboardingBack')?.addEventListener('click', back);
     $('#onboardingLogout')?.addEventListener('click', logout);
     $('#addOnboardStudent')?.addEventListener('click', addStudentDraft);
+    document.querySelector('.onboarding-step')?.addEventListener('input', captureCurrentDraft);
+    document.querySelector('.onboarding-step')?.addEventListener('change', captureCurrentDraft);
     $('#onboardLogo')?.addEventListener('change', event => {
       const file = event.currentTarget.files[0];
       if (!file) return;
       const preview = $('#onboardLogoPreview');
       preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Logo">`;
+      fileAsDataUrl(file).then(logo => {
+        state.draft.header = {...(state.draft.header || {}), logo};
+        persistDraft();
+      });
     });
     document.querySelectorAll('[data-remove-student]').forEach(button => {
       button.addEventListener('click', () => {
         state.studentDrafts.splice(Number(button.dataset.removeStudent), 1);
+        persistDraft();
         render();
       });
     });
+  }
+
+  function captureCurrentDraft() {
+    if (state.step === 0) {
+      state.draft.header = {
+        ...(state.draft.header || {}),
+        network: $('#onboardNetwork')?.value || '',
+        school: $('#onboardSchool')?.value || '',
+        contact: $('#onboardContact')?.value || '',
+      };
+    }
+    if (state.step === 1) {
+      state.draft.period = {
+        name: $('#onboardPeriodName')?.value || '',
+        start: $('#onboardPeriodStart')?.value || '',
+        end: $('#onboardPeriodEnd')?.value || '',
+      };
+    }
+    if (state.step === 2) {
+      state.draft.class = {
+        name: $('#onboardClassName')?.value || '',
+        stage: $('#onboardClassStage')?.value || 'Educacao Infantil',
+        shift: $('#onboardClassShift')?.value || 'Manha',
+      };
+    }
+    if (state.step === 3) {
+      state.draft.studentInput = {
+        name: $('#onboardStudentName')?.value || '',
+        birthDate: $('#onboardStudentBirth')?.value || '',
+        classId: Number($('#onboardStudentClass')?.value || 0),
+      };
+    }
+    persistDraft();
   }
 
   async function start(user) {
@@ -318,6 +410,7 @@
     state.starting = true;
     try {
       await refreshState();
+      loadDraft();
       if (!shouldRun()) return;
       state.step = firstMissingStep();
       if (state.students.length === 0) await showFirstAccessTutorialBeforeOnboarding(state.user);

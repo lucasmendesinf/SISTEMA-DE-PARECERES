@@ -64,9 +64,10 @@
     });
   }
 
-  async function editDataUrl(dataUrl, mode) {
+  async function editDataUrl(dataUrl, mode, options = {}) {
     if (mode === 'manual' && window.ManualImageEditor) {
-      const edited = await window.ManualImageEditor.open(dataUrl);
+      const edited = await window.ManualImageEditor.open(dataUrl, options);
+      if (options.queue) return edited;
       return edited || dataUrl;
     }
     return dataUrl;
@@ -89,7 +90,7 @@
     return {photos: output, mode};
   }
 
-  async function processDataUrls(dataUrls, limit = 3) {
+  async function processDataUrls(dataUrls, limit = 3, options = {}) {
     const list = [...dataUrls].filter(Boolean);
     if (list.length > limit) throw new Error(`Adicione no maximo ${limit} imagens.`);
     await window.PortalImageEditorPermissions?.init?.();
@@ -97,8 +98,16 @@
     const mode = await chooseMode(modes);
     editorMode.last = mode;
     const output = [];
-    for (const dataUrl of list) {
-      output.push(await editDataUrl(await normalizeImageDataUrl(dataUrl), mode));
+    for (let index = 0; index < list.length; index += 1) {
+      const dataUrl = list[index];
+      const normalized = await normalizeImageDataUrl(dataUrl);
+      if (options.reviewEach && mode === 'manual' && window.ManualImageEditor) {
+        const result = await editDataUrl(normalized, mode, {queue: {index, total: list.length}});
+        if (typeof result === 'string') output.push(result);
+        else if (result?.action === 'save' && result.photo) output.push(result.photo);
+        continue;
+      }
+      output.push(await editDataUrl(normalized, mode));
     }
     return {photos: output, mode};
   }

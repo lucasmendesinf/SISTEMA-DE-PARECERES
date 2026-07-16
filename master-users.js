@@ -166,7 +166,8 @@
 
   function billingText(user) {
     const billing = user.billing || {};
-    return `${billing.plan || 'Basico'} - ${billing.cycleLabel || cycleLabels[billing.cycle] || 'Mensal'} - ${money(billing.amount)} - ${paymentLabels[billing.paymentMethod] || 'Pix ou cartao'} - ${billingStatusLabels[billing.status] || 'Pendente'}`;
+    const trialText = Number(billing.trialDays || 0) > 0 ? ` - teste ${Number(billing.trialDays)} dias` : '';
+    return `${billing.plan || 'Basico'} - ${billing.cycleLabel || cycleLabels[billing.cycle] || 'Mensal'} - ${money(billing.amount)} - ${paymentLabels[billing.paymentMethod] || 'Pix ou cartao'} - ${billingStatusLabels[billing.status] || 'Pendente'}${trialText}`;
   }
 
   function renderUsers() {
@@ -229,6 +230,7 @@
     const defaultCycle = billingCycles.find(cycle => cycle.active) || billingCycles[0] || null;
     const selectedCycleId = Number(billing.cycleId || defaultCycle?.id || 0);
     const selectedCycle = billingCycles.find(cycle => Number(cycle.id) === selectedCycleId) || billingCycles[0] || null;
+    const trialDays = Number(billing.trialDays ?? (!editing ? 3 : 0));
     const cycleOptions = billingCycles.map(cycle => {
       const selected = Number(cycle.id) === selectedCycleId;
       return `<option value="${cycle.id}" data-months="${cycle.months}" data-amount="${Number(cycle.amount || 0).toFixed(2)}" ${selected ? 'selected' : ''} ${!cycle.active && !selected ? 'disabled' : ''}>${escapeHtml(cycle.name)}${cycle.active ? '' : ' (inativo)'} - ${cycle.months} ${cycle.months === 1 ? 'mes' : 'meses'} - ${money(cycle.amount)}</option>`;
@@ -267,6 +269,7 @@
             <input name="billingCycle" type="hidden" value="${(selectedCycle?.months || billing.cycleMonths || 1) >= 12 ? 'annual' : 'monthly'}">
             <div class="field"><label>Forma de pagamento</label><select name="billingPaymentMethod"><option value="both" ${(billing.paymentMethod || 'both') === 'both' ? 'selected' : ''}>Pix ou cartao</option><option value="pix" ${billing.paymentMethod === 'pix' ? 'selected' : ''}>Somente Pix</option><option value="card" ${billing.paymentMethod === 'card' ? 'selected' : ''}>Somente cartao recorrente</option><option value="manual" ${billing.paymentMethod === 'manual' ? 'selected' : ''}>Cobranca manual</option></select></div>
             <div class="field"><label>Status</label><select name="billingStatus"><option value="pending" ${(billing.status || 'pending') === 'pending' ? 'selected' : ''}>Pendente</option><option value="active" ${billing.status === 'active' ? 'selected' : ''}>Pago/ativo</option><option value="trial" ${billing.status === 'trial' ? 'selected' : ''}>Teste</option><option value="overdue" ${billing.status === 'overdue' ? 'selected' : ''}>Atrasado</option><option value="canceled" ${billing.status === 'canceled' ? 'selected' : ''}>Cancelado</option><option value="exempt" ${billing.status === 'exempt' ? 'selected' : ''}>Isento</option></select></div>
+            <div class="field"><label>Dias de teste</label><input name="billingTrialDays" type="number" min="0" max="365" step="1" value="${trialDays}"></div>
             <div class="field"><label>Proximo vencimento</label><input name="billingNextDueDate" type="date" value="${escapeHtml(billing.nextDueDate || '')}"></div>
           </div>
           <div class="field"><label>Observacoes internas</label><input name="billingNotes" value="${escapeHtml(billing.notes || '')}" placeholder="Opcional"></div>
@@ -287,6 +290,9 @@
     const cycleSelect = form.querySelector('[name="billingCycleId"]');
     const amountInput = form.querySelector('[name="billingAmount"]');
     const legacyCycleInput = form.querySelector('[name="billingCycle"]');
+    const trialDaysInput = form.querySelector('[name="billingTrialDays"]');
+    const statusSelect = form.querySelector('[name="billingStatus"]');
+    const nextDueInput = form.querySelector('[name="billingNextDueDate"]');
     const syncCycle = () => {
       const selected = cycleSelect.selectedOptions[0];
       const months = Number(selected?.dataset.months || 1);
@@ -295,6 +301,20 @@
     };
     cycleSelect.addEventListener('change', syncCycle);
     syncCycle();
+    const syncTrial = () => {
+      const days = Math.max(0, Number(trialDaysInput.value || 0));
+      if (days > 0) {
+        statusSelect.value = 'trial';
+        if (!editing || !nextDueInput.value) {
+          const due = new Date();
+          due.setHours(0, 0, 0, 0);
+          due.setDate(due.getDate() + days);
+          nextDueInput.value = due.toISOString().slice(0, 10);
+        }
+      }
+    };
+    trialDaysInput.addEventListener('input', syncTrial);
+    syncTrial();
     const role = form.querySelector('[name="role"]');
     const phoneInput = form.querySelector('[name="phone"]');
     phoneInput.addEventListener('input', () => { phoneInput.value = formatPhone(phoneInput.value); });
@@ -329,7 +349,8 @@
         paymentMethod: form.querySelector('[name="billingPaymentMethod"]').value,
         status: form.querySelector('[name="billingStatus"]').value,
         nextDueDate: form.querySelector('[name="billingNextDueDate"]').value,
-        notes: form.querySelector('[name="billingNotes"]').value
+        notes: form.querySelector('[name="billingNotes"]').value,
+        trialDays: form.querySelector('[name="billingTrialDays"]').value
       }
     };
     for (const field of fields) {

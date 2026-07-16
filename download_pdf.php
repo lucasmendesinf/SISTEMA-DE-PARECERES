@@ -27,11 +27,6 @@ function pdfEscape(string $value): string {
     return str_replace(['\\', '(', ')', "\r", "\n"], ['\\\\', '\\(', '\\)', '', ''], $value);
 }
 
-function pdfWrap(string $text, int $limit = 92): array {
-    $text = preg_replace('/\s+/u', ' ', trim($text)) ?: '';
-    return $text === '' ? [] : explode("\n", wordwrap($text, $limit, "\n", false));
-}
-
 function sanitizePdfFont(string $font): array {
     return match ($font) {
         'Times New Roman' => ['Times-Roman', 'Times-Bold'],
@@ -65,23 +60,59 @@ final class PdfLayout {
         $this->setY($y - $leading);
     }
     private function textWidth(string $text, float $size): float {
-        return strlen(pdfEscape($text)) * $size * 0.47;
+        $text = iconv('UTF-8', 'Windows-1252//TRANSLIT', $text) ?: $text;
+        $width = 0.0;
+        foreach (str_split($text) as $char) {
+            if ($char === ' ') { $width += 0.28; continue; }
+            if (str_contains('.,;:!|ijlI', $char)) { $width += 0.24; continue; }
+            if (str_contains('mwMW@', $char)) { $width += 0.78; continue; }
+            if (ctype_upper($char)) { $width += 0.62; continue; }
+            $width += 0.50;
+        }
+        return $width * $size;
+    }
+    private function wrapTextToWidth(string $text, float $width, float $size): array {
+        $text = preg_replace('/\s+/u', ' ', trim($text)) ?: '';
+        if ($text === '') return [];
+        $words = preg_split('/\s+/u', $text) ?: [];
+        $lines = [];
+        $line = '';
+        foreach ($words as $word) {
+            $candidate = $line === '' ? $word : $line . ' ' . $word;
+            if ($line !== '' && $this->textWidth($candidate, $size) > $width) {
+                $lines[] = $line;
+                $line = $word;
+                continue;
+            }
+            $line = $candidate;
+        }
+        if ($line !== '') $lines[] = $line;
+        return $lines;
     }
     public function justifiedLine(string $text, float $x, float $width, float $size, string $font, float $leading): void {
         $this->ensure($leading);
         $y = $this->y();
-        $spaces = substr_count(trim($text), ' ');
-        $wordSpacing = 0.0;
-        if ($spaces > 0) $wordSpacing = max(0, min(8, ($width - $this->textWidth($text, $size)) / $spaces));
-        $this->pages[$this->page]['content'] .= sprintf(
-            "BT /%s %.2F Tf 0 0 0 rg %.3F Tw %.2F %.2F Td (%s) Tj 0 Tw ET\n",
-            $font,
-            $size,
-            $wordSpacing,
-            $x,
-            $y,
-            pdfEscape($text)
-        );
+        $words = preg_split('/\s+/u', trim($text)) ?: [];
+        if (count($words) < 2) {
+            $this->line($text, $x, $size, $font, $leading);
+            return;
+        }
+        $wordWidths = array_map(fn(string $word): float => $this->textWidth($word, $size), $words);
+        $normalSpace = $this->textWidth(' ', $size);
+        $spaceCount = count($words) - 1;
+        $extraSpace = max(0, ($width - array_sum($wordWidths) - ($normalSpace * $spaceCount)) / $spaceCount);
+        $cursor = $x;
+        foreach ($words as $index => $word) {
+            $this->pages[$this->page]['content'] .= sprintf(
+                "BT /%s %.2F Tf 0 0 0 rg %.2F %.2F Td (%s) Tj ET\n",
+                $font,
+                $size,
+                $cursor,
+                $y,
+                pdfEscape($word)
+            );
+            $cursor += $wordWidths[$index] + $normalSpace + $extraSpace;
+        }
         $this->setY($y - $leading);
     }
     public function centered(string $text, float $size = 12, string $font = 'F2', float $leading = 22, ?array $color = null): void {
@@ -89,13 +120,20 @@ final class PdfLayout {
         $this->line($text, max(36, (595 - $width) / 2), $size, $font, $leading, $color);
     }
     public function paragraph(string $text): void {
-        $wrap = (int) max(68, min(98, 1050 / $this->bodySize));
+        $left = 85.0;
+        $right = 57.0;
+        $indent = 35.0;
+        $bodyWidth = 595.0 - $left - $right;
         foreach (preg_split('/\R{2,}/u', trim($text)) ?: [] as $block) {
-            $lines = pdfWrap($block, $wrap);
+            $lines = $this->wrapTextToWidth($block, $bodyWidth - $indent, $this->bodySize);
+            if (count($lines) > 1) {
+                $rest = $this->wrapTextToWidth(implode(' ', array_slice($lines, 1)), $bodyWidth, $this->bodySize);
+                $lines = [$lines[0], ...$rest];
+            }
             $lastIndex = count($lines) - 1;
             foreach ($lines as $index => $line) {
-                $x = $index === 0 ? 90 : 54;
-                $width = $index === 0 ? 451 : 487;
+                $x = $index === 0 ? $left + $indent : $left;
+                $width = $index === 0 ? $bodyWidth - $indent : $bodyWidth;
                 if ($index < $lastIndex) $this->justifiedLine($line, $x, $width, $this->bodySize, 'F1', $this->bodyLeading);
                 else $this->line($line, $x, $this->bodySize, 'F1', $this->bodyLeading);
             }
@@ -239,7 +277,12 @@ $layout->setY(min($layout->y(), $photoBottom) - 34);
 $layout->centered($documentType . ' - ' . mb_strtoupper($period, 'UTF-8'), $documentFontSize, 'F2', 30, $detailColor);
 $layout->paragraph($text);
 foreach ($entryBlocks as $entry) {
-    if ($entry['note'] !== '') $layout->paragraph($entry['note']);
+    if ($entry['note'] !== '') {
+        foreach (preg_split('/\R+/u', $entry['note']) ?: [] as $noteBlock) {
+            $noteBlock = trim($noteBlock);
+            if ($noteBlock !== '') $layout->paragraph($noteBlock);
+        }
+    }
     foreach (array_chunk($entry['images'], 2) as $row) $layout->imageRow($row);
 }
 if ($finalText !== '') $layout->paragraph($finalText);

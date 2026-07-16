@@ -46,7 +46,7 @@
     return shell;
   }
 
-  async function open(dataUrl) {
+  async function open(dataUrl, options = {}) {
     await loadStyle(cdn.cropperCss);
     await loadScript(cdn.cropperJs, () => Boolean(window.Cropper));
     return new Promise(resolve => {
@@ -59,11 +59,17 @@
       let nativeEditor = null;
       let nativeHistory = [];
       let nativeRedo = [];
+      const queue = options.queue || null;
+      const queueControls = queue?.total > 1;
+      const queueTitle = queue?.total > 1 ? `Imagem ${queue.index + 1} de ${queue.total}` : '';
       const shell = overlay('Editor com IA e manual', `
+        ${queueTitle ? `<p class="image-editor-counter">${queueTitle}</p>` : ''}
         <p class="image-editor-help">Ajuste o quadro sobre a area que precisa ser ocultada e aplique pixelizacao ou tarja.</p>
         <div class="image-editor-stage"><img id="manualCropImage" src="${dataUrl}" alt="Imagem para corte"></div>
         <canvas id="manualFabricCanvas" width="900" height="620" hidden></canvas>
         <div class="image-editor-actions">
+          ${queueControls ? '<button class="secondary danger" id="manualDiscardImage" type="button">Descartar imagem</button>' : ''}
+          ${queueControls ? '<button class="secondary" id="manualNextImage" type="button">Proxima imagem</button>' : ''}
           <button class="secondary" id="manualCrop" type="button">Aplicar corte</button>
           <button class="secondary" id="manualSkipCrop" type="button">Continuar sem cortar</button>
           <button class="secondary" id="manualAddBox" type="button" hidden>Adicionar area</button>
@@ -82,6 +88,8 @@
 
       const close = result => { shell.remove(); resolve(result); };
       shell.querySelector('.image-editor-close').onclick = () => close(null);
+      shell.querySelector('#manualDiscardImage')?.addEventListener('click', () => close({action: 'discard'}));
+      shell.querySelector('#manualNextImage')?.addEventListener('click', () => close({action: 'next'}));
 
       function fitCropStage() {
         if (!cropper) return;
@@ -581,7 +589,8 @@
         if (!fabricCanvas && !nativeEditor) await enterCanvas(currentUrl);
         if (nativeEditor) {
           drawNative(false);
-          close(nativeEditor.canvas.toDataURL('image/jpeg', .9));
+          const photo = nativeEditor.canvas.toDataURL('image/jpeg', .9);
+          close(queue ? {action: 'save', photo} : photo);
           return;
         }
         const active = fabricCanvas?.getActiveObject();
@@ -589,7 +598,8 @@
           fabricCanvas.remove(active);
           fabricCanvas.renderAll();
         }
-        close(fabricCanvas ? fabricCanvas.toDataURL({format: 'jpeg', quality: .9}) : currentUrl);
+        const photo = fabricCanvas ? fabricCanvas.toDataURL({format: 'jpeg', quality: .9}) : currentUrl;
+        close(queue ? {action: 'save', photo} : photo);
       };
     });
   }

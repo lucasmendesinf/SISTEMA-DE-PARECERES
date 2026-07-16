@@ -33,6 +33,7 @@
   const money = value => Number(value || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
   const billingMethods = billing => billing?.paymentMethod === 'pix' ? ['pix'] : billing?.paymentMethod === 'card' ? ['card'] : ['pix', 'card'];
   const supportWhatsAppUrl = 'https://wa.me/5541996310725';
+  let billingCycles = [];
 
   async function request(method = 'GET', body) {
     const response = await fetch(api, {
@@ -68,6 +69,43 @@
     }
     if (!response.ok) throw new Error(data.error || 'Nao foi possivel iniciar o pagamento.');
     return data;
+  }
+
+  function cycleOptions(selectedId) {
+    return billingCycles.map(cycle => `<option value="${cycle.id}" data-amount="${Number(cycle.amount || 0).toFixed(2)}" ${Number(cycle.id) === Number(selectedId) ? 'selected' : ''}>${escapeHtml(cycle.name)} - ${cycle.months} ${cycle.months === 1 ? 'mes' : 'meses'} - ${escapeHtml(money(cycle.amount))}</option>`).join('');
+  }
+
+  function billingChoiceFields(scope = 'profile') {
+    const billing = user?.billing || {};
+    if (!billingCycles.length) return '';
+    return `
+      <div class="billing-choice" data-billing-choice="${scope}">
+        <label>Plano
+          <input data-billing-plan-choice value="${escapeHtml(billing.plan || 'Basico')}" maxlength="80">
+        </label>
+        <label>Periodo
+          <select data-billing-cycle-choice>${cycleOptions(billing.cycleId)}</select>
+        </label>
+        <p class="muted" data-billing-cycle-amount></p>
+      </div>`;
+  }
+
+  function setupBillingChoice(root) {
+    const select = root.querySelector('[data-billing-cycle-choice]');
+    const amount = root.querySelector('[data-billing-cycle-amount]');
+    if (!select || !amount) return;
+    const sync = () => {
+      const option = select.selectedOptions[0];
+      amount.textContent = option ? `Valor selecionado: ${money(option.dataset.amount || 0)}` : '';
+    };
+    select.addEventListener('change', sync);
+    sync();
+  }
+
+  function selectedBillingChoice(root) {
+    const cycleId = root.querySelector('[data-billing-cycle-choice]')?.value || '';
+    const plan = root.querySelector('[data-billing-plan-choice]')?.value || user?.billing?.plan || 'Basico';
+    return {cycleId, plan};
   }
 
   function renderBillingPaymentResult(container, data) {
@@ -206,6 +244,7 @@
           <div><dt>Valor</dt><dd>${escapeHtml(money(billing.amount))}</dd></div>
           <div><dt>Vencimento</dt><dd>${escapeHtml(billing.nextDueDate || 'Nao informado')}</dd></div>
         </dl>
+        ${billingChoiceFields('lock')}
         <div id="billingLockMessage" class="profile-message"></div>
         <div class="form-actions billing-actions">
           ${methods.includes('pix') ? '<button class="primary" type="button" data-lock-pay-method="pix">Pagar com Pix</button>' : ''}
@@ -222,13 +261,14 @@
         </div>
       </div>`;
     document.body.append(modal);
+    setupBillingChoice(modal);
     modal.querySelectorAll('[data-lock-pay-method]').forEach(button => {
       button.addEventListener('click', async () => {
         const message = modal.querySelector('#billingLockMessage');
         message.textContent = '';
         button.disabled = true;
         try {
-          const data = await billingRequest('POST', {method: button.dataset.lockPayMethod});
+          const data = await billingRequest('POST', {method: button.dataset.lockPayMethod, ...selectedBillingChoice(modal)});
           renderBillingPaymentResult(message, data);
         } catch (error) {
           message.textContent = error.message;
@@ -326,6 +366,7 @@
             <div><dt>Pagamento</dt><dd>${escapeHtml(paymentLabels[billing.paymentMethod] || 'Pix ou cartao')}</dd></div>
             <div><dt>Vencimento</dt><dd>${escapeHtml(billing.nextDueDate || 'Nao informado')}</dd></div>
           </dl>
+          ${billingChoiceFields('profile')}
           <div id="billingMessage" class="profile-message"></div>
           <div class="form-actions billing-actions">
             ${methods.includes('pix') ? '<button class="secondary" type="button" data-pay-method="pix">Pagar com Pix</button>' : ''}
@@ -354,6 +395,7 @@
         </form>
       </div>`;
     document.querySelector('main').append(section);
+    setupBillingChoice(section);
 
     section.querySelector('#profileForm').addEventListener('submit', async event => {
       event.preventDefault();
@@ -378,7 +420,7 @@
         message.textContent = '';
         button.disabled = true;
         try {
-          const data = await billingRequest('POST', {method: button.dataset.payMethod});
+          const data = await billingRequest('POST', {method: button.dataset.payMethod, ...selectedBillingChoice(section)});
           renderBillingPaymentResult(message, data);
         } catch (error) {
           message.textContent = error.message;
@@ -462,6 +504,15 @@
     setTimeout(openBillingPaymentScreen, 350);
   }
 
+  async function refreshBillingChoices() {
+    try {
+      const billingData = await billingRequest('GET');
+      billingCycles = billingData.cycles || [];
+      if (billingData.billing && user) user = {...user, billing: billingData.billing};
+      window.PortalCurrentUser = user;
+    } catch (_) {}
+  }
+
   async function init() {
     if (window.PortalBootstrapUser) {
       user = window.PortalBootstrapUser;
@@ -472,6 +523,7 @@
     window.PortalCurrentUserPromise = window.PortalCurrentUserPromise || request();
     try { user = await window.PortalCurrentUserPromise; } catch (_) { return; }
     window.PortalCurrentUser = user;
+    await refreshBillingChoices();
     document.body.dataset.role = user.role || 'cliente';
     window.dispatchEvent(new CustomEvent('portal:user-ready', {detail: user}));
     if (user.billingWarning && !user.billingAlert) setTimeout(() => alert(user.billingWarning), 300);
@@ -503,5 +555,12 @@
     redirectOverdueBillingOnce();
   }
 
+  window.addEventListener('portal:terms-accepted', async event => {
+    user = event.detail || user;
+    await refreshBillingChoices();
+    renderBillingBanner();
+    renderBillingLockModal();
+    redirectOverdueBillingOnce();
+  });
   document.addEventListener('DOMContentLoaded', init);
 })();

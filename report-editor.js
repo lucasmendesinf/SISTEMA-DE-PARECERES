@@ -272,6 +272,7 @@ function openDraftWithSavedImages() {
 
 function documentDraftHtml() {
   const readOnly = !!wizard.readOnly;
+  const textParagraphs = value => String(value || '').split(/\r\n|\r|\n/u).map(part => part.trim()).filter(Boolean).map(part => `<p>${esc(part)}</p>`).join('');
   const paragraphs = mainParagraphs().map((part, index) => `
     <div class="editable-paragraph">
       <p>${esc(part)}</p>
@@ -279,7 +280,7 @@ function documentDraftHtml() {
     </div>
   `).join('');
   const entries = wizardEntries().map((entry, index) => {
-    const note = entry.photoNote ? `<p>${esc(entry.photoNote)}</p>` : '';
+    const note = entry.photoNote ? textParagraphs(entry.photoNote) : '';
     const photos = entry.photos?.length ? `<div class="activity-photos">${entry.photos.map(src => `<img src="${src}" alt="Foto da vivência">`).join('')}</div>` : '';
     return `
       <section class="document-entry editable-entry">
@@ -369,6 +370,7 @@ async function refreshSelectedRegisteredActivities(selectedIds = []) {
 
 async function importSelectedRegisteredActivities() {
   const selected = (wizard.activityIds || []).map(String);
+  wizard.lastImportCancelled = false;
   await refreshSelectedRegisteredActivities(selected);
   const current = currentWizardEntry();
   const currentIsOnlySelection = current.activityIds.length && !current.photoNote && !current.photos.length;
@@ -379,7 +381,9 @@ async function importSelectedRegisteredActivities() {
     .filter(activity => selected.includes(String(activity.id)) && !existing.has(String(activity.id)));
   const additions = [];
   for (const activity of selectedActivities) {
-    additions.push(await registeredActivityEntry(activity));
+    const entry = await registeredActivityEntry(activity);
+    if (entry) additions.push(entry);
+    else wizard.lastImportCancelled = true;
   }
   if (additions.length) {
     wizard.entries = currentIsOnlySelection ? [...entries, ...additions] : [...entries, current, ...additions].filter(hasWizardEntryContent);
@@ -390,13 +394,66 @@ async function importSelectedRegisteredActivities() {
 
 async function registeredActivityEntry(activity) {
   const photos = Array.isArray(activity.photos) ? [...activity.photos] : [];
-  let editedPhotos = photos;
-  if (photos.length && window.PortalImageEditors?.processDataUrls) {
-    const result = await window.PortalImageEditors.processDataUrls(photos, 3);
+  const selectedPhotos = await chooseRegisteredActivityPhotos(activity, photos);
+  if (selectedPhotos === null) return null;
+  let editedPhotos = selectedPhotos;
+  if (selectedPhotos.length && window.PortalImageEditors?.processDataUrls) {
+    const result = await window.PortalImageEditors.processDataUrls(selectedPhotos, selectedPhotos.length, {reviewEach: true});
     editedPhotos = result.photos;
     wizard.imageEditorMode = result.mode;
   }
   return {activityIds: [activity.id], photoNote: activity.note || activity.title, photos: editedPhotos};
+}
+
+function chooseRegisteredActivityPhotos(activity, photos = []) {
+  if (!photos.length) return Promise.resolve([]);
+  return new Promise(resolve => {
+    const shell = document.createElement('dialog');
+    shell.className = 'activity-photo-picker-shell';
+    shell.innerHTML = `
+      <div class="activity-photo-picker">
+        <button class="image-editor-close" type="button" data-photo-cancel aria-label="Fechar">x</button>
+        <p class="wizard-step">SELECIONE AS FOTOS</p>
+        <h2>${esc(activity.title || 'Atividade')}</h2>
+        <p class="modal-subtitle">Escolha as imagens que deseja usar neste documento. Depois disso, cada imagem escolhida abrira no editor.</p>
+        <div class="activity-photo-mosaic">
+          ${photos.map((photo, index) => `
+            <label class="activity-photo-choice">
+              <input type="checkbox" value="${index}">
+              <img src="${photo}" alt="Foto ${index + 1}">
+              <span>Usar foto ${index + 1}</span>
+            </label>
+          `).join('')}
+        </div>
+        <div class="form-actions">
+          <button class="secondary" type="button" data-photo-none>Adicionar sem imagens</button>
+          <button class="secondary" type="button" data-photo-cancel>Cancelar</button>
+          <button class="primary" type="button" data-photo-use>Usar selecionadas</button>
+        </div>
+      </div>`;
+    document.body.append(shell);
+    if (typeof shell.showModal === 'function') shell.showModal();
+    else shell.setAttribute('open', '');
+    const close = value => {
+      if (typeof shell.close === 'function' && shell.open) shell.close();
+      shell.remove();
+      resolve(value);
+    };
+    shell.addEventListener('cancel', event => {
+      event.preventDefault();
+      close(null);
+    });
+    shell.querySelectorAll('[data-photo-cancel]').forEach(button => button.addEventListener('click', () => close(null)));
+    shell.querySelector('[data-photo-none]')?.addEventListener('click', () => close([]));
+    shell.querySelector('[data-photo-use]')?.addEventListener('click', () => {
+      const indexes = [...shell.querySelectorAll('input[type="checkbox"]:checked')].map(input => Number(input.value));
+      if (!indexes.length) {
+        alert('Selecione pelo menos uma imagem ou escolha Adicionar sem imagens.');
+        return;
+      }
+      close(indexes.map(index => photos[index]).filter(Boolean));
+    });
+  });
 }
 
 async function selectRegisteredActivityForDocument(input) {
@@ -411,13 +468,13 @@ async function selectRegisteredActivityForDocument(input) {
     bufferStepTwo();
     const count = await importSelectedRegisteredActivities();
     if (!count) {
-      alert('Esta atividade ja foi adicionada ao documento.');
+      if (!wizard.lastImportCancelled) alert('Esta atividade ja foi adicionada ao documento.');
       input.checked = false;
       bufferStepTwo();
       return;
     }
     persistWizard();
-    wizardReviewV2();
+    wizardActivitiesV2();
   } catch (error) {
     console.error(error);
     alert(error.message || 'Nao foi possivel anexar a atividade ao documento.');
@@ -433,10 +490,13 @@ async function useRegisteredActivities() {
   if (wizard.isProcessingPhotos) return alert('Aguarde o carregamento das imagens terminar.');
   bufferStepTwo();
   const count = await importSelectedRegisteredActivities();
-  if (!count) return alert('Selecione uma atividade ainda não adicionada.');
+  if (!count) {
+    if (!wizard.lastImportCancelled) alert('Selecione uma atividade ainda não adicionada.');
+    return;
+  }
   persistWizard();
   alert(`${count} atividade(s) adicionada(s) ao documento.`);
-  wizardReviewV2();
+  wizardActivitiesV2();
 }
 
 async function wizardReviewV2() {
@@ -453,7 +513,7 @@ async function wizardReviewV2() {
     <p class="modal-subtitle">Clique em um parágrafo ou bloco para editar exatamente o trecho desejado.</p>
     <div class="review-toolbar">
       <button class="secondary" type="button" onclick="editAllMainText()">Editar texto principal</button>
-      <button class="secondary" type="button" onclick="wizardAddMore()">Adicionar nova vivência</button>
+      <button class="primary review-add-entry" type="button" onclick="wizardAddMore()">+ Adicionar nova vivência</button>
       ${finalTextOptionHtml()}
     </div>
     <div class="review-box">${configuredHeaderHtml()}${studentDocumentHeader(student)}${documentTypePreview()}${documentDraftHtml()}</div>
@@ -667,6 +727,18 @@ function scheduleWizardAutosave() {
   clearTimeout(reportAutosaveTimer);
   reportAutosaveTimer = setTimeout(autosaveWizardDraft, 1400);
 }
+
+window.flushWizardDraftAutosave = function flushWizardDraftAutosave() {
+  if ($('#wizardText')) bufferStepOne();
+  if ($('#wizardPhotoNote')) bufferStepTwo();
+  clearTimeout(reportAutosaveTimer);
+  autosaveWizardDraft();
+};
+
+window.cancelWizardDraftAutosave = function cancelWizardDraftAutosave() {
+  clearTimeout(reportAutosaveTimer);
+  reportAutosaveQueued = false;
+};
 
 const originalBufferStepOneForAutosave = window.bufferStepOne;
 if (typeof originalBufferStepOneForAutosave === 'function') {

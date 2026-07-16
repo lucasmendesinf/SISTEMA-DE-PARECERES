@@ -76,8 +76,9 @@
   if (saveButton) {
     const oldClick = saveButton.onclick;
     saveButton.onclick = async event => {
+      const selectedDocumentStyle = saveDocumentStyleWithHeader();
       await oldClick?.call(saveButton, event);
-      const settings = {...getHeaderSettings(), ...saveDocumentStyleWithHeader()};
+      const settings = {...getHeaderSettings(), ...selectedDocumentStyle};
       const response = await fetch('api.php?resource=header-settings', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -90,12 +91,13 @@
   }
 
   function appendStyleFields(fields) {
+    const header = getHeaderSettings();
     const style = getDocumentStyle();
     return {
       ...fields,
-      documentFont: style.font,
-      documentFontSize: style.fontSize,
-      detailColor: style.detailColor
+      documentFont: fontOptions.includes(header.documentFont) ? header.documentFont : style.font,
+      documentFontSize: clampFontSize(header.documentFontSize || style.fontSize),
+      detailColor: normalizeColor(header.detailColor || style.detailColor)
     };
   }
 

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260716-email-attachments-json-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260716-email-generate-timeout-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -9,7 +9,7 @@ const STATIC_ASSETS = [
   './report-type-badge.css',
   './experience-fields.css',
   './brand-logo.css',
-  './user-profile.css?v=20260716-trial-plan-choice-1',
+  './user-profile.css?v=20260716-email-loading-1',
   './billing-lock.css?v=20260703-billing-lock-3',
   './marketing-notice.css?v=20260702-marketing-notice-list-1',
   './terms-consent.css?v=20260716-terms-link-1',
@@ -28,7 +28,7 @@ const STATIC_ASSETS = [
   './app.js?v=20260715-keep-current-menu-1',
   './report-editor.js?v=20260715-deliver-keeps-done-1',
   './document-style-settings.js?v=20260716-force-docx-font-1',
-  './director-email.js?v=20260716-email-attachments-json-1',
+  './director-email.js?v=20260716-email-generate-timeout-1',
   './terms-consent.js?v=20260716-terms-link-1',
   './auth-profile.js?v=20260716-fast-admin-menu-1',
   './google-drive-integration.js?v=20260716-drive-pairs-1',

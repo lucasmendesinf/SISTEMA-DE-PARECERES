@@ -93,9 +93,13 @@
   async function documentBlob(endpoint, fields) {
     const body = new URLSearchParams();
     Object.entries(fields).forEach(([key, value]) => body.set(key, value ?? ''));
-    const response = await fetch(endpoint, {method: 'POST', body});
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45000);
+    const response = await fetch(endpoint, {method: 'POST', body, signal: controller.signal}).finally(() => clearTimeout(timeout));
     if (!response.ok) throw new Error(await response.text() || 'Falha ao gerar arquivo para anexo.');
-    return response.blob();
+    const blob = await response.blob();
+    if (!blob || blob.size <= 0) throw new Error('O arquivo gerado para anexo ficou vazio.');
+    return blob;
   }
 
   async function blobToBase64(blob) {
@@ -108,7 +112,12 @@
   }
 
   async function buildEmailAttachments(report) {
-    await window.ensureReportDetail?.(report.id);
+    if (window.ensureReportDetail) {
+      await Promise.race([
+        window.ensureReportDetail(report.databaseId || report.id),
+        new Promise(resolve => setTimeout(resolve, 8000))
+      ]);
+    }
     const fullReport = data.reports.find(item => String(item.id) === String(report.id) || String(item.databaseId) === String(report.databaseId)) || report;
     const student = data.students.find(item => String(item.id) === String(fullReport.studentId));
     if (!student) throw new Error('Aluno nao localizado para gerar anexos.');
@@ -133,15 +142,11 @@
       headerContact: header.contact || '',
       headerLogo: header.logo || ''
     });
-    const pdfEntries = await Promise.all((fullReport.entries || []).map(async entry => ({
-      ...entry,
-      photos: (await Promise.all((entry.photos || []).map(src => typeof pdfJpeg === 'function' ? pdfJpeg(src) : src))).filter(Boolean)
-    })));
     const pdfFields = {
       ...baseFields,
-      studentPhoto: typeof pdfJpeg === 'function' ? await pdfJpeg(student.photo || '') : student.photo || '',
-      headerLogo: typeof pdfJpeg === 'function' ? await pdfJpeg(header.logo || '') : header.logo || '',
-      entries: JSON.stringify(pdfEntries)
+      studentPhoto: student.photo || '',
+      headerLogo: header.logo || '',
+      entries: JSON.stringify(fullReport.entries || [])
     };
     return {
       docx: await documentBlob('download_parecer.php', baseFields),
@@ -170,7 +175,7 @@
         <p id="directorEmailStatus" class="profile-message"></p>
         <div class="form-actions">
           <button class="secondary" type="button" onclick="document.querySelector('#modal').close()">Cancelar</button>
-          <button class="primary" type="button" onclick="sendReportToDirector(${Number(report.databaseId || report.id)})">Enviar e-mail</button>
+          <button class="primary" type="button" id="directorEmailSendButton" onclick="sendReportToDirector(${Number(report.databaseId || report.id)})">Enviar e-mail</button>
         </div>
       `);
     }
@@ -178,6 +183,7 @@
 
   window.sendReportToDirector = async function sendReportToDirector(reportId) {
     const status = $('#directorEmailStatus');
+    const sendButton = $('#directorEmailSendButton');
     const recipientEmail = $('#directorEmailRecipient')?.value.trim() || '';
     const message = $('#directorEmailMessage')?.value.trim() || '';
     if (!recipientEmail) {
@@ -185,13 +191,21 @@
       $('#directorEmailRecipient')?.focus();
       return;
     }
-    if (status) status.textContent = 'Enviando...';
+    if (sendButton) {
+      sendButton.disabled = true;
+      sendButton.dataset.originalText = sendButton.dataset.originalText || sendButton.textContent;
+      sendButton.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Enviando...';
+    }
+    if (status) {
+      status.classList.add('email-send-loading');
+      status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Preparando envio...';
+    }
     try {
       const report = data.reports.find(item => String(item.databaseId || item.id) === String(reportId) || String(item.id) === String(reportId));
       if (!report) throw new Error('Documento nao encontrado para gerar anexos.');
-      status.textContent = 'Gerando anexos PDF e Word...';
+      if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Gerando anexos PDF e Word...';
       const attachments = await buildEmailAttachments(report);
-      status.textContent = 'Enviando e-mail com anexos...';
+      if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Anexando arquivos e enviando e-mail...';
       const response = await fetch('api.php?resource=send-report-email', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -215,9 +229,20 @@
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Nao foi possivel enviar o e-mail.');
-      if (status) status.textContent = result.message || 'E-mail enviado com sucesso.';
+      if (status) {
+        status.classList.remove('email-send-loading');
+        status.textContent = result.message || 'E-mail enviado com sucesso.';
+      }
     } catch (error) {
-      if (status) status.textContent = error.message;
+      if (status) {
+        status.classList.remove('email-send-loading');
+        status.textContent = error.message;
+      }
+    } finally {
+      if (sendButton) {
+        sendButton.disabled = false;
+        sendButton.textContent = sendButton.dataset.originalText || 'Enviar e-mail';
+      }
     }
   };
 

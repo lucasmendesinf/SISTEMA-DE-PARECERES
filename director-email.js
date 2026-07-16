@@ -94,12 +94,67 @@
     const body = new URLSearchParams();
     Object.entries(fields).forEach(([key, value]) => body.set(key, value ?? ''));
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000);
+    const timeout = setTimeout(() => controller.abort(), 60000);
     const response = await fetch(endpoint, {method: 'POST', body, signal: controller.signal}).finally(() => clearTimeout(timeout));
     if (!response.ok) throw new Error(await response.text() || 'Falha ao gerar arquivo para anexo.');
     const blob = await response.blob();
     if (!blob || blob.size <= 0) throw new Error('O arquivo gerado para anexo ficou vazio.');
     return blob;
+  }
+
+  function isImageDataUrl(value) {
+    return typeof value === 'string' && /^data:image\/[\w.+-]+;base64,/.test(value);
+  }
+
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
+    return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+  }
+
+  async function compactImageDataUrl(dataUrl, maxWidth = 1200, quality = 0.72) {
+    if (!isImageDataUrl(dataUrl)) return dataUrl || '';
+    return new Promise(resolve => {
+      const image = new Image();
+      const finish = value => resolve(value || dataUrl);
+      const timer = setTimeout(() => finish(dataUrl), 7000);
+      image.onload = () => {
+        clearTimeout(timer);
+        try {
+          const scale = Math.min(1, maxWidth / Math.max(image.naturalWidth || image.width || maxWidth, 1));
+          const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+          const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext('2d', {alpha: false});
+          context.fillStyle = '#ffffff';
+          context.fillRect(0, 0, width, height);
+          context.drawImage(image, 0, 0, width, height);
+          const compact = canvas.toDataURL('image/jpeg', quality);
+          finish(compact.length < dataUrl.length ? compact : dataUrl);
+        } catch (error) {
+          finish(dataUrl);
+        }
+      };
+      image.onerror = () => {
+        clearTimeout(timer);
+        finish(dataUrl);
+      };
+      image.src = dataUrl;
+    });
+  }
+
+  async function compactReportEntries(entries) {
+    const sourceEntries = Array.isArray(entries) ? entries : [];
+    const compacted = [];
+    for (const entry of sourceEntries) {
+      const photos = [];
+      for (const photo of (Array.isArray(entry?.photos) ? entry.photos : [])) {
+        photos.push(await compactImageDataUrl(photo, 1280, 0.72));
+      }
+      compacted.push({...entry, photos});
+    }
+    return compacted;
   }
 
   async function blobToBase64(blob) {
@@ -127,6 +182,9 @@
     const type = normalizeType(fullReport.documentType);
     const label = documentLabel(fullReport.documentType);
     const safeName = `${label} - ${student.name}`.replace(/[\\/:*?"<>|]+/g, '-');
+    const compactStudentPhoto = await compactImageDataUrl(student.photo || '', 900, 0.74);
+    const compactHeaderLogo = await compactImageDataUrl(header.logo || '', 700, 0.78);
+    const compactEntries = await compactReportEntries(fullReport.entries || []);
     const baseFields = styledFields({
       name: student.name,
       birthDate: student.birthDate || '',
@@ -134,19 +192,19 @@
       period: period?.name || 'Periodo avaliativo',
       text: fullReport.text || '',
       documentType: type,
-      studentPhoto: student.photo || '',
-      entries: JSON.stringify(fullReport.entries || []),
+      studentPhoto: compactStudentPhoto,
+      entries: JSON.stringify(compactEntries),
       finalText: fullReport.useFinalText ? (fullReport.finalText || header.finalText || '') : '',
       headerNetwork: header.network || '',
       headerSchool: header.school || '',
       headerContact: header.contact || '',
-      headerLogo: header.logo || ''
+      headerLogo: compactHeaderLogo
     });
     const pdfFields = {
       ...baseFields,
-      studentPhoto: student.photo || '',
-      headerLogo: header.logo || '',
-      entries: JSON.stringify(fullReport.entries || [])
+      studentPhoto: compactStudentPhoto,
+      headerLogo: compactHeaderLogo,
+      entries: JSON.stringify(compactEntries)
     };
     return {
       docx: await documentBlob('download_parecer.php', baseFields),
@@ -203,31 +261,39 @@
     try {
       const report = data.reports.find(item => String(item.databaseId || item.id) === String(reportId) || String(item.id) === String(reportId));
       if (!report) throw new Error('Documento nao encontrado para gerar anexos.');
-      if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Gerando anexos PDF e Word...';
+      if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Otimizando imagens e gerando anexos PDF e Word...';
       const attachments = await buildEmailAttachments(report);
       if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Anexando arquivos e enviando e-mail...';
+      const totalSize = attachments.docx.size + attachments.pdf.size;
+      if (totalSize > 18 * 1024 * 1024) {
+        throw new Error(`Os anexos ficaram muito grandes (${formatBytes(totalSize)}). Remova algumas imagens ou envie pelo Google Drive.`);
+      }
+      const encodedAttachments = [
+        {
+          name: attachments.docxName,
+          mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          content: await blobToBase64(attachments.docx)
+        },
+        {
+          name: attachments.pdfName,
+          mime: 'application/pdf',
+          content: await blobToBase64(attachments.pdf)
+        }
+      ];
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90000);
       const response = await fetch('api.php?resource=send-report-email', {
         method: 'POST',
+        signal: controller.signal,
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           reportId,
           recipientEmail,
           message,
-          attachments: [
-            {
-              name: attachments.docxName,
-              mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-              content: await blobToBase64(attachments.docx)
-            },
-            {
-              name: attachments.pdfName,
-              mime: 'application/pdf',
-              content: await blobToBase64(attachments.pdf)
-            }
-          ]
+          attachments: encodedAttachments
         })
-      });
-      const result = await response.json();
+      }).finally(() => clearTimeout(timeout));
+      const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Nao foi possivel enviar o e-mail.');
       if (status) {
         status.classList.remove('email-send-loading');
@@ -236,7 +302,9 @@
     } catch (error) {
       if (status) {
         status.classList.remove('email-send-loading');
-        status.textContent = error.message;
+        status.textContent = error.name === 'AbortError'
+          ? 'O servidor demorou para enviar o e-mail. Tente novamente ou envie pelo Google Drive.'
+          : error.message;
       }
     } finally {
       if (sendButton) {

@@ -92,7 +92,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <link rel="stylesheet" href="report-type-badge.css">
   <link rel="stylesheet" href="experience-fields.css">
   <link rel="stylesheet" href="brand-logo.css">
-  <link rel="stylesheet" href="user-profile.css?v=20260716-email-loading-1">
+  <link rel="stylesheet" href="user-profile.css?v=20260716-gemini-review-1">
   <link rel="stylesheet" href="billing-lock.css?v=20260703-billing-lock-3">
   <link rel="stylesheet" href="marketing-notice.css?v=20260702-marketing-notice-list-1">
   <link rel="stylesheet" href="terms-consent.css?v=20260716-terms-link-1">
@@ -174,9 +174,9 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="document-style-settings.js?v=20260716-force-docx-font-1"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
   <script src="billing-cycles.js?v=20260705-billing-cycles-1"></script>
-  <script src="text-ai-review.js?v=20260703-portuguese-review-3"></script>
+  <script src="text-ai-review.js?v=20260716-gemini-review-1"></script>
   <script src="document-button-fix.js"></script>
-  <script src="director-email.js?v=20260716-email-generate-timeout-1"></script>
+  <script src="director-email.js?v=20260716-email-timeout-fix-1"></script>
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
   <script src="terms-consent.js?v=20260716-terms-link-1"></script>
   <script src="auth-profile.js?v=20260716-fast-admin-menu-1"></script>

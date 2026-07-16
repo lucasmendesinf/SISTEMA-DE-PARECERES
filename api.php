@@ -128,6 +128,19 @@ try {
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_google_drive_audit_user (usuario_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS ai_review_logs (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        usuario_id BIGINT UNSIGNED NOT NULL,
+        provider VARCHAR(40) NOT NULL,
+        action VARCHAR(40) NOT NULL,
+        status VARCHAR(30) NOT NULL,
+        escola_hash VARCHAR(64) NULL,
+        error_message TEXT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_ai_review_user_date (usuario_id, created_at),
+        INDEX idx_ai_review_school_date (escola_hash, created_at),
+        INDEX idx_ai_review_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec("INSERT INTO billing_cycles (name,slug,month_count,amount,active) VALUES
         ('Mensal','monthly',1,0.00,1),
         ('Trimestral','quarterly',3,0.00,1),
@@ -152,6 +165,7 @@ try {
         'activities' => 'atividades',
         'reports' => 'pareceres',
         'send-report-email' => 'pareceres',
+        'ai-review' => 'pareceres',
         'experience-fields' => 'configuracoes',
         'header-settings' => 'configuracoes',
     ];
@@ -446,6 +460,57 @@ try {
             'filenameTemplate' => (string) ($settings['filename_template'] ?? ''),
             'scope' => 'https://www.googleapis.com/auth/drive.file',
         ];
+    };
+    $aiReviewDefaults = [
+        'enabled' => false,
+        'provider' => 'gemini',
+        'fallback_enabled' => true,
+        'daily_user_limit' => 10,
+        'daily_school_limit' => 100,
+        'providers' => [
+            'gemini' => [
+                'enabled' => true,
+                'priority' => 1,
+                'api_key' => trim((string) (getenv('GEMINI_API_KEY') ?: ($config['gemini']['api_key'] ?? ''))),
+                'model' => trim((string) (getenv('GEMINI_MODEL') ?: ($config['gemini']['model'] ?? 'gemini-3.5-flash'))),
+            ],
+        ],
+    ];
+    $getAiReviewSettings = static function () use ($pdo, $aiReviewDefaults): array {
+        $query = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key='ai_review' LIMIT 1");
+        $query->execute();
+        $saved = json_decode((string) ($query->fetchColumn() ?: '{}'), true);
+        $settings = array_replace_recursive($aiReviewDefaults, is_array($saved) ? $saved : []);
+        $envKey = trim((string) (getenv('GEMINI_API_KEY') ?: ''));
+        $envModel = trim((string) (getenv('GEMINI_MODEL') ?: ''));
+        if ($envKey !== '' && trim((string) ($settings['providers']['gemini']['api_key'] ?? '')) === '') $settings['providers']['gemini']['api_key'] = $envKey;
+        if ($envModel !== '' && trim((string) ($settings['providers']['gemini']['model'] ?? '')) === '') $settings['providers']['gemini']['model'] = $envModel;
+        return $settings;
+    };
+    $publicAiReviewSettings = static function (array $settings) use ($maskSecret): array {
+        $gemini = is_array($settings['providers']['gemini'] ?? null) ? $settings['providers']['gemini'] : [];
+        return [
+            'enabled' => !empty($settings['enabled']),
+            'provider' => (string) ($settings['provider'] ?? 'gemini'),
+            'fallbackEnabled' => !empty($settings['fallback_enabled']),
+            'dailyUserLimit' => (int) ($settings['daily_user_limit'] ?? 10),
+            'dailySchoolLimit' => (int) ($settings['daily_school_limit'] ?? 100),
+            'geminiEnabled' => !empty($gemini['enabled']),
+            'geminiConfigured' => trim((string) ($gemini['api_key'] ?? '')) !== '',
+            'geminiApiKeyMasked' => $maskSecret((string) ($gemini['api_key'] ?? '')),
+            'geminiModel' => (string) ($gemini['model'] ?? 'gemini-3.5-flash'),
+        ];
+    };
+    $aiSchoolHash = static function (int $userId) use ($pdo): string {
+        $query = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key=? LIMIT 1");
+        $query->execute(['header_settings_' . $userId]);
+        $settings = json_decode((string) ($query->fetchColumn() ?: '{}'), true);
+        $school = is_array($settings) ? trim((string) ($settings['school'] ?? $settings['network'] ?? '')) : '';
+        return hash('sha256', mb_strtolower($school !== '' ? $school : 'usuario-' . $userId, 'UTF-8'));
+    };
+    $logAiReview = static function (int $userId, string $provider, string $action, string $status, string $schoolHash = '', string $error = '') use ($pdo): void {
+        $stmt = $pdo->prepare('INSERT INTO ai_review_logs (usuario_id,provider,action,status,escola_hash,error_message) VALUES (?,?,?,?,?,?)');
+        $stmt->execute([$userId, $provider, $action, $status, $schoolHash ?: null, mb_substr($error, 0, 2000, 'UTF-8') ?: null]);
     };
     $googleDriveAudit = static function (?int $userId, string $action, string $details = '') use ($pdo): void {
         $stmt = $pdo->prepare('INSERT INTO google_drive_audit_logs (usuario_id,action,details) VALUES (?,?,?)');
@@ -1242,6 +1307,132 @@ try {
             echo json_encode($createMercadoPagoPayment($loggedUser, $method), JSON_UNESCAPED_UNICODE);
             exit;
         }
+    }
+    if ($resource === 'ai-review-settings') {
+        $masterUser = $requireMaster();
+        $settings = $getAiReviewSettings();
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            echo json_encode($publicAiReviewSettings($settings), JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+            $currentGemini = is_array($settings['providers']['gemini'] ?? null) ? $settings['providers']['gemini'] : [];
+            $apiKey = trim((string) ($input['geminiApiKey'] ?? ''));
+            $settings = [
+                'enabled' => !empty($input['enabled']),
+                'provider' => 'gemini',
+                'fallback_enabled' => !empty($input['fallbackEnabled']),
+                'daily_user_limit' => max(1, min(500, (int) ($input['dailyUserLimit'] ?? 10))),
+                'daily_school_limit' => max(1, min(5000, (int) ($input['dailySchoolLimit'] ?? 100))),
+                'providers' => [
+                    'gemini' => [
+                        'enabled' => !empty($input['geminiEnabled']),
+                        'priority' => 1,
+                        'api_key' => $apiKey !== '' ? $apiKey : (string) ($currentGemini['api_key'] ?? ''),
+                        'model' => trim((string) ($input['geminiModel'] ?? 'gemini-3.5-flash')) ?: 'gemini-3.5-flash',
+                    ],
+                ],
+            ];
+            if ($settings['enabled'] && $settings['providers']['gemini']['enabled'] && trim((string) $settings['providers']['gemini']['api_key']) === '') {
+                throw new RuntimeException('Informe a API Key do Gemini para ativar a revisao por IA.');
+            }
+            $save = $pdo->prepare('INSERT INTO app_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
+            $save->execute(['ai_review', json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+            echo json_encode(['ok' => true, 'settings' => $publicAiReviewSettings($settings)], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    }
+    if ($resource === 'ai-review' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $user = $loadCurrentUser();
+        $settings = $getAiReviewSettings();
+        $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+        $text = trim((string) ($input['text'] ?? ''));
+        $action = in_array((string) ($input['action'] ?? 'improve'), ['improve', 'grammar', 'summarize', 'expand'], true) ? (string) $input['action'] : 'improve';
+        $studentName = trim((string) ($input['studentName'] ?? ''));
+        if ($text === '') throw new RuntimeException('Escreva um texto antes de solicitar a revisao.');
+        if (mb_strlen($text, 'UTF-8') > 12000) throw new RuntimeException('O texto esta muito longo para revisao. Divida em partes menores.');
+        if (empty($settings['enabled'])) throw new RuntimeException('Revisao por IA ainda nao esta habilitada pelo administrador.');
+        $schoolHash = $aiSchoolHash((int) $user['id']);
+        $todayStart = (new DateTimeImmutable('today'))->format('Y-m-d 00:00:00');
+        $userCount = $pdo->prepare("SELECT COUNT(*) FROM ai_review_logs WHERE usuario_id=? AND status='success' AND created_at>=?");
+        $userCount->execute([(int) $user['id'], $todayStart]);
+        if ((int) $userCount->fetchColumn() >= (int) ($settings['daily_user_limit'] ?? 10)) {
+            throw new RuntimeException('Voce atingiu o limite diario de revisoes por IA. Tente novamente amanha.');
+        }
+        $schoolCount = $pdo->prepare("SELECT COUNT(*) FROM ai_review_logs WHERE escola_hash=? AND status='success' AND created_at>=?");
+        $schoolCount->execute([$schoolHash, $todayStart]);
+        if ((int) $schoolCount->fetchColumn() >= (int) ($settings['daily_school_limit'] ?? 100)) {
+            throw new RuntimeException('A escola atingiu o limite diario de revisoes por IA. Tente novamente amanha.');
+        }
+        $sensitivePatterns = [
+            '/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/' => '[CPF]',
+            '/\b(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?\d{4,5}-?\d{4}\b/' => '[TELEFONE]',
+            '/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/' => '[EMAIL]',
+        ];
+        $safeText = preg_replace(array_keys($sensitivePatterns), array_values($sensitivePatterns), $text) ?? $text;
+        if ($studentName !== '') $safeText = str_replace($studentName, '[ALUNO]', $safeText);
+        $instructions = [
+            'improve' => 'Melhore o texto, mantendo o sentido original.',
+            'grammar' => 'Corrija ortografia, gramatica, acentuacao e pontuacao.',
+            'summarize' => 'Resuma o parecer mantendo os pontos pedagogicos essenciais.',
+            'expand' => 'Expanda o parecer com linguagem pedagogica, sem inventar fatos ou atividades.',
+        ];
+        $prompt = "Voce e especialista em educacao infantil e elaboracao de pareceres pedagogicos.\nRevise o texto obedecendo rigorosamente as regras abaixo:\n- Corrigir ortografia, gramatica, acentuacao e pontuacao.\n- Melhorar clareza e linguagem pedagogica.\n- Nao inventar informacoes.\n- Nao criar atividades inexistentes.\n- Nao fazer diagnosticos.\n- Nao alterar o sentido do texto.\n- Retornar somente o texto revisado.\n\nTarefa: {$instructions[$action]}\n\nTexto:\n{$safeText}";
+        $providers = [];
+        $gemini = is_array($settings['providers']['gemini'] ?? null) ? $settings['providers']['gemini'] : [];
+        if (!empty($gemini['enabled'])) $providers[] = ['name' => 'gemini', 'settings' => $gemini];
+        $lastError = '';
+        foreach ($providers as $provider) {
+            try {
+                if ($provider['name'] !== 'gemini') continue;
+                $apiKey = trim((string) ($provider['settings']['api_key'] ?? ''));
+                $model = trim((string) ($provider['settings']['model'] ?? 'gemini-3.5-flash')) ?: 'gemini-3.5-flash';
+                if ($apiKey === '') throw new RuntimeException('Gemini API Key nao configurada.');
+                if (!function_exists('curl_init')) throw new RuntimeException('Extensao cURL do PHP nao habilitada.');
+                $payload = json_encode([
+                    'model' => $model,
+                    'system_instruction' => 'Voce revisa textos pedagogicos em portugues do Brasil e retorna apenas o texto final.',
+                    'input' => $prompt,
+                    'generation_config' => ['temperature' => 0.2, 'thinking_level' => 'low'],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $curl = curl_init('https://generativelanguage.googleapis.com/v1beta/interactions');
+                curl_setopt_array($curl, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_POST => true,
+                    CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'x-goog-api-key: ' . $apiKey],
+                    CURLOPT_POSTFIELDS => $payload,
+                    CURLOPT_TIMEOUT => 35,
+                ]);
+                $raw = curl_exec($curl);
+                $curlError = curl_error($curl);
+                $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+                curl_close($curl);
+                if ($raw === false || $curlError !== '') throw new RuntimeException('Falha de conexao com o provedor de IA.');
+                $data = json_decode((string) $raw, true);
+                if ($status >= 400 || !is_array($data)) throw new RuntimeException('O provedor de IA recusou a solicitacao.');
+                $reviewed = trim((string) ($data['output_text'] ?? ''));
+                if ($reviewed === '' && is_array($data['steps'] ?? null)) {
+                    $parts = [];
+                    foreach ($data['steps'] as $step) {
+                        foreach (($step['content'] ?? []) as $content) {
+                            if (is_array($content) && isset($content['text'])) $parts[] = (string) $content['text'];
+                        }
+                    }
+                    $reviewed = trim(implode("\n", $parts));
+                }
+                if ($reviewed === '') throw new RuntimeException('O provedor de IA nao retornou texto revisado.');
+                if ($studentName !== '') $reviewed = str_replace('[ALUNO]', $studentName, $reviewed);
+                $logAiReview((int) $user['id'], 'gemini', $action, 'success', $schoolHash);
+                echo json_encode(['success' => true, 'provider' => 'gemini', 'texto_original' => $text, 'texto_revisado' => $reviewed], JSON_UNESCAPED_UNICODE);
+                exit;
+            } catch (Throwable $e) {
+                $lastError = $e->getMessage();
+                $logAiReview((int) $user['id'], (string) $provider['name'], $action, 'error', $schoolHash, $lastError);
+                if (empty($settings['fallback_enabled'])) break;
+            }
+        }
+        throw new RuntimeException('Nao foi possivel revisar com IA agora. Tente novamente em instantes.');
     }
     if ($resource === 'google-drive') {
         $user = $loadCurrentUser();
@@ -2199,6 +2390,10 @@ try {
         exit;
     }
     if ($resource === 'send-report-email' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        ignore_user_abort(true);
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(180);
+        }
         $isMultipartEmail = str_starts_with((string) ($_SERVER['CONTENT_TYPE'] ?? ''), 'multipart/form-data');
         $input = $isMultipartEmail ? $_POST : json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         $reportId = (int) ($input['reportId'] ?? 0);
@@ -2263,10 +2458,18 @@ try {
         if (!$emailAttachments) {
             throw new RuntimeException('Nenhum arquivo foi gerado para anexar ao e-mail.');
         }
+        $totalAttachmentBytes = array_sum(array_map(static fn (array $attachment): int => strlen((string) $attachment['content']), $emailAttachments));
+        if ($totalAttachmentBytes > 22 * 1024 * 1024) {
+            throw new RuntimeException('Os anexos ficaram muito grandes para envio por e-mail. Remova algumas imagens ou envie pelo Google Drive.');
+        }
         $subject = $documentLabel . ' - ' . $studentName;
+        $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? 'aiprof.local'));
+        $host = preg_replace('/:\d+$/', '', $host) ?: 'aiprof.local';
+        $host = preg_match('/^[a-z0-9.-]+$/', $host) ? $host : 'aiprof.local';
+        $fromAddress = 'no-reply@' . $host;
         $headers = "MIME-Version: 1.0\r\n";
-        $headers .= "From: Ai Prof <no-reply@aiprof.local>\r\n";
-        $replyTo = filter_var((string) ($report['professora_email'] ?? ''), FILTER_VALIDATE_EMAIL) ? (string) $report['professora_email'] : 'no-reply@aiprof.local';
+        $headers .= "From: Ai Prof <{$fromAddress}>\r\n";
+        $replyTo = filter_var((string) ($report['professora_email'] ?? ''), FILTER_VALIDATE_EMAIL) ? (string) $report['professora_email'] : $fromAddress;
         $headers .= "Reply-To: {$replyTo}\r\n";
         $headers .= "Content-Type: multipart/mixed; boundary=\"{$boundary}\"\r\n";
         $body = "--{$boundary}\r\n";
@@ -2282,6 +2485,12 @@ try {
             $body .= chunk_split(base64_encode($attachment['content'])) . "\r\n";
         }
         $body .= "--{$boundary}--\r\n";
+        if (function_exists('fastcgi_finish_request')) {
+            echo json_encode(['ok' => true, 'message' => 'E-mail em processamento. Em instantes ele sera entregue para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
+            fastcgi_finish_request();
+            @mail($recipientEmail, $subject, $body, $headers);
+            exit;
+        }
         if (!function_exists('mail') || !mail($recipientEmail, $subject, $body, $headers)) {
             throw new RuntimeException('Nao foi possivel enviar o e-mail. Verifique a configuracao de envio de e-mail do servidor.');
         }

@@ -129,20 +129,121 @@
       || document.querySelector('textarea');
   }
 
-  window.adjustTextWithAI = function adjustTextWithAI(field) {
-    const textarea = targetTextarea(field);
-    if (!textarea) return;
-    const original = textarea.value.trim();
-    if (!original) {
-      textarea.focus();
-      alert('Escreva um texto antes de solicitar a revis\u00e3o.');
-      return;
-    }
-    textarea.value = reviewPortuguese(original);
+  const actionLabels = {
+    improve: 'Melhorar texto',
+    grammar: 'Corrigir gram\u00e1tica',
+    summarize: 'Resumir parecer',
+    expand: 'Expandir parecer'
+  };
+
+  async function requestAiReview(text, action) {
+    const student = typeof wizard === 'object' && wizard?.studentId && Array.isArray(data?.students)
+      ? data.students.find(item => String(item.id) === String(wizard.studentId))
+      : null;
+    const response = await fetch('api.php?resource=ai-review', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text, action, studentName: student?.name || ''})
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) throw new Error(result.error || 'Nao foi possivel revisar com IA agora.');
+    return result.texto_revisado || '';
+  }
+
+  function syncTextareaBuffers(textarea) {
     textarea.dispatchEvent(new Event('input', {bubbles: true}));
     if (typeof bufferStepOne === 'function' && textarea.id === 'wizardText') bufferStepOne();
     if (typeof bufferStepTwo === 'function' && textarea.id === 'wizardPhotoNote') bufferStepTwo();
-    textarea.focus();
+  }
+
+  function showComparisonModal(textarea, original, suggestion, provider = '') {
+    document.querySelector('#aiReviewModal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'aiReviewModal';
+    modal.className = 'ai-review-backdrop';
+    modal.innerHTML = `
+      <section class="ai-review-modal" role="dialog" aria-modal="true" aria-labelledby="aiReviewTitle">
+        <button class="ai-review-close" type="button" data-ai-review-close aria-label="Fechar">x</button>
+        <p class="eyebrow">REVISAO INTELIGENTE</p>
+        <h2 id="aiReviewTitle">Compare antes de aplicar</h2>
+        ${provider ? `<p class="ai-review-provider">Provedor usado: ${escapeHtml(provider)}</p>` : ''}
+        <div class="ai-review-columns">
+          <div><h3>Texto original</h3><textarea readonly>${escapeHtml(original)}</textarea></div>
+          <div><h3>Sugestao da IA</h3><textarea id="aiReviewSuggestion">${escapeHtml(suggestion)}</textarea></div>
+        </div>
+        <div class="form-actions">
+          <button class="secondary" type="button" data-ai-review-copy>Copiar</button>
+          <button class="secondary" type="button" data-ai-review-close>Cancelar</button>
+          <button class="primary" type="button" data-ai-review-apply>Aplicar sugestao</button>
+        </div>
+      </section>`;
+    document.body.append(modal);
+    const closeModal = () => modal.remove();
+    modal.querySelectorAll('[data-ai-review-close]').forEach(button => button.addEventListener('click', closeModal));
+    modal.querySelector('[data-ai-review-copy]')?.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(modal.querySelector('#aiReviewSuggestion')?.value || suggestion);
+    });
+    modal.querySelector('[data-ai-review-apply]')?.addEventListener('click', () => {
+      textarea.value = modal.querySelector('#aiReviewSuggestion')?.value || suggestion;
+      syncTextareaBuffers(textarea);
+      closeModal();
+      textarea.focus();
+    });
+    modal.querySelector('#aiReviewSuggestion')?.focus();
+  }
+
+  async function runAiReview(textarea, action, trigger) {
+    const original = textarea.value.trim();
+    if (!original) {
+      textarea.focus();
+      alert('Escreva um texto antes de solicitar a revisao.');
+      return;
+    }
+    const oldText = trigger?.textContent;
+    if (trigger) {
+      trigger.disabled = true;
+      trigger.textContent = 'Revisando com IA...';
+    }
+    try {
+      const suggestion = await requestAiReview(original, action);
+      showComparisonModal(textarea, original, suggestion, 'Gemini');
+    } catch (error) {
+      if (confirm((error.message || 'Nao foi possivel revisar com IA agora.') + '\n\nDeseja aplicar a revisao local simples?')) {
+        showComparisonModal(textarea, original, reviewPortuguese(original), 'Revisao local');
+      }
+    } finally {
+      if (trigger) {
+        trigger.disabled = false;
+        trigger.textContent = oldText || actionLabels[action] || 'Revisar com IA';
+      }
+    }
+  }
+
+  function openAiReviewMenu(textarea, anchor) {
+    document.querySelector('#aiReviewMenu')?.remove();
+    const menu = document.createElement('div');
+    menu.id = 'aiReviewMenu';
+    menu.className = 'ai-review-menu';
+    menu.innerHTML = Object.entries(actionLabels).map(([action, label]) => `<button type="button" data-ai-action="${action}">${label}</button>`).join('');
+    document.body.append(menu);
+    const rect = anchor?.getBoundingClientRect?.() || textarea.getBoundingClientRect();
+    menu.style.left = `${Math.min(rect.left, window.innerWidth - 230)}px`;
+    menu.style.top = `${rect.bottom + window.scrollY + 6}px`;
+    const closeMenu = () => menu.remove();
+    menu.addEventListener('click', event => {
+      const button = event.target.closest('[data-ai-action]');
+      if (!button) return;
+      const action = button.dataset.aiAction;
+      closeMenu();
+      runAiReview(textarea, action, anchor);
+    });
+    setTimeout(() => document.addEventListener('click', closeMenu, {once: true}), 0);
+  }
+
+  window.adjustTextWithAI = function adjustTextWithAI(field) {
+    const textarea = targetTextarea(field);
+    if (!textarea) return;
+    openAiReviewMenu(textarea, window.event?.currentTarget || textarea);
   };
 
   window.adjustInlineParagraph = function adjustInlineParagraph() {
@@ -181,8 +282,83 @@
     document.querySelectorAll('textarea').forEach(addReviewButton);
   }
 
+  async function apiJson(url, options = {}) {
+    const response = await fetch(url, options);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Nao foi possivel concluir a operacao.');
+    return data;
+  }
+
+  function ensureAiSettingsPanel() {
+    if (document.body.dataset.role !== 'master') return;
+    const config = document.querySelector('#configuracoes');
+    if (!config || document.querySelector('#aiReviewSettingsPanel')) return;
+    const panel = document.createElement('div');
+    panel.id = 'aiReviewSettingsPanel';
+    panel.className = 'panel ai-review-settings-panel';
+    panel.innerHTML = `
+      <div class="profile-subtitle">
+        <h3>Revisao inteligente com IA</h3>
+        <p>Configure o Gemini para revisar textos de pareceres sem expor a chave no navegador.</p>
+      </div>
+      <div class="form-grid">
+        <label class="checkline"><input id="aiReviewEnabled" type="checkbox"> Habilitar revisao por IA</label>
+        <label class="checkline"><input id="aiReviewFallback" type="checkbox"> Usar fallback quando o provedor falhar</label>
+        <label class="checkline"><input id="aiGeminiEnabled" type="checkbox"> Gemini ativo</label>
+        <div class="field"><label>Gemini API Key</label><input id="aiGeminiApiKey" type="password" autocomplete="off" placeholder="Cole a API Key ou deixe em branco para manter"></div>
+        <div class="field"><label>Modelo Gemini</label><input id="aiGeminiModel" placeholder="gemini-3.5-flash"></div>
+        <div class="field"><label>Limite diario por professora</label><input id="aiDailyUserLimit" type="number" min="1" max="500"></div>
+        <div class="field"><label>Limite diario por escola</label><input id="aiDailySchoolLimit" type="number" min="1" max="5000"></div>
+      </div>
+      <p id="aiReviewSettingsStatus" class="profile-message"></p>
+      <div class="form-actions"><button class="primary" type="button" id="saveAiReviewSettings">Salvar IA</button></div>`;
+    config.append(panel);
+    loadAiSettings();
+    panel.querySelector('#saveAiReviewSettings')?.addEventListener('click', saveAiSettings);
+  }
+
+  async function loadAiSettings() {
+    const status = document.querySelector('#aiReviewSettingsStatus');
+    try {
+      const settings = await apiJson('api.php?resource=ai-review-settings');
+      document.querySelector('#aiReviewEnabled').checked = !!settings.enabled;
+      document.querySelector('#aiReviewFallback').checked = !!settings.fallbackEnabled;
+      document.querySelector('#aiGeminiEnabled').checked = !!settings.geminiEnabled;
+      document.querySelector('#aiGeminiApiKey').placeholder = settings.geminiConfigured ? `Configurada: ${settings.geminiApiKeyMasked}` : 'Cole a API Key do Gemini';
+      document.querySelector('#aiGeminiModel').value = settings.geminiModel || 'gemini-3.5-flash';
+      document.querySelector('#aiDailyUserLimit').value = settings.dailyUserLimit || 10;
+      document.querySelector('#aiDailySchoolLimit').value = settings.dailySchoolLimit || 100;
+      if (status) status.textContent = settings.enabled ? 'Revisao por IA habilitada.' : 'Revisao por IA desabilitada.';
+    } catch (error) {
+      if (status) status.textContent = error.message;
+    }
+  }
+
+  async function saveAiSettings() {
+    const status = document.querySelector('#aiReviewSettingsStatus');
+    if (status) status.textContent = 'Salvando configuracao de IA...';
+    try {
+      const payload = {
+        enabled: document.querySelector('#aiReviewEnabled')?.checked,
+        fallbackEnabled: document.querySelector('#aiReviewFallback')?.checked,
+        geminiEnabled: document.querySelector('#aiGeminiEnabled')?.checked,
+        geminiApiKey: document.querySelector('#aiGeminiApiKey')?.value.trim(),
+        geminiModel: document.querySelector('#aiGeminiModel')?.value.trim(),
+        dailyUserLimit: document.querySelector('#aiDailyUserLimit')?.value,
+        dailySchoolLimit: document.querySelector('#aiDailySchoolLimit')?.value
+      };
+      await apiJson('api.php?resource=ai-review-settings', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+      if (document.querySelector('#aiGeminiApiKey')) document.querySelector('#aiGeminiApiKey').value = '';
+      if (status) status.textContent = 'Configuracao de IA salva com sucesso.';
+      loadAiSettings();
+    } catch (error) {
+      if (status) status.textContent = error.message;
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     refreshTextareaReviewButtons();
+    ensureAiSettingsPanel();
     let refreshTimer = 0;
     const observer = new MutationObserver(() => {
       clearTimeout(refreshTimer);
@@ -190,4 +366,5 @@
     });
     observer.observe(document.body, {childList: true, subtree: true});
   });
+  window.addEventListener('portal:user-ready', ensureAiSettingsPanel);
 })();

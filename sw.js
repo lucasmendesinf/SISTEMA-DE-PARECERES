@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260716-terms-before-onboarding-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260716-terms-persist-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -32,7 +32,7 @@ const STATIC_ASSETS = [
   './text-ai-review.js?v=20260716-email-no-ai-1',
   './director-email.js?v=20260716-official-email-files-1',
   './terms-consent.js?v=20260716-terms-before-onboarding-1',
-  './auth-profile.js?v=20260716-fast-admin-menu-1',
+  './auth-profile.js?v=20260716-terms-persist-1',
   './google-drive-integration.js?v=20260716-client-permissions-1',
   './tutorial-videos.js?v=20260706-video-before-onboarding-2',
   './manual-image-editor.js?v=20260709-activity-photos-30-1',

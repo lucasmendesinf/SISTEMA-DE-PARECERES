@@ -1,6 +1,7 @@
 <?php
 // Portal Pareceres — aplicação local, sem dependências externas.
 session_start();
+$termsVersion = 'lgpd-2026-07-16';
 if (empty($_SESSION['user_id'])) {
   header('Location: login.php');
   exit;
@@ -10,6 +11,12 @@ $bootstrapUser = [
   'name' => 'Usuário logado',
   'role' => 'cliente',
   'permissions' => [],
+  'terms' => [
+    'accepted' => false,
+    'acceptedAt' => null,
+    'version' => null,
+    'currentVersion' => $termsVersion,
+  ],
 ];
 if (!empty($_SESSION['bootstrap_user']) && is_array($_SESSION['bootstrap_user'])) {
   $sessionBootstrap = $_SESSION['bootstrap_user'];
@@ -20,6 +27,12 @@ if (!empty($_SESSION['bootstrap_user']) && is_array($_SESSION['bootstrap_user'])
     'phone' => (string) ($sessionBootstrap['phone'] ?? ''),
     'role' => (string) ($sessionBootstrap['role'] ?? 'cliente'),
     'permissions' => is_array($sessionBootstrap['permissions'] ?? null) ? array_values(array_filter($sessionBootstrap['permissions'], 'is_string')) : [],
+    'terms' => is_array($sessionBootstrap['terms'] ?? null) ? $sessionBootstrap['terms'] : [
+      'accepted' => false,
+      'acceptedAt' => null,
+      'version' => null,
+      'currentVersion' => $termsVersion,
+    ],
   ];
 }
 try {
@@ -30,7 +43,7 @@ try {
     $config['password'],
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
   );
-  $query = $pdo->prepare('SELECT id,nome,email,telefone,perfil,permissoes FROM usuarios WHERE id=? LIMIT 1');
+  $query = $pdo->prepare('SELECT id,nome,email,telefone,perfil,permissoes,terms_accepted_at,terms_version FROM usuarios WHERE id=? LIMIT 1');
   $query->execute([(int) $_SESSION['user_id']]);
   $row = $query->fetch(PDO::FETCH_ASSOC);
   if ($row) {
@@ -42,6 +55,12 @@ try {
       'phone' => (string) ($row['telefone'] ?? ''),
       'role' => (string) ($row['perfil'] ?? 'cliente'),
       'permissions' => is_array($permissions) ? array_values(array_filter($permissions, 'is_string')) : [],
+      'terms' => [
+        'accepted' => trim((string) ($row['terms_accepted_at'] ?? '')) !== '' && trim((string) ($row['terms_version'] ?? '')) === $termsVersion,
+        'acceptedAt' => trim((string) ($row['terms_accepted_at'] ?? '')) ?: null,
+        'version' => trim((string) ($row['terms_version'] ?? '')) ?: null,
+        'currentVersion' => $termsVersion,
+      ],
     ];
     $_SESSION['bootstrap_user'] = $bootstrapUser;
   }
@@ -184,7 +203,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="director-email.js?v=20260716-official-email-files-1"></script>
   <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
   <script src="terms-consent.js?v=20260716-terms-before-onboarding-1"></script>
-  <script src="auth-profile.js?v=20260716-fast-admin-menu-1"></script>
+  <script src="auth-profile.js?v=20260716-terms-persist-1"></script>
   <script src="google-drive-integration.js?v=20260716-client-permissions-1"></script>
   <script src="tutorial-videos.js?v=20260706-video-before-onboarding-2"></script>
   <script src="onboarding.js?v=20260716-terms-before-onboarding-1"></script>

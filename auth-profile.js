@@ -514,15 +514,15 @@
   }
 
   async function init() {
-    let lastReadyRole = '';
+    let lastReadyKey = '';
     const publishUser = () => {
       if (!user) return;
       window.PortalCurrentUser = user;
       document.body.dataset.role = user.role || 'cliente';
       updateChrome();
-      const currentRole = user.role || 'cliente';
-      if (lastReadyRole !== currentRole) {
-        lastReadyRole = currentRole;
+      const currentKey = `${user.role || 'cliente'}:${user.terms?.accepted ? 'terms-ok' : 'terms-pending'}:${user.terms?.version || ''}`;
+      if (lastReadyKey !== currentKey) {
+        lastReadyKey = currentKey;
         window.dispatchEvent(new CustomEvent('portal:user-ready', {detail: user}));
       }
     };

@@ -2,6 +2,7 @@
   "name": "Ai Prof.",
   "short_name": "Ai Prof.",
   "description": "Sistema para criar pareceres e portfólios pedagógicos.",
+  "version": "20260716-reset-terms-2",
   "id": "./",
   "start_url": "login.php?source=pwa",
   "scope": "./",

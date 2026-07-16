@@ -106,7 +106,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Ai Prof.">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="manifest.json?v=20260716-reset-terms-2">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
   <link rel="stylesheet" href="style.css?v=20260709-camera-touch-only-1">
   <link rel="stylesheet" href="mobile-menu.css?v=20260709-sidebar-scroll-1">
@@ -215,6 +215,6 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>
   <script src="image-editor-flow.js?v=20260709-activity-photos-30-1"></script>
   <script src="document-image-zoom.js?v=20260702-document-image-zoom-front-1"></script>
-  <script src="pwa.js?v=20260705-pwa-1"></script>
+  <script src="pwa.js?v=20260716-reset-terms-2"></script>
 </body>
 </html>

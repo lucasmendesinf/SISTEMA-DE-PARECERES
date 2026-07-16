@@ -1,7 +1,9 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260716-reset-terms-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260716-reset-terms-2';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
+  './manifest.json?v=20260716-reset-terms-2',
+  './pwa.js?v=20260716-reset-terms-2',
   './login.css?v=20260702-billing-modal-1',
   './style.css?v=20260709-camera-touch-only-1',
   './mobile-menu.css?v=20260709-sidebar-scroll-1',

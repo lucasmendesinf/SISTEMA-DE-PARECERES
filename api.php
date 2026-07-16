@@ -2232,6 +2232,19 @@ try {
         $html .= '<p>Os arquivos do documento seguem em anexo.</p>';
         $boundary = '__AIPROF_' . bin2hex(random_bytes(8));
         $emailAttachments = [];
+        if (!$isMultipartEmail && is_array($input['attachments'] ?? null)) {
+            foreach ($input['attachments'] as $attachment) {
+                if (!is_array($attachment)) continue;
+                $name = $cleanFileName((string) ($attachment['name'] ?? 'documento'));
+                $mime = (string) ($attachment['mime'] ?? '');
+                if (!in_array($mime, ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'], true)) {
+                    $mime = str_ends_with(strtolower($name), '.pdf') ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                }
+                $content = base64_decode((string) ($attachment['content'] ?? ''), true);
+                if (!is_string($content) || $content === '') continue;
+                $emailAttachments[] = ['name' => $name, 'mime' => $mime, 'content' => $content];
+            }
+        }
         if (!empty($_FILES['attachments']) && is_array($_FILES['attachments']['tmp_name'] ?? null)) {
             foreach ($_FILES['attachments']['tmp_name'] as $index => $tmpName) {
                 if (!is_string($tmpName) || $tmpName === '' || !is_uploaded_file($tmpName)) continue;

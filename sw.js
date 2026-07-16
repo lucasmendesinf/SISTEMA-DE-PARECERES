@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260716-email-attachments-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260716-email-attachments-json-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -28,7 +28,7 @@ const STATIC_ASSETS = [
   './app.js?v=20260715-keep-current-menu-1',
   './report-editor.js?v=20260715-deliver-keeps-done-1',
   './document-style-settings.js?v=20260716-force-docx-font-1',
-  './director-email.js?v=20260716-email-attachments-1',
+  './director-email.js?v=20260716-email-attachments-json-1',
   './terms-consent.js?v=20260716-terms-link-1',
   './auth-profile.js?v=20260716-fast-admin-menu-1',
   './google-drive-integration.js?v=20260716-drive-pairs-1',

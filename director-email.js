@@ -98,6 +98,15 @@
     return response.blob();
   }
 
+  async function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+      reader.onerror = () => reject(new Error('Nao foi possivel preparar o anexo para envio.'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
   async function buildEmailAttachments(report) {
     await window.ensureReportDetail?.(report.id);
     const fullReport = data.reports.find(item => String(item.id) === String(report.id) || String(item.databaseId) === String(report.databaseId)) || report;
@@ -183,15 +192,26 @@
       status.textContent = 'Gerando anexos PDF e Word...';
       const attachments = await buildEmailAttachments(report);
       status.textContent = 'Enviando e-mail com anexos...';
-      const form = new FormData();
-      form.append('reportId', reportId);
-      form.append('recipientEmail', recipientEmail);
-      form.append('message', message);
-      form.append('attachments[]', attachments.docx, attachments.docxName);
-      form.append('attachments[]', attachments.pdf, attachments.pdfName);
       const response = await fetch('api.php?resource=send-report-email', {
         method: 'POST',
-        body: form
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          reportId,
+          recipientEmail,
+          message,
+          attachments: [
+            {
+              name: attachments.docxName,
+              mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              content: await blobToBase64(attachments.docx)
+            },
+            {
+              name: attachments.pdfName,
+              mime: 'application/pdf',
+              content: await blobToBase64(attachments.pdf)
+            }
+          ]
+        })
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Nao foi possivel enviar o e-mail.');

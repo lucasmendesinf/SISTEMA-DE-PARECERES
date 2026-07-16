@@ -76,6 +76,72 @@
     return `Segue parecer referente ao ${reportPeriod()} da crianca ${student?.name || ''}.`;
   }
 
+  const currentHeader = () => JSON.parse(localStorage.getItem(headerKey) || '{}');
+  const normalizeType = value => typeof normalizeDocumentType === 'function' ? normalizeDocumentType(value) : (value === 'portfolio' ? 'portfolio' : 'parecer');
+  const documentLabel = value => normalizeType(value) === 'portfolio' ? 'Portfolio' : 'Parecer';
+
+  function styledFields(fields) {
+    const header = currentHeader();
+    return {
+      ...fields,
+      documentFont: header.documentFont || 'Arial',
+      documentFontSize: header.documentFontSize || 12,
+      detailColor: header.detailColor || '#253c31'
+    };
+  }
+
+  async function documentBlob(endpoint, fields) {
+    const body = new URLSearchParams();
+    Object.entries(fields).forEach(([key, value]) => body.set(key, value ?? ''));
+    const response = await fetch(endpoint, {method: 'POST', body});
+    if (!response.ok) throw new Error(await response.text() || 'Falha ao gerar arquivo para anexo.');
+    return response.blob();
+  }
+
+  async function buildEmailAttachments(report) {
+    await window.ensureReportDetail?.(report.id);
+    const fullReport = data.reports.find(item => String(item.id) === String(report.id) || String(item.databaseId) === String(report.databaseId)) || report;
+    const student = data.students.find(item => String(item.id) === String(fullReport.studentId));
+    if (!student) throw new Error('Aluno nao localizado para gerar anexos.');
+    const period = data.periods.find(item => item.active) || data.periods[0];
+    const className = student.className || data.classes.find(item => String(item.id) === String(student.classId))?.name || 'Turma nao informada';
+    const header = currentHeader();
+    const type = normalizeType(fullReport.documentType);
+    const label = documentLabel(fullReport.documentType);
+    const safeName = `${label} - ${student.name}`.replace(/[\\/:*?"<>|]+/g, '-');
+    const baseFields = styledFields({
+      name: student.name,
+      birthDate: student.birthDate || '',
+      className,
+      period: period?.name || 'Periodo avaliativo',
+      text: fullReport.text || '',
+      documentType: type,
+      studentPhoto: student.photo || '',
+      entries: JSON.stringify(fullReport.entries || []),
+      finalText: fullReport.useFinalText ? (fullReport.finalText || header.finalText || '') : '',
+      headerNetwork: header.network || '',
+      headerSchool: header.school || '',
+      headerContact: header.contact || '',
+      headerLogo: header.logo || ''
+    });
+    const pdfEntries = await Promise.all((fullReport.entries || []).map(async entry => ({
+      ...entry,
+      photos: (await Promise.all((entry.photos || []).map(src => typeof pdfJpeg === 'function' ? pdfJpeg(src) : src))).filter(Boolean)
+    })));
+    const pdfFields = {
+      ...baseFields,
+      studentPhoto: typeof pdfJpeg === 'function' ? await pdfJpeg(student.photo || '') : student.photo || '',
+      headerLogo: typeof pdfJpeg === 'function' ? await pdfJpeg(header.logo || '') : header.logo || '',
+      entries: JSON.stringify(pdfEntries)
+    };
+    return {
+      docx: await documentBlob('download_parecer.php', baseFields),
+      pdf: await documentBlob('download_pdf.php', pdfFields),
+      docxName: `${safeName}.docx`,
+      pdfName: `${safeName}.pdf`
+    };
+  }
+
   window.openDirectorEmailModal = async function openDirectorEmailModal(id) {
     const report = await (window.ensureReportDetail ? window.ensureReportDetail(id) : Promise.resolve(data.reports.find(item => String(item.id) === String(id))));
     if (!report) return alert('Documento nao encontrado.');
@@ -112,10 +178,20 @@
     }
     if (status) status.textContent = 'Enviando...';
     try {
+      const report = data.reports.find(item => String(item.databaseId || item.id) === String(reportId) || String(item.id) === String(reportId));
+      if (!report) throw new Error('Documento nao encontrado para gerar anexos.');
+      status.textContent = 'Gerando anexos PDF e Word...';
+      const attachments = await buildEmailAttachments(report);
+      status.textContent = 'Enviando e-mail com anexos...';
+      const form = new FormData();
+      form.append('reportId', reportId);
+      form.append('recipientEmail', recipientEmail);
+      form.append('message', message);
+      form.append('attachments[]', attachments.docx, attachments.docxName);
+      form.append('attachments[]', attachments.pdf, attachments.pdfName);
       const response = await fetch('api.php?resource=send-report-email', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({reportId, recipientEmail, message})
+        body: form
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Nao foi possivel enviar o e-mail.');

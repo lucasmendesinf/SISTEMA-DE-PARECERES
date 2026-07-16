@@ -2199,7 +2199,8 @@ try {
         exit;
     }
     if ($resource === 'send-report-email' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+        $isMultipartEmail = str_starts_with((string) ($_SERVER['CONTENT_TYPE'] ?? ''), 'multipart/form-data');
+        $input = $isMultipartEmail ? $_POST : json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         $reportId = (int) ($input['reportId'] ?? 0);
         if ($reportId <= 0) throw new RuntimeException('Documento invalido para envio.');
         $recipientEmail = trim((string) ($input['recipientEmail'] ?? ''));
@@ -2211,14 +2212,12 @@ try {
         $report = $reportQuery->fetch(PDO::FETCH_ASSOC);
         if (!$report) throw new RuntimeException('Documento nao encontrado.');
         if (($report['status'] ?? '') !== 'concluido') throw new RuntimeException('Somente pareceres concluidos podem ser enviados por e-mail.');
-        $blockQuery = $pdo->prepare('SELECT ordem,texto FROM parecer_blocos WHERE parecer_id=? ORDER BY ordem,id');
-        $blockQuery->execute([$reportId]);
-        $blocks = $blockQuery->fetchAll(PDO::FETCH_ASSOC);
-        $attachmentQuery = $pdo->prepare('SELECT ordem,arquivo,mime_type FROM parecer_anexos WHERE parecer_id=? ORDER BY ordem,id');
-        $attachmentQuery->execute([$reportId]);
-        $attachments = $attachmentQuery->fetchAll(PDO::FETCH_ASSOC);
         $escape = static function (string $value): string {
             return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        };
+        $cleanFileName = static function (string $name): string {
+            $name = trim(preg_replace('/[\\\\\/:*?"<>|]+/', '-', $name) ?: '');
+            return $name !== '' ? $name : 'documento';
         };
         $documentLabel = ($report['tipo_documento'] ?? '') === 'portfolio' ? 'Portfolio' : 'Parecer pedagogico';
         $studentName = (string) ($report['nome'] ?? '');
@@ -2230,40 +2229,45 @@ try {
         $html = '<h2>' . $escape($documentLabel . ' - ' . $studentName) . '</h2>';
         $html .= '<p>' . nl2br($escape($customMessage)) . '</p>';
         $html .= '<p><strong>Aluno:</strong> ' . $escape($studentName) . '<br><strong>Turma:</strong> ' . $escape((string) ($report['turma_nome'] ?? 'Turma nao informada')) . '</p>';
-        foreach (preg_split('/\n{2,}/', trim((string) ($report['texto'] ?? ''))) as $paragraph) {
-            if (trim($paragraph) !== '') $html .= '<p>' . nl2br($escape(trim($paragraph))) . '</p>';
-        }
-        foreach ($blocks as $block) {
-            $note = trim((string) ($block['texto'] ?? ''));
-            if ($note !== '') $html .= '<p><strong>Vivencias registradas:</strong><br>' . nl2br($escape($note)) . '</p>';
-        }
+        $html .= '<p>Os arquivos do documento seguem em anexo.</p>';
         $boundary = '__AIPROF_' . bin2hex(random_bytes(8));
-        $inlineParts = '';
-        $imageIndex = 1;
-        foreach ($attachments as $attachment) {
-            $mime = preg_match('#^image/[\w.+-]+$#', (string) ($attachment['mime_type'] ?? '')) ? (string) $attachment['mime_type'] : 'application/octet-stream';
-            if (!str_starts_with($mime, 'image/')) continue;
-            $cid = 'parecer-img-' . $imageIndex . '@aiprof';
-            $html .= '<p><img src="cid:' . $cid . '" alt="Imagem do parecer" style="max-width:520px;width:100%;height:auto"></p>';
-            $inlineParts .= "--{$boundary}\r\n";
-            $inlineParts .= "Content-Type: {$mime}; name=\"imagem-{$imageIndex}\"\r\n";
-            $inlineParts .= "Content-Transfer-Encoding: base64\r\n";
-            $inlineParts .= "Content-ID: <{$cid}>\r\n";
-            $inlineParts .= "Content-Disposition: inline; filename=\"imagem-{$imageIndex}\"\r\n\r\n";
-            $inlineParts .= chunk_split(base64_encode((string) $attachment['arquivo'])) . "\r\n";
-            $imageIndex++;
+        $emailAttachments = [];
+        if (!empty($_FILES['attachments']) && is_array($_FILES['attachments']['tmp_name'] ?? null)) {
+            foreach ($_FILES['attachments']['tmp_name'] as $index => $tmpName) {
+                if (!is_string($tmpName) || $tmpName === '' || !is_uploaded_file($tmpName)) continue;
+                $error = (int) ($_FILES['attachments']['error'][$index] ?? UPLOAD_ERR_OK);
+                if ($error !== UPLOAD_ERR_OK) continue;
+                $content = file_get_contents($tmpName);
+                if (!is_string($content) || $content === '') continue;
+                $name = $cleanFileName((string) ($_FILES['attachments']['name'][$index] ?? 'documento'));
+                $mime = (string) ($_FILES['attachments']['type'][$index] ?? '');
+                if (!in_array($mime, ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'], true)) {
+                    $mime = str_ends_with(strtolower($name), '.pdf') ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                }
+                $emailAttachments[] = ['name' => $name, 'mime' => $mime, 'content' => $content];
+            }
+        }
+        if (!$emailAttachments) {
+            throw new RuntimeException('Nenhum arquivo foi gerado para anexar ao e-mail.');
         }
         $subject = $documentLabel . ' - ' . $studentName;
         $headers = "MIME-Version: 1.0\r\n";
         $headers .= "From: Ai Prof <no-reply@aiprof.local>\r\n";
         $replyTo = filter_var((string) ($report['professora_email'] ?? ''), FILTER_VALIDATE_EMAIL) ? (string) $report['professora_email'] : 'no-reply@aiprof.local';
         $headers .= "Reply-To: {$replyTo}\r\n";
-        $headers .= "Content-Type: multipart/related; boundary=\"{$boundary}\"; type=\"text/html\"; charset=UTF-8\r\n";
+        $headers .= "Content-Type: multipart/mixed; boundary=\"{$boundary}\"\r\n";
         $body = "--{$boundary}\r\n";
         $body .= "Content-Type: text/html; charset=UTF-8\r\n";
         $body .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
         $body .= '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#253c31">' . $html . '<p>Enviado por Ai Prof.</p></body></html>' . "\r\n";
-        $body .= $inlineParts;
+        foreach ($emailAttachments as $attachment) {
+            $fileName = addcslashes($attachment['name'], "\"\\");
+            $body .= "--{$boundary}\r\n";
+            $body .= "Content-Type: {$attachment['mime']}; name=\"{$fileName}\"\r\n";
+            $body .= "Content-Transfer-Encoding: base64\r\n";
+            $body .= "Content-Disposition: attachment; filename=\"{$fileName}\"\r\n\r\n";
+            $body .= chunk_split(base64_encode($attachment['content'])) . "\r\n";
+        }
         $body .= "--{$boundary}--\r\n";
         if (!function_exists('mail') || !mail($recipientEmail, $subject, $body, $headers)) {
             throw new RuntimeException('Nao foi possivel enviar o e-mail. Verifique a configuracao de envio de e-mail do servidor.');

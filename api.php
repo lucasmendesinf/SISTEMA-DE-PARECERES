@@ -23,6 +23,7 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
 
+    $schemaVersion = '2026-07-17-users-performance-1';
     $addColumnIfMissing = function (PDO $pdo, string $table, string $column, string $definition): void {
         $quotedTable = '`' . str_replace('`', '``', $table) . '`';
         $stmt = $pdo->prepare("SHOW COLUMNS FROM {$quotedTable} LIKE ?");
@@ -31,7 +32,20 @@ try {
             $pdo->exec("ALTER TABLE {$quotedTable} ADD COLUMN {$definition}");
         }
     };
+    $addIndexIfMissing = function (PDO $pdo, string $table, string $index, string $definition): void {
+        $quotedTable = '`' . str_replace('`', '``', $table) . '`';
+        $stmt = $pdo->prepare("SHOW INDEX FROM {$quotedTable} WHERE Key_name=?");
+        $stmt->execute([$index]);
+        if (!$stmt->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec("ALTER TABLE {$quotedTable} ADD INDEX {$index} {$definition}");
+        }
+    };
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS app_settings (setting_key VARCHAR(80) PRIMARY KEY, setting_value MEDIUMTEXT NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $schemaStmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key='schema_version' LIMIT 1");
+    $schemaStmt->execute();
+    $currentSchemaVersion = (string) ($schemaStmt->fetchColumn() ?: '');
+    if ($currentSchemaVersion !== $schemaVersion) {
     $addColumnIfMissing($pdo, 'usuarios', 'perfil', "perfil ENUM('master','cliente') NOT NULL DEFAULT 'cliente' AFTER telefone");
     $addColumnIfMissing($pdo, 'usuarios', 'permissoes', 'permissoes JSON NULL AFTER perfil');
     $addColumnIfMissing($pdo, 'usuarios', 'ativo', 'ativo TINYINT(1) NOT NULL DEFAULT 1 AFTER permissoes');
@@ -51,6 +65,8 @@ try {
     $addColumnIfMissing($pdo, 'usuarios', 'terms_accepted_at', 'terms_accepted_at DATETIME NULL AFTER mercado_pago_last_payment_id');
     $addColumnIfMissing($pdo, 'usuarios', 'terms_version', 'terms_version VARCHAR(40) NULL AFTER terms_accepted_at');
     $addColumnIfMissing($pdo, 'usuarios', 'terms_ip', 'terms_ip VARCHAR(45) NULL AFTER terms_version');
+    $addIndexIfMissing($pdo, 'usuarios', 'idx_usuarios_perfil_nome', '(perfil, nome)');
+    $addIndexIfMissing($pdo, 'usuarios', 'idx_usuarios_billing_due', '(perfil, billing_next_due_date, nome)');
     $addColumnIfMissing($pdo, 'turmas', 'usuario_id', 'usuario_id BIGINT UNSIGNED NULL AFTER id');
     $addColumnIfMissing($pdo, 'periodos_avaliativos', 'usuario_id', 'usuario_id BIGINT UNSIGNED NULL AFTER id');
     $addColumnIfMissing($pdo, 'criancas', 'usuario_id', 'usuario_id BIGINT UNSIGNED NULL AFTER id');
@@ -243,6 +259,9 @@ try {
     $pdo->exec("UPDATE criancas c JOIN turmas t ON t.id=c.turma_id SET c.usuario_id=t.usuario_id WHERE c.usuario_id IS NULL");
     $pdo->exec("UPDATE criancas SET usuario_id=(SELECT id FROM (SELECT id FROM usuarios ORDER BY id LIMIT 1) primeiro_usuario) WHERE usuario_id IS NULL");
     $pdo->exec("UPDATE atividades a LEFT JOIN turmas t ON t.id=a.turma_id SET a.usuario_id=COALESCE(t.usuario_id,(SELECT id FROM (SELECT id FROM usuarios ORDER BY id LIMIT 1) primeiro_usuario)) WHERE a.usuario_id IS NULL");
+    $saveSchemaVersion = $pdo->prepare("INSERT INTO app_settings (setting_key,setting_value) VALUES ('schema_version',?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
+    $saveSchemaVersion->execute([$schemaVersion]);
+    }
 
     $permissionMap = [
         'children' => 'alunos',

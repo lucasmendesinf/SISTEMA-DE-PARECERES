@@ -21,6 +21,10 @@
     return (currentUser?.role || document.body.dataset.role) === 'master';
   }
 
+  function canManageTutorials() {
+    return isMaster() || (Array.isArray(currentUser?.permissions) && currentUser.permissions.includes('tutoriais_cadastro'));
+  }
+
   function embedUrl(video) {
     return `https://www.youtube.com/embed/${encodeURIComponent(video.youtubeId)}?rel=0`;
   }
@@ -35,7 +39,7 @@
   function renderAdminPanel() {
     const target = $('#tutorialAdminPanel');
     if (!target) return;
-    if (!isMaster()) {
+    if (!canManageTutorials()) {
       target.innerHTML = '';
       return;
     }

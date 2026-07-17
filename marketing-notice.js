@@ -89,6 +89,11 @@
       <p style="color:${escapeHtml(notice.textColor || '#236b52')}">${escapeHtml(notice.body)}</p>`;
   }
 
+  function canManageMarketing() {
+    const user = window.PortalCurrentUser || window.PortalBootstrapUser || {};
+    return user.role === 'master' || (Array.isArray(user.permissions) && user.permissions.includes('informativo'));
+  }
+
   function ensureMarketingAdminView() {
     if (document.querySelector('#informativoMarketing')) return;
     const section = document.createElement('section');
@@ -296,7 +301,7 @@
       const data = await request();
       applyNoticeData(data);
       if (window.PortalCurrentUser && window.PortalCurrentUser.role !== 'master') renderMarketingCard();
-      if (window.PortalCurrentUser?.role === 'master') {
+      if (canManageMarketing()) {
         ensureMarketingAdminView();
         ensureMarketingNav();
         resetForm();

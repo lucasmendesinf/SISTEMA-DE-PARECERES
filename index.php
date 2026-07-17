@@ -87,9 +87,14 @@ $canSee = static function (string $view) use ($bootstrapUser): bool {
     'pareceres' => 'pareceres',
     'tutoriais' => 'tutoriais',
     'configuracoes' => 'configuracoes',
+    'informativoMarketing' => 'informativo',
+    'usuarios' => 'usuarios',
+    'financeiro' => 'financeiro',
+    'consumoIa' => 'consumo_ia',
     'drive-arquivos' => 'drive',
   ];
   if ($view === 'pareceres' && in_array('portfolio', $permissions, true)) return true;
+  if ($view === 'tutoriais' && in_array('tutoriais_cadastro', $permissions, true)) return true;
   return isset($map[$view]) && in_array($map[$view], $permissions, true);
 };
 $isMaster = ($bootstrapUser['role'] ?? 'cliente') === 'master';
@@ -145,10 +150,10 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
       <?php if ($canSee('pareceres')): ?><button class="nav-item" data-view="pareceres"><span>▤</span> Pareceres</button><?php endif; ?>
       <?php if ($canSee('tutoriais')): ?><button class="nav-item" data-view="tutoriais"><span>▶</span> Tutoriais</button><?php endif; ?>
       <?php if ($canSee('configuracoes')): ?><button class="nav-item" data-view="configuracoes"><span>⚙</span> Configurações</button><?php endif; ?>
-      <?php if ($isMaster): ?><button class="nav-item" data-view="informativoMarketing"><span aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a2 2 0 0 0 2 2h2l4 5v-5h2l7 3V6l-7 3H5a2 2 0 0 0-2 2Z"/><path d="M17 9.5v5"/><path d="M7 15v4"/></svg></span> Informativo</button><?php endif; ?>
-      <?php if ($isMaster): ?><button class="nav-item" data-view="usuarios"><span>@</span> Usuarios</button><?php endif; ?>
-      <?php if ($isMaster): ?><button class="nav-item" data-view="financeiro"><span>$</span> Financeiro</button><?php endif; ?>
-      <?php if ($isMaster): ?><button class="nav-item" data-view="consumoIa"><span>◫</span> Consumo IA</button><?php endif; ?>
+      <?php if ($canSee('informativoMarketing')): ?><button class="nav-item" data-view="informativoMarketing"><span aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a2 2 0 0 0 2 2h2l4 5v-5h2l7 3V6l-7 3H5a2 2 0 0 0-2 2Z"/><path d="M17 9.5v5"/><path d="M7 15v4"/></svg></span> Informativo</button><?php endif; ?>
+      <?php if ($canSee('usuarios')): ?><button class="nav-item" data-view="usuarios"><span>@</span> Usuarios</button><?php endif; ?>
+      <?php if ($canSee('financeiro')): ?><button class="nav-item" data-view="financeiro"><span>$</span> Financeiro</button><?php endif; ?>
+      <?php if ($canSee('consumoIa')): ?><button class="nav-item" data-view="consumoIa"><span>◫</span> Consumo IA</button><?php endif; ?>
     </nav>
     <div class="sidebar-bottom"><a class="help" href="https://wa.me/5541996310725" target="_blank" rel="noopener noreferrer">◌ Suporte</a><div class="profile" aria-haspopup="true" aria-expanded="false"><div class="avatar"><?= $escape($initials($bootstrapUser['name'])) ?></div><div><strong><?= $escape($bootstrapUser['name']) ?></strong><small><?= $escape($profileRole) ?></small></div></div><div class="profile-menu" hidden><button type="button" id="sidebarProfileButton">Meus dados</button><button type="button" id="sidebarLogoutButton" class="danger">Sair do sistema</button></div></div>
   </aside>
@@ -203,15 +208,15 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="text-ai-review.js?v=20260716-email-no-ai-1"></script>
   <script src="document-button-fix.js?v=20260717-require-student-1"></script>
   <script src="director-email.js?v=20260716-official-email-files-1"></script>
-  <script src="marketing-notice.js?v=20260702-informativo-label-1"></script>
+  <script src="marketing-notice.js?v=20260717-menu-permissions-1"></script>
   <script src="terms-consent.js?v=20260716-terms-before-onboarding-1"></script>
   <script src="auth-profile.js?v=20260716-terms-persist-1"></script>
-  <script src="google-drive-integration.js?v=20260716-client-permissions-1"></script>
-  <script src="tutorial-videos.js?v=20260706-video-before-onboarding-2"></script>
-  <script src="onboarding.js?v=20260716-onboarding-student-close-1"></script>
-  <script src="master-users.js?v=20260716-reset-terms-1"></script>
-  <script src="finance-admin.js?v=20260716-fast-admin-menu-1"></script>
-  <script src="ai-usage-admin.js?v=20260716-ai-usage-1"></script>
+  <script src="google-drive-integration.js?v=20260717-menu-permissions-1"></script>
+  <script src="tutorial-videos.js?v=20260717-menu-permissions-1"></script>
+  <script src="onboarding.js?v=20260717-fast-onboarding-1"></script>
+  <script src="master-users.js?v=20260717-menu-permissions-1"></script>
+  <script src="finance-admin.js?v=20260717-menu-permissions-1"></script>
+  <script src="ai-usage-admin.js?v=20260717-menu-permissions-1"></script>
   <script src="image-editor-permissions.js?v=20260702-combined-image-editor-1"></script>
   <script src="manual-image-editor.js?v=20260709-activity-photos-30-1"></script>
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>

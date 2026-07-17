@@ -259,7 +259,7 @@
 
   function init() {
     const user = window.PortalBootstrapUser || {};
-    if (user.role !== 'master' && document.body.dataset.role !== 'master') return;
+    if (user.role !== 'master' && document.body.dataset.role !== 'master' && !user.permissions?.includes('consumo_ia')) return;
     ensureView();
     ensureNav();
     document.querySelectorAll('.nav-item[data-view="consumoIa"]').forEach(bindNavButton);

@@ -10,8 +10,13 @@
     atividades: 'Atividades',
     pareceres: 'Pareceres',
     portfolio: 'Portfolio',
-    tutoriais: 'Tutoriais',
+    tutoriais: 'Tutoriais - visualizar',
+    tutoriais_cadastro: 'Tutoriais - cadastro',
     configuracoes: 'Configuracoes',
+    informativo: 'Informativo',
+    usuarios: 'Usuarios',
+    financeiro: 'Financeiro',
+    consumo_ia: 'Consumo IA',
     drive: 'Arquivos no Drive'
   };
   const editorLabels = {
@@ -31,6 +36,10 @@
     pareceres: 'pareceres',
     tutoriais: 'tutoriais',
     configuracoes: 'configuracoes',
+    informativoMarketing: 'informativo',
+    usuarios: 'usuarios',
+    financeiro: 'financeiro',
+    consumoIa: 'consumo_ia',
     'drive-arquivos': 'drive'
   };
   let currentUser = null;
@@ -73,6 +82,9 @@
     if (!permission) return true;
     if (view === 'pareceres') {
       return currentUser.permissions.includes('pareceres') || currentUser.permissions.includes('portfolio');
+    }
+    if (view === 'tutoriais') {
+      return currentUser.permissions.includes('tutoriais') || currentUser.permissions.includes('tutoriais_cadastro');
     }
     return currentUser.permissions.includes(permission);
   }
@@ -401,7 +413,7 @@
     currentUser = window.PortalCurrentUser || window.PortalBootstrapUser || null;
     if (currentUser) {
       applyClientPermissions();
-      if (currentUser.role === 'master') {
+      if (currentUser.role === 'master' || currentUser.permissions?.includes('usuarios')) {
         ensureUsersView();
         ensureUsersNav();
       }
@@ -409,7 +421,7 @@
     window.PortalCurrentUserPromise = window.PortalCurrentUserPromise || request(authApi);
     try { currentUser = await window.PortalCurrentUserPromise; } catch (_) { return; }
     applyClientPermissions();
-    if (currentUser.role !== 'master') return;
+    if (currentUser.role !== 'master' && !currentUser.permissions?.includes('usuarios')) return;
     ensureUsersView();
     ensureUsersNav();
     await loadBillingCycles();

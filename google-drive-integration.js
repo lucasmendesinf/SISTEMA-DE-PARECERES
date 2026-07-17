@@ -459,9 +459,10 @@
   }
 
   async function init() {
-    if (!canUseDriveMenu()) return;
-    ensureDriveNav();
-    ensureDriveView();
+    if (canUseDriveMenu()) {
+      ensureDriveNav();
+      ensureDriveView();
+    }
     renderDriveConfig();
     wrapDeliverReport();
     await loadDriveState().catch(() => null);

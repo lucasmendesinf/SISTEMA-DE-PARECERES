@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260717-require-student-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260717-menu-permissions-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -26,7 +26,7 @@ const STATIC_ASSETS = [
   './onboarding.css?v=20260716-onboarding-student-close-1',
   './save-feedback.css?v=20260717-save-feedback-front-1',
   './save-feedback.js?v=20260717-save-feedback-front-1',
-  './onboarding.js?v=20260716-onboarding-student-close-1',
+  './onboarding.js?v=20260717-fast-onboarding-1',
   './activities-edit.js?v=20260709-mobile-camera-only-1',
   './experience-fields.js?v=20260709-mobile-camera-only-1',
   './modal-controls.js?v=20260715-onboarding-draft-1',
@@ -38,12 +38,14 @@ const STATIC_ASSETS = [
   './director-email.js?v=20260716-official-email-files-1',
   './terms-consent.js?v=20260716-terms-before-onboarding-1',
   './auth-profile.js?v=20260716-terms-persist-1',
-  './google-drive-integration.js?v=20260716-client-permissions-1',
-  './tutorial-videos.js?v=20260706-video-before-onboarding-2',
+  './marketing-notice.js?v=20260717-menu-permissions-1',
+  './google-drive-integration.js?v=20260717-menu-permissions-1',
+  './tutorial-videos.js?v=20260717-menu-permissions-1',
   './manual-image-editor.js?v=20260709-activity-photos-30-1',
   './image-editor-flow.js?v=20260709-activity-photos-30-1',
-  './master-users.js?v=20260716-reset-terms-1',
-  './ai-usage-admin.js?v=20260716-ai-usage-1',
+  './master-users.js?v=20260717-menu-permissions-1',
+  './finance-admin.js?v=20260717-menu-permissions-1',
+  './ai-usage-admin.js?v=20260717-menu-permissions-1',
   './assets/ai-prof-logo-transparent.png',
   './assets/pwa/icon-192.png',
   './assets/pwa/icon-512.png',

@@ -349,13 +349,14 @@
 
   async function init() {
     let user = window.PortalCurrentUser || window.PortalBootstrapUser || null;
-    if (user?.role === 'master') {
+    const canUseFinance = user?.role === 'master' || user?.permissions?.includes('financeiro');
+    if (canUseFinance) {
       ensureFinanceView();
       ensureFinanceNav();
     }
     window.PortalCurrentUserPromise = window.PortalCurrentUserPromise || request(authApi);
     try { user = await window.PortalCurrentUserPromise; } catch (_) { return; }
-    if (user.role !== 'master') return;
+    if (user.role !== 'master' && !user.permissions?.includes('financeiro')) return;
     ensureFinanceView();
     ensureFinanceNav();
     await loadFinance();

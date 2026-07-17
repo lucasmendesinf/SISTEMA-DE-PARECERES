@@ -241,6 +241,15 @@
     button.textContent = loading ? 'Salvando...' : (button.dataset.label || 'Proximo');
   }
 
+  function syncAppDataAfterFinish() {
+    setTimeout(() => {
+      try { if (typeof loadHeaderSettings === 'function') loadHeaderSettings(); } catch (error) { console.warn(error); }
+      try { if (typeof loadPeriods === 'function') loadPeriods(); } catch (error) { console.warn(error); }
+      try { if (typeof loadClasses === 'function') loadClasses(); } catch (error) { console.warn(error); }
+      try { if (typeof loadChildren === 'function') loadChildren(); } catch (error) { console.warn(error); }
+    }, 0);
+  }
+
   async function showFirstAccessTutorialBeforeOnboarding(user) {
     const openTutorial = () => {
       if (!window.TutorialVideos?.showFirstAccessBeforeOnboarding) return Promise.resolve(false);
@@ -273,7 +282,6 @@
     persistDraft();
     await request('header-settings', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(state.header)});
     localStorage.setItem('parecer-cabecalho-professora-v1', JSON.stringify(state.header));
-    if (typeof loadHeaderSettings === 'function') loadHeaderSettings();
   }
 
   async function savePeriod() {
@@ -281,8 +289,9 @@
     if (!name) { $('#onboardPeriodName').focus(); throw new Error('Informe o nome do periodo.'); }
     state.draft.period = {name, start: $('#onboardPeriodStart').value, end: $('#onboardPeriodEnd').value};
     persistDraft();
-    await request('periods', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, start: $('#onboardPeriodStart').value, end: $('#onboardPeriodEnd').value})});
-    if (typeof loadPeriods === 'function') await loadPeriods();
+    const result = await request('periods', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, start: $('#onboardPeriodStart').value, end: $('#onboardPeriodEnd').value})});
+    const period = {id: result.id || Date.now(), name, start: $('#onboardPeriodStart').value || 'Data nao informada', end: $('#onboardPeriodEnd').value || 'Data nao informada', active: true};
+    state.periods = [period, ...state.periods.map(item => ({...item, active: false})).filter(item => String(item.id) !== String(period.id))];
   }
 
   async function saveClass() {
@@ -290,8 +299,9 @@
     if (!name) { $('#onboardClassName').focus(); throw new Error('Informe o nome da turma.'); }
     state.draft.class = {name, stage: $('#onboardClassStage').value, shift: $('#onboardClassShift').value};
     persistDraft();
-    await request('classes', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, stage: $('#onboardClassStage').value, shift: $('#onboardClassShift').value})});
-    if (typeof loadClasses === 'function') await loadClasses();
+    const result = await request('classes', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, stage: $('#onboardClassStage').value, shift: $('#onboardClassShift').value})});
+    const item = {id: result.id || Date.now(), name, stage: $('#onboardClassStage').value, shift: $('#onboardClassShift').value};
+    state.classes = [item, ...state.classes.filter(existing => String(existing.id) !== String(item.id))];
   }
 
   async function addStudentDraft() {
@@ -313,12 +323,13 @@
       if (!state.studentDrafts.length) return false;
     }
     for (const student of state.studentDrafts) {
-      await request('children', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(student)});
+      const result = await request('children', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(student)});
+      const id = result.id ? `db-${result.id}` : `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      state.students.push({...student, id, databaseId: result.id || null});
     }
     state.studentDrafts = [];
     state.draft.studentInput = {};
     persistDraft();
-    if (typeof loadChildren === 'function') await loadChildren();
     return true;
   }
 
@@ -334,7 +345,6 @@
         const saved = await saveStudents();
         if (!saved) return;
       }
-      await refreshState();
       if (state.step < 3) {
         state.step += 1;
         render();
@@ -345,6 +355,7 @@
         clearDraft();
         document.body.classList.remove('onboarding-locked');
         ensureDialog().close();
+        syncAppDataAfterFinish();
         return;
       }
       state.step = firstMissingStep();

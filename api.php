@@ -253,6 +253,11 @@ try {
         'send-report-email' => 'pareceres',
         'ai-review' => 'pareceres',
         'tutorial-videos' => 'tutoriais',
+        'marketing-notice' => 'informativo',
+        'finance' => 'financeiro',
+        'ai-usage' => 'consumo_ia',
+        'users' => 'usuarios',
+        'billing-cycles' => 'usuarios',
         'google-drive' => 'drive',
         'google-drive-history' => 'drive',
         'google-drive-upload' => 'drive',
@@ -1329,6 +1334,13 @@ try {
         }
         return $user;
     };
+    $requireMasterOrPermission = static function (string $permission) use ($loadCurrentUser): array {
+        $user = $loadCurrentUser();
+        if (($user['perfil'] ?? 'cliente') === 'master') return $user;
+        if (in_array($permission, $user['permissions'] ?? [], true)) return $user;
+        http_response_code(403);
+        throw new RuntimeException('Seu usuario nao possui permissao para acessar esta area.');
+    };
     $clientSetupStatus = static function (array $user) use ($pdo): array {
         $ownerId = (int) ($user['id'] ?? 0);
         if (($user['perfil'] ?? 'cliente') === 'master' || $ownerId <= 0) return ['complete' => true, 'missing' => []];
@@ -1366,17 +1378,21 @@ try {
     $requirePermission = static function (string $resource) use ($loadCurrentUser, $permissionMap, $pdo, $clientSetupStatus, $setupStepAllowed): void {
         $user = $loadCurrentUser();
         if (($user['perfil'] ?? 'cliente') === 'master') return;
+        if ($resource === 'header-settings') return;
+        if (in_array($resource, ['google-drive', 'google-drive-history', 'google-drive-upload', 'google-drive-oauth'], true)) return;
+        if ($resource === 'marketing-notice' && $_SERVER['REQUEST_METHOD'] === 'GET') return;
+        if ($resource === 'tutorial-videos' && $_SERVER['REQUEST_METHOD'] === 'GET' && (in_array('tutoriais', $user['permissions'] ?? [], true) || in_array('tutoriais_cadastro', $user['permissions'] ?? [], true))) return;
+        if ($resource === 'tutorial-videos' && in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['POST', 'DELETE'], true) && in_array('tutoriais_cadastro', $user['permissions'] ?? [], true)) return;
+        $setupTables = ['children' => 'criancas', 'classes' => 'turmas', 'periods' => 'periodos_avaliativos'];
+        if (isset($setupTables[$resource]) && $_SERVER['REQUEST_METHOD'] === 'GET') return;
         $setup = $clientSetupStatus($user);
         if (empty($setup['complete'])) {
             if ($setupStepAllowed($resource, $_SERVER['REQUEST_METHOD'] ?? 'GET', $setup)) return;
             http_response_code(428);
             throw new RuntimeException('Conclua o cadastro inicial antes de usar o sistema.');
         }
-        if ($resource === 'header-settings') return;
         if ($resource === 'experience-fields') return;
         if ($resource === 'google-drive-oauth' && ($_GET['action'] ?? '') === 'callback') return;
-        $setupTables = ['children' => 'criancas', 'classes' => 'turmas', 'periods' => 'periodos_avaliativos'];
-        if (isset($setupTables[$resource]) && $_SERVER['REQUEST_METHOD'] === 'GET') return;
         if (isset($setupTables[$resource]) && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $count = $pdo->prepare("SELECT COUNT(*) FROM {$setupTables[$resource]} WHERE usuario_id=?");
             $count->execute([(int) $user['id']]);
@@ -1607,7 +1623,7 @@ try {
         }
     }
     if ($resource === 'ai-usage') {
-        $requireMaster();
+        $requireMasterOrPermission('consumo_ia');
         $action = (string) ($_GET['action'] ?? 'summary');
         $validDate = static function (string $value, string $fallback): string {
             return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : $fallback;
@@ -2078,7 +2094,7 @@ try {
         }
     }
     if ($resource === 'finance') {
-        $requireMaster();
+        $requireMasterOrPermission('financeiro');
         $paymentRow = static function (array $row): array {
             return [
                 'id' => (int) $row['id'],
@@ -2191,7 +2207,7 @@ try {
         throw new RuntimeException('Metodo nao permitido.');
     }
     if ($resource === 'billing-cycles') {
-        $requireMaster();
+        $requireMasterOrPermission('usuarios');
         $cycleRow = static function (array $row): array {
             return [
                 'id' => (int) $row['id'],
@@ -2252,8 +2268,8 @@ try {
         throw new RuntimeException('Metodo nao permitido.');
     }
     if ($resource === 'users') {
-        $masterUser = $requireMaster();
-        $allowedPermissions = ['alunos', 'turmas', 'periodos', 'atividades', 'pareceres', 'portfolio', 'tutoriais', 'configuracoes', 'drive'];
+        $masterUser = $requireMasterOrPermission('usuarios');
+        $allowedPermissions = ['alunos', 'turmas', 'periodos', 'atividades', 'pareceres', 'portfolio', 'tutoriais', 'tutoriais_cadastro', 'configuracoes', 'informativo', 'usuarios', 'financeiro', 'consumo_ia', 'drive'];
         $normalizePermissions = static function (array $permissions) use ($allowedPermissions): array {
             return array_values(array_intersect($allowedPermissions, array_unique(array_map('strval', $permissions))));
         };
@@ -2420,7 +2436,7 @@ try {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $requireMaster();
+            $requireMasterOrPermission('informativo');
             $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
             $notices = $loadNotices();
             $id = trim((string) ($input['id'] ?? ''));
@@ -2441,7 +2457,7 @@ try {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
-            $requireMaster();
+            $requireMasterOrPermission('informativo');
             $id = trim((string) ($_GET['id'] ?? ''));
             if ($id === '') throw new RuntimeException('Informe o informativo que deseja excluir.');
             $notices = array_values(array_filter($loadNotices(), static function (array $notice) use ($id): bool {
@@ -2545,10 +2561,7 @@ try {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            if (($loggedUser['perfil'] ?? 'cliente') !== 'master') {
-                http_response_code(403);
-                throw new RuntimeException('Acesso restrito ao login master.');
-            }
+            $requireMasterOrPermission('tutoriais_cadastro');
             $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
             $title = trim((string) ($input['title'] ?? ''));
             $url = trim((string) ($input['url'] ?? ''));
@@ -2592,10 +2605,7 @@ try {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
-            if (($loggedUser['perfil'] ?? 'cliente') !== 'master') {
-                http_response_code(403);
-                throw new RuntimeException('Acesso restrito ao login master.');
-            }
+            $requireMasterOrPermission('tutoriais_cadastro');
             $id = trim((string) ($_GET['id'] ?? ''));
             if ($id === '') throw new RuntimeException('Informe o tutorial que deseja excluir.');
             $items = array_values(array_filter($loadTutorials(), static fn(array $item): bool => (string) ($item['id'] ?? '') !== $id));

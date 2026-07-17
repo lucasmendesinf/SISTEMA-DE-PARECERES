@@ -45,6 +45,9 @@
   let currentUser = null;
   let usersState = {users: [], currentUserId: 0, availablePermissions: Object.keys(labels)};
   let billingCycles = [];
+  let billingCyclesPromise = null;
+  let usersLoadPromise = null;
+  let usersLoaded = false;
   const userFilters = {active: '', role: ''};
 
   const escapeHtml = value => String(value || '').replace(/[&<>'"]/g, char => ({
@@ -144,7 +147,7 @@
             </select>
           </div>
         </div>
-        <div id="portalUsersList" class="user-admin-list"></div>
+        <div id="portalUsersList" class="user-admin-list"><p class="muted">Carregando usuarios...</p></div>
       </div>`;
     document.querySelector('main').append(section);
     section.querySelector('#addPortalUser').addEventListener('click', () => openUserForm());
@@ -184,6 +187,10 @@
     const billing = user.billing || {};
     const trialText = Number(billing.trialDays || 0) > 0 ? ` - teste ${Number(billing.trialDays)} dias` : '';
     return `${billing.plan || 'Basico'} - ${billing.cycleLabel || cycleLabels[billing.cycle] || 'Mensal'} - ${money(billing.amount)} - ${paymentLabels[billing.paymentMethod] || 'Pix ou cartao'} - ${billingStatusLabels[billing.status] || 'Pendente'}${trialText}`;
+  }
+
+  function canManageUsers(user = currentUser) {
+    return Boolean(user && (user.role === 'master' || user.permissions?.includes('usuarios')));
   }
 
   function renderUsers() {
@@ -229,17 +236,36 @@
     });
   }
 
-  async function loadUsers() {
-    usersState = await request(usersApi);
-    renderUsers();
+  async function loadUsers({force = false} = {}) {
+    if (usersLoadPromise && !force) return usersLoadPromise;
+    usersLoadPromise = (async () => {
+      usersState = await request(usersApi);
+      usersLoaded = true;
+      renderUsers();
+      return usersState;
+    })().finally(() => {
+      usersLoadPromise = null;
+    });
+    return usersLoadPromise;
   }
 
   async function loadBillingCycles() {
-    const data = await request(billingCyclesApi);
-    billingCycles = data.cycles || [];
+    if (billingCyclesPromise) return billingCyclesPromise;
+    billingCyclesPromise = request(billingCyclesApi)
+      .then(data => {
+        billingCycles = data.cycles || [];
+        return billingCycles;
+      })
+      .finally(() => {
+        billingCyclesPromise = null;
+      });
+    return billingCyclesPromise;
   }
 
-  function openUserForm(user = null) {
+  async function openUserForm(user = null) {
+    if (!billingCycles.length) {
+      try { await loadBillingCycles(); } catch (_) {}
+    }
     const editing = Boolean(user);
     const permissions = new Set(user?.permissions || []);
     const billing = user?.billing || {};
@@ -383,7 +409,7 @@
         body: JSON.stringify(payload)
       });
       document.querySelector('#modal')?.close();
-      await loadUsers();
+      await loadUsers({force: true});
     } catch (error) {
       message.textContent = error.message;
     }
@@ -392,7 +418,7 @@
   async function deleteUser(id) {
     if (!confirm('Excluir este usuario de acesso?')) return;
     await request(`${usersApi}&id=${id}`, {method: 'DELETE'});
-    await loadUsers();
+    await loadUsers({force: true});
   }
 
   async function resetUser(id) {
@@ -406,26 +432,31 @@
       body: JSON.stringify({userId: id})
     });
     alert('Dados resetados. No proximo login, este usuario fara o cadastro inicial novamente.');
-    await loadUsers();
+    await loadUsers({force: true});
+  }
+
+  function prepareUsersArea() {
+    ensureUsersView();
+    ensureUsersNav();
+    if (!usersLoaded && !usersLoadPromise) {
+      loadUsers().catch(error => {
+        const list = document.querySelector('#portalUsersList');
+        if (list) list.innerHTML = `<p class="profile-message">${escapeHtml(error.message)}</p>`;
+      });
+    }
+    loadBillingCycles().catch(() => {});
   }
 
   async function init() {
     currentUser = window.PortalCurrentUser || window.PortalBootstrapUser || null;
     if (currentUser) {
       applyClientPermissions();
-      if (currentUser.role === 'master' || currentUser.permissions?.includes('usuarios')) {
-        ensureUsersView();
-        ensureUsersNav();
-      }
+      if (canManageUsers(currentUser)) prepareUsersArea();
     }
     window.PortalCurrentUserPromise = window.PortalCurrentUserPromise || request(authApi);
     try { currentUser = await window.PortalCurrentUserPromise; } catch (_) { return; }
     applyClientPermissions();
-    if (currentUser.role !== 'master' && !currentUser.permissions?.includes('usuarios')) return;
-    ensureUsersView();
-    ensureUsersNav();
-    await loadBillingCycles();
-    await loadUsers();
+    if (canManageUsers(currentUser)) prepareUsersArea();
   }
 
   document.addEventListener('DOMContentLoaded', init);

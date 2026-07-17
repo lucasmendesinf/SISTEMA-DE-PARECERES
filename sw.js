@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260717-menu-permissions-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260717-users-fast-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -43,7 +43,7 @@ const STATIC_ASSETS = [
   './tutorial-videos.js?v=20260717-menu-permissions-1',
   './manual-image-editor.js?v=20260709-activity-photos-30-1',
   './image-editor-flow.js?v=20260709-activity-photos-30-1',
-  './master-users.js?v=20260717-menu-permissions-1',
+  './master-users.js?v=20260717-users-fast-1',
   './finance-admin.js?v=20260717-menu-permissions-1',
   './ai-usage-admin.js?v=20260717-menu-permissions-1',
   './assets/ai-prof-logo-transparent.png',

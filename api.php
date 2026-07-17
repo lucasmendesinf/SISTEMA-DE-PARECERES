@@ -1400,6 +1400,7 @@ try {
         }
         $permission = $permissionMap[$resource] ?? $resource;
         if ($resource === 'reports' && in_array('portfolio', $user['permissions'] ?? [], true)) return;
+        if ($resource === 'send-report-email' && (in_array('pareceres', $user['permissions'] ?? [], true) || in_array('portfolio', $user['permissions'] ?? [], true))) return;
         if (!in_array($permission, $user['permissions'] ?? [], true)) {
             http_response_code(403);
             throw new RuntimeException('Seu usuário não possui permissão para acessar esta área.');
@@ -2274,7 +2275,7 @@ try {
             return array_values(array_intersect($allowedPermissions, array_unique(array_map('strval', $permissions))));
         };
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-            $rows = $pdo->query("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect},created_at FROM usuarios ORDER BY perfil DESC, nome")->fetchAll(PDO::FETCH_ASSOC);
+            $rows = $pdo->query("SELECT usuarios.id,usuarios.nome,usuarios.email,usuarios.telefone,usuarios.perfil,usuarios.permissoes,usuarios.ativo,usuarios.image_editor_permission,usuarios.billing_plan,usuarios.billing_cycle,usuarios.billing_cycle_id,usuarios.billing_amount,usuarios.billing_payment_method,usuarios.billing_status,usuarios.billing_next_due_date,usuarios.billing_notes,usuarios.billing_trial_days,usuarios.mercado_pago_customer_id,usuarios.mercado_pago_subscription_id,usuarios.mercado_pago_last_payment_id,bc.name AS billing_cycle_name,bc.month_count AS billing_cycle_months,usuarios.created_at FROM usuarios LEFT JOIN billing_cycles bc ON bc.id=usuarios.billing_cycle_id ORDER BY usuarios.perfil DESC, usuarios.nome")->fetchAll(PDO::FETCH_ASSOC);
             $users = array_map(static function (array $row): array {
                 $permissions = json_decode((string) ($row['permissoes'] ?? '[]'), true);
                 return ['id' => (int) $row['id'], 'name' => $row['nome'], 'email' => $row['email'], 'phone' => $row['telefone'], 'role' => $row['perfil'], 'permissions' => is_array($permissions) ? $permissions : [], 'active' => (bool) $row['ativo'], 'imageEditorPermission' => $row['image_editor_permission'] ?? 'none', 'billing' => ['plan' => $row['billing_plan'] ?? 'Basico', 'cycle' => $row['billing_cycle'] ?? 'monthly', 'cycleId' => isset($row['billing_cycle_id']) ? (int) $row['billing_cycle_id'] : null, 'cycleLabel' => trim((string) ($row['billing_cycle_name'] ?? '')) ?: (($row['billing_cycle'] ?? 'monthly') === 'annual' ? 'Anual' : 'Mensal'), 'cycleMonths' => max(1, (int) ($row['billing_cycle_months'] ?? (($row['billing_cycle'] ?? 'monthly') === 'annual' ? 12 : 1))), 'amount' => (float) ($row['billing_amount'] ?? 0), 'paymentMethod' => $row['billing_payment_method'] ?? 'both', 'status' => $row['billing_status'] ?? 'pending', 'nextDueDate' => $row['billing_next_due_date'] ?? null, 'notes' => $row['billing_notes'] ?? '', 'trialDays' => (int) ($row['billing_trial_days'] ?? 0)], 'createdAt' => $row['created_at']];

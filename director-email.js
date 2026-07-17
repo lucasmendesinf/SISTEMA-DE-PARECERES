@@ -80,6 +80,29 @@
   const normalizeType = value => typeof normalizeDocumentType === 'function' ? normalizeDocumentType(value) : (value === 'portfolio' ? 'portfolio' : 'parecer');
   const documentLabel = value => normalizeType(value) === 'portfolio' ? 'Portfolio' : 'Parecer';
 
+  async function ensureFullReport(reportOrId) {
+    const id = typeof reportOrId === 'object' ? (reportOrId.databaseId || reportOrId.id) : reportOrId;
+    let report = typeof reportOrId === 'object'
+      ? reportOrId
+      : data.reports.find(item => String(item.databaseId || item.id) === String(id) || String(item.id) === String(id));
+    if (report?.hasFullData && Array.isArray(report.entries)) return report;
+    const response = await fetch('api.php?resource=reports');
+    if (!response.ok) throw new Error('Nao foi possivel carregar o documento completo.');
+    const fullReports = await response.json();
+    const fullReport = fullReports.find(item => String(item.databaseId || item.id) === String(id) || String(item.id) === String(id));
+    if (!fullReport) return report;
+    fullReport.status = ['done', 'concluido', 'concluído', 'entregue'].includes(String(fullReport.status).toLowerCase()) ? 'done' : (fullReport.status || 'draft');
+    fullReport.hasFullData = true;
+    const index = data.reports.findIndex(item => String(item.databaseId || item.id) === String(fullReport.databaseId || fullReport.id) || String(item.id) === String(fullReport.id));
+    if (index >= 0) data.reports[index] = {...data.reports[index], ...fullReport};
+    else data.reports.unshift(fullReport);
+    return data.reports.find(item => String(item.databaseId || item.id) === String(fullReport.databaseId || fullReport.id) || String(item.id) === String(fullReport.id)) || fullReport;
+  }
+
+  if (typeof window.ensureReportDetail !== 'function') {
+    window.ensureReportDetail = ensureFullReport;
+  }
+
   function styledFields(fields) {
     const header = currentHeader();
     return {
@@ -115,10 +138,7 @@
   }
 
   async function buildOfficialReportFiles(report) {
-    if (window.ensureReportDetail) {
-      await window.ensureReportDetail(report.databaseId || report.id);
-    }
-    const fullReport = data.reports.find(item => String(item.id) === String(report.id) || String(item.databaseId) === String(report.databaseId)) || report;
+    const fullReport = await ensureFullReport(report);
     const student = data.students.find(item => String(item.id) === String(fullReport.studentId));
     if (!student) throw new Error('Aluno nao localizado para gerar anexos.');
     const period = data.periods.find(item => item.active) || data.periods[0];
@@ -250,7 +270,7 @@
   }
 
   window.openDirectorEmailModal = async function openDirectorEmailModal(id) {
-    const report = await (window.ensureReportDetail ? window.ensureReportDetail(id) : Promise.resolve(data.reports.find(item => String(item.id) === String(id))));
+    const report = await ensureFullReport(id);
     if (!report) return alert('Documento nao encontrado.');
     const message = defaultMessage(report);
     if (typeof open === 'function') {
@@ -294,9 +314,11 @@
       status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Preparando envio...';
     }
     try {
-      const report = data.reports.find(item => String(item.databaseId || item.id) === String(reportId) || String(item.id) === String(reportId));
+      const report = await ensureFullReport(reportId);
       if (!report) throw new Error('Documento nao encontrado para gerar anexos.');
-      if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Localizando arquivos finais salvos...';
+      if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Atualizando arquivos finais com imagens...';
+      await window.saveOfficialReportFiles(report);
+      if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Anexando arquivos oficiais e enviando e-mail...';
       const sendRequest = async () => {
         const response = await fetch('api.php?resource=send-report-email', {
           method: 'POST',
@@ -314,7 +336,6 @@
         if (!String(error?.message || '').includes('arquivo final salvo')) throw error;
         if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Salvando arquivos finais para este documento...';
         await window.saveOfficialReportFiles(report);
-        if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Anexando arquivos oficiais e enviando e-mail...';
         result = await sendRequest();
       }
       if (status) {

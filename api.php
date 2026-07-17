@@ -269,6 +269,7 @@ try {
         'periods' => 'periodos',
         'activities' => 'atividades',
         'reports' => 'pareceres',
+        'report-files' => 'pareceres',
         'send-report-email' => 'pareceres',
         'ai-review' => 'pareceres',
         'tutorial-videos' => 'tutoriais',
@@ -1418,7 +1419,7 @@ try {
             if ((int) $count->fetchColumn() === 0) return;
         }
         $permission = $permissionMap[$resource] ?? $resource;
-        if ($resource === 'reports' && in_array('portfolio', $user['permissions'] ?? [], true)) return;
+        if (in_array($resource, ['reports', 'report-files'], true) && in_array('portfolio', $user['permissions'] ?? [], true)) return;
         if ($resource === 'send-report-email' && (in_array('pareceres', $user['permissions'] ?? [], true) || in_array('portfolio', $user['permissions'] ?? [], true))) return;
         if (!in_array($permission, $user['permissions'] ?? [], true)) {
             http_response_code(403);

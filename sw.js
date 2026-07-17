@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260717-save-feedback-front-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260717-require-student-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -34,6 +34,7 @@ const STATIC_ASSETS = [
   './report-editor.js?v=20260716-activity-selection-lock-1',
   './document-style-settings.js?v=20260716-force-docx-font-1',
   './text-ai-review.js?v=20260716-email-no-ai-1',
+  './document-button-fix.js?v=20260717-require-student-1',
   './director-email.js?v=20260716-official-email-files-1',
   './terms-consent.js?v=20260716-terms-before-onboarding-1',
   './auth-profile.js?v=20260716-terms-persist-1',

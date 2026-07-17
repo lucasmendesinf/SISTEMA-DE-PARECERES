@@ -5,3 +5,5 @@
 .document-header{color:var(--document-detail-color, #3980d4)!important}
 .document-student{color:var(--document-detail-color, #253c31)!important}
 .document-student b{color:var(--document-detail-color, #253c31)!important}
+.linked-activity.is-disabled{opacity:.48;cursor:not-allowed;background:#f7faf8}
+.linked-activity.is-disabled input{cursor:not-allowed}

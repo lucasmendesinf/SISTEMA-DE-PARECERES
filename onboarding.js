@@ -89,19 +89,45 @@
     state.studentDrafts = [];
   }
 
+  function canCloseOnCurrentStep() {
+    return state.step === 3;
+  }
+
+  function closeOnboarding() {
+    if (!canCloseOnCurrentStep()) return;
+    captureCurrentDraft();
+    persistDraft();
+    state.locked = false;
+    document.body.classList.remove('onboarding-locked');
+    const dialog = ensureDialog();
+    if (dialog.open) dialog.close('dismissed');
+  }
+
   function ensureDialog() {
     let dialog = $('#onboardingModal');
     if (dialog) return dialog;
     dialog = document.createElement('dialog');
     dialog.id = 'onboardingModal';
     dialog.className = 'onboarding-dialog';
-    dialog.addEventListener('cancel', event => event.preventDefault());
+    dialog.addEventListener('cancel', event => {
+      if (!canCloseOnCurrentStep()) {
+        event.preventDefault();
+        return;
+      }
+      captureCurrentDraft();
+      persistDraft();
+      state.locked = false;
+      document.body.classList.remove('onboarding-locked');
+    });
     dialog.addEventListener('click', event => {
       const bounds = dialog.getBoundingClientRect();
       const clickedBackdrop = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
-      if (clickedBackdrop) event.preventDefault();
+      if (!clickedBackdrop) return;
+      event.preventDefault();
+      closeOnboarding();
     });
     dialog.addEventListener('close', () => {
+      document.body.classList.remove('onboarding-locked');
       if (!state.locked || !shouldRun()) return;
       setTimeout(render, 0);
     });
@@ -192,7 +218,8 @@
     persistDraft();
     const dialog = ensureDialog();
     const steps = [stepSchool, stepPeriod, stepClass, stepStudents];
-    dialog.innerHTML = `<div class="onboarding-shell">${progressHtml()}${steps[state.step]()}</div>`;
+    const closeButton = canCloseOnCurrentStep() ? '<button class="onboarding-close" type="button" id="onboardingClose" aria-label="Fechar cadastro inicial">&times;</button>' : '';
+    dialog.innerHTML = `<div class="onboarding-shell">${closeButton}${progressHtml()}${steps[state.step]()}</div>`;
     bindStep();
     state.locked = true;
     document.body.classList.add('onboarding-locked');
@@ -347,6 +374,7 @@
   function bindStep() {
     $('#onboardingNext')?.addEventListener('click', next);
     $('#onboardingBack')?.addEventListener('click', back);
+    $('#onboardingClose')?.addEventListener('click', closeOnboarding);
     $('#onboardingLogout')?.addEventListener('click', logout);
     $('#addOnboardStudent')?.addEventListener('click', addStudentDraft);
     document.querySelector('.onboarding-step')?.addEventListener('input', captureCurrentDraft);

@@ -32,6 +32,22 @@ function clearActiveWizardEntry() {
   delete wizard.editingEntryIndex;
 }
 
+function addedActivityIdsOutsideCurrentEntry() {
+  return new Set((wizard.entries || [])
+    .map(normalizeWizardEntry)
+    .filter((_, index) => index !== wizard.editingEntryIndex)
+    .flatMap(entry => (entry.activityIds || []).map(String)));
+}
+
+function setRegisteredActivitySelectionLock(activeInput, locked) {
+  document.querySelectorAll('.wizard-activity').forEach(input => {
+    const isActive = input === activeInput;
+    const alreadyAdded = input.dataset.alreadyAdded === '1';
+    input.disabled = alreadyAdded || (locked && !isActive);
+    input.closest('.linked-activity')?.classList.toggle('is-disabled', input.disabled && !isActive);
+  });
+}
+
 function wizardEntries() {
   const entries = (wizard.entries || []).map(normalizeWizardEntry).filter(hasWizardEntryContent);
   const current = currentWizardEntry();
@@ -121,9 +137,12 @@ function wizardActivitiesV2() {
   if ($('#wizardText')) bufferStepOne();
   if (!wizard.text?.trim()) return wizardStart();
   const editing = Number.isInteger(wizard.editingEntryIndex);
+  const selectedActivityIds = (wizard.activityIds || []).map(String);
+  const hasActiveSelection = selectedActivityIds.length > 0;
+  const addedIds = addedActivityIdsOutsideCurrentEntry();
   const activities = data.activities.map(activity => `
-    <label class="linked-activity">
-      <input class="wizard-activity" type="checkbox" value="${activity.id}" ${(wizard.activityIds || []).includes(activity.id) ? 'checked' : ''} onchange="selectRegisteredActivityForDocument(this)">
+    <label class="linked-activity ${addedIds.has(String(activity.id)) || (hasActiveSelection && !selectedActivityIds.includes(String(activity.id))) ? 'is-disabled' : ''}">
+      <input class="wizard-activity" type="checkbox" value="${activity.id}" ${selectedActivityIds.includes(String(activity.id)) ? 'checked' : ''} ${addedIds.has(String(activity.id)) || (hasActiveSelection && !selectedActivityIds.includes(String(activity.id))) ? 'disabled' : ''} data-already-added="${addedIds.has(String(activity.id)) ? '1' : '0'}" onchange="selectRegisteredActivityForDocument(this)">
       <span><strong>${esc(activity.title)}</strong><small>${esc(activity.date)} · ${esc(activity.area)}</small></span>
       ${activity.photos?.[0] ? `<img src="${activity.photos[0]}" alt="Foto">` : ''}
     </label>
@@ -459,16 +478,16 @@ function chooseRegisteredActivityPhotos(activity, photos = []) {
 async function selectRegisteredActivityForDocument(input) {
   if (!input?.checked) {
     bufferStepTwo();
+    setRegisteredActivitySelectionLock(input, false);
     return;
   }
-  input.disabled = true;
+  setRegisteredActivitySelectionLock(input, true);
   const label = input.closest('.linked-activity');
   label?.classList.add('is-importing');
   try {
     bufferStepTwo();
     const count = await importSelectedRegisteredActivities();
     if (!count) {
-      if (!wizard.lastImportCancelled) alert('Esta atividade ja foi adicionada ao documento.');
       input.checked = false;
       bufferStepTwo();
       return;
@@ -481,7 +500,7 @@ async function selectRegisteredActivityForDocument(input) {
     input.checked = false;
     bufferStepTwo();
   } finally {
-    input.disabled = false;
+    setRegisteredActivitySelectionLock(input, false);
     label?.classList.remove('is-importing');
   }
 }

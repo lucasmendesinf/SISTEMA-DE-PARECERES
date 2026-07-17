@@ -147,6 +147,24 @@ function imageRowParagraph(DOMDocument $document, array $images): DOMElement
     return $paragraph;
 }
 
+function ensureImageContentType(ZipArchive $zip, string $extension, string $contentType): void
+{
+    $xml = $zip->getFromName('[Content_Types].xml');
+    if ($xml === false) return;
+    $document = new DOMDocument('1.0', 'UTF-8');
+    $document->preserveWhiteSpace = false;
+    if (!$document->loadXML($xml)) return;
+    $namespace = 'http://schemas.openxmlformats.org/package/2006/content-types';
+    $xpath = new DOMXPath($document);
+    $xpath->registerNamespace('ct', $namespace);
+    if ($xpath->query('/ct:Types/ct:Default[@Extension="' . $extension . '"]')->length > 0) return;
+    $default = $document->createElementNS($namespace, 'Default');
+    $default->setAttribute('Extension', $extension);
+    $default->setAttribute('ContentType', $contentType);
+    $document->documentElement?->appendChild($default);
+    $zip->addFromString('[Content_Types].xml', $document->saveXML());
+}
+
 function identificationTable(DOMDocument $document, array $lines, ?DOMNode $photo, int $fontSize = 20, ?string $color = null): DOMElement
 {
     $w='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -168,6 +186,9 @@ function addImageToDocx(ZipArchive $zip, string $dataUrl, int $imageId): ?array
     $size = @getimagesizefromstring($binary); if (!$size) return null;
     [$width, $height] = $size; $scale = min(2179320 / $width, 3432000 / $height); $cx = (int)($width * $scale); $cy = (int)($height * $scale);
     $ext = str_contains($matches[1], 'png') ? 'png' : 'jpg';
+    ensureImageContentType($zip, 'png', 'image/png');
+    ensureImageContentType($zip, 'jpg', 'image/jpeg');
+    ensureImageContentType($zip, 'jpeg', 'image/jpeg');
     $zip->addFromString('word/media/parecer-'.$imageId.'.'.$ext, $binary);
     if ($rels === null) {
         $rels = new DOMDocument();

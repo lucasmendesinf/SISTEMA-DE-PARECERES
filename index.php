@@ -205,7 +205,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="document-style-settings.js?v=20260716-force-docx-font-1"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
   <script src="billing-cycles.js?v=20260705-billing-cycles-1"></script>
-  <script src="text-ai-review.js?v=20260716-email-no-ai-1"></script>
+  <script src="text-ai-review.js?v=20260717-generate-text-label-1"></script>
   <script src="document-button-fix.js?v=20260717-require-student-1"></script>
   <script src="director-email.js?v=20260717-email-full-report-2"></script>
   <script src="marketing-notice.js?v=20260717-menu-permissions-1"></script>

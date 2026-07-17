@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260717-email-full-report-2';
+const CACHE_VERSION = 'ai-prof-pwa-20260717-generate-text-label-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -33,7 +33,7 @@ const STATIC_ASSETS = [
   './app.js?v=20260715-keep-current-menu-1',
   './report-editor.js?v=20260716-activity-selection-lock-1',
   './document-style-settings.js?v=20260716-force-docx-font-1',
-  './text-ai-review.js?v=20260716-email-no-ai-1',
+  './text-ai-review.js?v=20260717-generate-text-label-1',
   './document-button-fix.js?v=20260717-require-student-1',
   './director-email.js?v=20260717-email-full-report-2',
   './terms-consent.js?v=20260716-terms-before-onboarding-1',

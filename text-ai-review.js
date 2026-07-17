@@ -141,7 +141,7 @@
     improve: 'Melhorar texto',
     grammar: 'Corrigir gram\u00e1tica',
     summarize: 'Resumir parecer',
-    expand: 'Expandir parecer'
+    expand: 'Gerar texto'
   };
 
   async function requestAiReview(text, action) {

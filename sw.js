@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260716-activity-selection-lock-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260717-save-feedback-front-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -24,8 +24,8 @@ const STATIC_ASSETS = [
   './tutorial-videos.css?v=20260706-video-before-onboarding-2',
   './document-image-zoom.css?v=20260702-document-image-zoom-front-1',
   './onboarding.css?v=20260716-onboarding-student-close-1',
-  './save-feedback.css?v=20260716-save-feedback-1',
-  './save-feedback.js?v=20260716-save-feedback-1',
+  './save-feedback.css?v=20260717-save-feedback-front-1',
+  './save-feedback.js?v=20260717-save-feedback-front-1',
   './onboarding.js?v=20260716-onboarding-student-close-1',
   './activities-edit.js?v=20260709-mobile-camera-only-1',
   './experience-fields.js?v=20260709-mobile-camera-only-1',

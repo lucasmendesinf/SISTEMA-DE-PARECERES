@@ -18,12 +18,13 @@
   function ensureElements() {
     let overlay = document.querySelector('#saveFeedbackOverlay');
     if (!overlay) {
-      overlay = document.createElement('div');
+      overlay = document.createElement('dialog');
       overlay.id = 'saveFeedbackOverlay';
       overlay.className = 'save-feedback-overlay';
       overlay.setAttribute('aria-live', 'polite');
       overlay.setAttribute('aria-busy', 'true');
       overlay.innerHTML = '<div class="save-feedback-box"><span class="save-feedback-spinner" aria-hidden="true"></span><span id="saveFeedbackText">Salvando...</span></div>';
+      overlay.addEventListener('cancel', event => event.preventDefault());
       document.body.append(overlay);
     }
 
@@ -102,9 +103,17 @@
   function showLoading(message = 'Salvando...') {
     activeRequests += 1;
     const {overlay} = ensureElements();
+    document.body.append(overlay);
     const text = overlay.querySelector('#saveFeedbackText');
     if (text) text.textContent = message;
     overlay.classList.add('active');
+    if (typeof overlay.showModal === 'function' && !overlay.open) {
+      try {
+        overlay.showModal();
+      } catch (error) {
+        overlay.setAttribute('open', '');
+      }
+    }
   }
 
   function hideLoading() {
@@ -112,10 +121,12 @@
     if (activeRequests > 0) return;
     const overlay = document.querySelector('#saveFeedbackOverlay');
     overlay?.classList.remove('active');
+    if (overlay?.open && typeof overlay.close === 'function') overlay.close();
   }
 
   function notify(message) {
     const {toast} = ensureElements();
+    document.body.append(toast);
     toast.textContent = message;
     toast.classList.add('active');
     clearTimeout(toastTimer);

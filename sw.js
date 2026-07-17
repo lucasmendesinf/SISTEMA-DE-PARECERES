@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260717-generate-text-label-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260717-drive-document-type-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -15,7 +15,7 @@ const STATIC_ASSETS = [
   './billing-lock.css?v=20260703-billing-lock-3',
   './marketing-notice.css?v=20260702-marketing-notice-list-1',
   './terms-consent.css?v=20260716-terms-before-onboarding-1',
-  './google-drive-integration.css?v=20260716-drive-pairs-1',
+  './google-drive-integration.css?v=20260717-drive-document-type-1',
   './master-users.css?v=20260705-billing-cycles-1',
   './finance-admin.css?v=20260703-finance-due-filter-1',
   './ai-usage-admin.css?v=20260716-ai-usage-1',
@@ -39,7 +39,7 @@ const STATIC_ASSETS = [
   './terms-consent.js?v=20260716-terms-before-onboarding-1',
   './auth-profile.js?v=20260716-terms-persist-1',
   './marketing-notice.js?v=20260717-menu-permissions-1',
-  './google-drive-integration.js?v=20260717-menu-permissions-1',
+  './google-drive-integration.js?v=20260717-drive-document-type-1',
   './tutorial-videos.js?v=20260717-menu-permissions-1',
   './manual-image-editor.js?v=20260709-activity-photos-30-1',
   './image-editor-flow.js?v=20260709-activity-photos-30-1',

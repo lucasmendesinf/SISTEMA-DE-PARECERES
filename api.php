@@ -2020,13 +2020,14 @@ try {
     if ($resource === 'google-drive-history') {
         $user = $loadCurrentUser();
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-            $query = $pdo->prepare("SELECT gu.id,gu.parecer_id,gu.arquivo,gu.drive_file_id,gu.drive_link,gu.folder_name,gu.status,gu.error_message,gu.data_upload,gu.created_at,c.nome AS aluno FROM google_drive_uploads gu LEFT JOIN pareceres p ON p.id=gu.parecer_id LEFT JOIN criancas c ON c.id=p.crianca_id WHERE gu.usuario_id=? ORDER BY gu.created_at DESC LIMIT 200");
+            $query = $pdo->prepare("SELECT gu.id,gu.parecer_id,gu.arquivo,gu.drive_file_id,gu.drive_link,gu.folder_name,gu.status,gu.error_message,gu.data_upload,gu.created_at,p.tipo_documento,c.nome AS aluno FROM google_drive_uploads gu LEFT JOIN pareceres p ON p.id=gu.parecer_id LEFT JOIN criancas c ON c.id=p.crianca_id WHERE gu.usuario_id=? ORDER BY gu.created_at DESC LIMIT 200");
             $query->execute([(int) $user['id']]);
             echo json_encode(['uploads' => array_map(static fn(array $row): array => [
                 'id' => (int) $row['id'],
                 'reportId' => isset($row['parecer_id']) ? (int) $row['parecer_id'] : null,
                 'fileName' => $row['arquivo'],
                 'student' => $row['aluno'] ?? '',
+                'documentType' => ($row['tipo_documento'] ?? '') === 'portfolio' ? 'portfolio' : 'parecer',
                 'folder' => $row['folder_name'] ?? '',
                 'link' => $row['drive_link'] ?? '',
                 'status' => $row['status'],

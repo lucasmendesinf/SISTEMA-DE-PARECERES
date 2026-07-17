@@ -123,7 +123,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <link rel="stylesheet" href="billing-lock.css?v=20260703-billing-lock-3">
   <link rel="stylesheet" href="marketing-notice.css?v=20260702-marketing-notice-list-1">
   <link rel="stylesheet" href="terms-consent.css?v=20260716-terms-before-onboarding-1">
-  <link rel="stylesheet" href="google-drive-integration.css?v=20260716-drive-pairs-1">
+  <link rel="stylesheet" href="google-drive-integration.css?v=20260717-drive-document-type-1">
   <link rel="stylesheet" href="master-users.css?v=20260705-billing-cycles-1">
   <link rel="stylesheet" href="finance-admin.css?v=20260703-finance-due-filter-1">
   <link rel="stylesheet" href="ai-usage-admin.css?v=20260716-ai-usage-1">
@@ -211,7 +211,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="marketing-notice.js?v=20260717-menu-permissions-1"></script>
   <script src="terms-consent.js?v=20260716-terms-before-onboarding-1"></script>
   <script src="auth-profile.js?v=20260716-terms-persist-1"></script>
-  <script src="google-drive-integration.js?v=20260717-menu-permissions-1"></script>
+  <script src="google-drive-integration.js?v=20260717-drive-document-type-1"></script>
   <script src="tutorial-videos.js?v=20260717-menu-permissions-1"></script>
   <script src="onboarding.js?v=20260717-fast-onboarding-1"></script>
   <script src="master-users.js?v=20260717-users-fast-1"></script>

@@ -133,6 +133,8 @@
       const match = String(name || '').match(/\.(pdf|docx)$/i);
       return match ? match[1].toUpperCase() : 'Arquivo';
     };
+    const driveDocumentType = item => item.documentType === 'portfolio' ? 'portfolio' : 'parecer';
+    const driveDocumentTypeLabel = type => type === 'portfolio' ? 'Portfólio' : 'Parecer';
     const groups = driveUploads.reduce((acc, item) => {
       const student = item.student || 'Aluno nao informado';
       if (!acc.has(student)) acc.set(student, []);
@@ -147,14 +149,18 @@
         </header>
         <div class="drive-student-files">
           ${[...files.reduce((acc, item) => {
-            const key = baseFileName(item.fileName);
+            const key = `${driveDocumentType(item)}:${baseFileName(item.fileName)}`;
             if (!acc.has(key)) acc.set(key, []);
             acc.get(key).push(item);
             return acc;
-          }, new Map()).entries()].map(([title, documentFiles]) => `
+          }, new Map()).entries()].map(([groupKey, documentFiles]) => {
+            const type = driveDocumentType(documentFiles[0] || {});
+            const title = groupKey.replace(/^[^:]+:/, '');
+            return `
             <section class="drive-document-group">
               <div class="drive-document-title">
                 <strong>${escapeHtml(title)}</strong>
+                <span class="drive-document-type ${type}">${escapeHtml(driveDocumentTypeLabel(type))}</span>
                 <span>${documentFiles.length} ${documentFiles.length === 1 ? 'formato' : 'formatos'}</span>
               </div>
               <div class="drive-document-formats">
@@ -173,7 +179,8 @@
                     </div>
                   </div>`).join('')}
               </div>
-            </section>`).join('')}
+            </section>`;
+          }).join('')}
         </div>
       </article>`).join('') || '<p class="muted">Nenhum arquivo enviado ao Drive ainda.</p>';
   }

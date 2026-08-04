@@ -1,11 +1,11 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260717-drive-document-type-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260804-mobile-no-input-zoom-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
-  './manifest.json?v=20260716-reset-terms-2',
+  './manifest.json?v=20260804-mobile-no-input-zoom-1',
   './pwa.js?v=20260716-reset-terms-2',
   './login.css?v=20260702-billing-modal-1',
-  './style.css?v=20260709-camera-touch-only-1',
+  './style.css?v=20260804-mobile-no-input-zoom-1',
   './mobile-menu.css?v=20260709-sidebar-scroll-1',
   './activity-pagination.css',
   './report-type-badge.css',

@@ -191,6 +191,7 @@ async function saveActivityEdit(activityId) {
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || 'Nao foi possivel salvar a atividade.');
     if (result.activity) {
+      result.activity.photos = result.activity.photos?.length ? result.activity.photos : editingActivityPhotos;
       data.activities = data.activities.map(item => String(item.id) === String(result.activity.id) ? result.activity : item);
       if (!data.activities.some(item => String(item.id) === String(result.activity.id))) data.activities.unshift(result.activity);
       render();

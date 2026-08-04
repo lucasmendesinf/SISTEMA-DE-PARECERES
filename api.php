@@ -3228,8 +3228,8 @@ try {
         if (!$exists->fetchColumn()) throw new RuntimeException('Atividade não encontrada.');
         $pdo->prepare('DELETE FROM atividade_fotos WHERE atividade_id=?')->execute([$activityId]);
     } else {
-        $classId=(int)($input['classId']??0);$classCheck=$pdo->prepare('SELECT id FROM turmas WHERE id=? AND usuario_id=?');$classCheck->execute([$classId,$ownerId]);if(!$classCheck->fetchColumn()){$classCheck=$pdo->prepare('SELECT id FROM turmas WHERE usuario_id=? ORDER BY id LIMIT 1');$classCheck->execute([$ownerId]);$classId=(int)$classCheck->fetchColumn();}
-        $periodId=(int)($input['periodId']??0);$periodCheck=$pdo->prepare('SELECT id FROM periodos_avaliativos WHERE id=? AND usuario_id=?');$periodCheck->execute([$periodId,$ownerId]);if(!$periodCheck->fetchColumn()){$periodCheck=$pdo->prepare('SELECT id FROM periodos_avaliativos WHERE ativo=1 AND usuario_id=? ORDER BY id DESC LIMIT 1');$periodCheck->execute([$ownerId]);$periodId=(int)$periodCheck->fetchColumn();}
+        $classId=(int)($input['classId']??0);$classCheck=$pdo->prepare('SELECT id FROM turmas WHERE id=? AND usuario_id=?');$classCheck->execute([$classId,$ownerId]);if(!$classCheck->fetchColumn()){$classCheck=$pdo->prepare('SELECT id FROM turmas WHERE usuario_id=? ORDER BY id LIMIT 1');$classCheck->execute([$ownerId]);$classId=(int)$classCheck->fetchColumn();}if($classId<=0){$pdo->prepare("INSERT INTO turmas (usuario_id,nome,etapa,turno) VALUES (?,?,?,?)")->execute([$ownerId,'Turma inicial','Educacao Infantil','Integral']);$classId=(int)$pdo->lastInsertId();}
+        $periodId=(int)($input['periodId']??0);$periodCheck=$pdo->prepare('SELECT id FROM periodos_avaliativos WHERE id=? AND usuario_id=?');$periodCheck->execute([$periodId,$ownerId]);if(!$periodCheck->fetchColumn()){$periodCheck=$pdo->prepare('SELECT id FROM periodos_avaliativos WHERE ativo=1 AND usuario_id=? ORDER BY id DESC LIMIT 1');$periodCheck->execute([$ownerId]);$periodId=(int)$periodCheck->fetchColumn();}if($periodId<=0){$pdo->prepare("INSERT INTO periodos_avaliativos (usuario_id,nome,data_inicio,data_fim,ativo) VALUES (?,?,?,?,1)")->execute([$ownerId,'Periodo inicial',date('Y-01-01'),date('Y-12-31')]);$periodId=(int)$pdo->lastInsertId();}
         $insert = $pdo->prepare('INSERT INTO atividades (usuario_id,turma_id, periodo_id, titulo, campo_experiencia, observacoes, data_atividade) VALUES (?, ?, ?, ?, ?, ?, CURDATE())');
         $insert->execute([$ownerId, $classId, $periodId, $title, $area, $note]);
         $activityId = (int) $pdo->lastInsertId();
@@ -3257,7 +3257,8 @@ try {
             'area' => $area,
             'note' => $note,
             'date' => (string) ($dateQuery->fetchColumn() ?: date('d/m/Y')),
-            'photos' => array_values(array_filter($photos, 'is_string')),
+            'photos' => [],
+            'photoCount' => count($photos),
         ],
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $error) {

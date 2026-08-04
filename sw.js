@@ -1,8 +1,8 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260804-activity-save-list-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260804-activity-save-reliable-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
-  './manifest.json?v=20260804-activity-save-list-1',
+  './manifest.json?v=20260804-activity-save-reliable-1',
   './pwa.js?v=20260716-reset-terms-2',
   './login.css?v=20260702-billing-modal-1',
   './style.css?v=20260804-mobile-no-input-zoom-1',
@@ -27,10 +27,10 @@ const STATIC_ASSETS = [
   './save-feedback.css?v=20260717-save-feedback-front-1',
   './save-feedback.js?v=20260717-save-feedback-front-1',
   './onboarding.js?v=20260717-fast-onboarding-1',
-  './activities-edit.js?v=20260804-activity-save-list-1',
+  './activities-edit.js?v=20260804-activity-save-reliable-1',
   './experience-fields.js?v=20260709-mobile-camera-only-1',
   './modal-controls.js?v=20260715-onboarding-draft-1',
-  './app.js?v=20260804-activity-save-list-1',
+  './app.js?v=20260804-activity-save-reliable-1',
   './report-editor.js?v=20260716-activity-selection-lock-1',
   './document-style-settings.js?v=20260716-force-docx-font-1',
   './text-ai-review.js?v=20260717-generate-text-label-1',

@@ -3246,8 +3246,20 @@ try {
         $insertPhoto->execute([$activityId, $binary, $matches[1]]);
     }
     $pdo->commit();
+    $dateQuery = $pdo->prepare('SELECT DATE_FORMAT(data_atividade, "%d/%m/%Y") FROM atividades WHERE id=? AND usuario_id=?');
+    $dateQuery->execute([$activityId, $ownerId]);
     http_response_code((int) ($input['id'] ?? 0) > 0 ? 200 : 201);
-    echo json_encode(['id' => $activityId], JSON_UNESCAPED_UNICODE);
+    echo json_encode([
+        'id' => $activityId,
+        'activity' => [
+            'id' => $activityId,
+            'title' => $title,
+            'area' => $area,
+            'note' => $note,
+            'date' => (string) ($dateQuery->fetchColumn() ?: date('d/m/Y')),
+            'photos' => array_values(array_filter($photos, 'is_string')),
+        ],
+    ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $error) {
     try {
         if (isset($pdo) && $pdo->inTransaction()) {

@@ -4,3 +4,4 @@
 backups/
 config.production.php
 config.local.php
+error_log

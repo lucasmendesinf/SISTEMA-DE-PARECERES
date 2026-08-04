@@ -111,7 +111,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Ai Prof.">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="manifest.json?v=20260804-mobile-no-input-zoom-1">
+  <link rel="manifest" href="manifest.json?v=20260804-activity-photo-compress-1">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
   <link rel="stylesheet" href="style.css?v=20260804-mobile-no-input-zoom-1">
   <link rel="stylesheet" href="mobile-menu.css?v=20260709-sidebar-scroll-1">
@@ -189,14 +189,14 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <dialog id="modal"><form method="dialog" id="modalForm" novalidate><button class="close" type="button" formnovalidate aria-label="Fechar" onclick="event.preventDefault();event.stopPropagation();this.closest('dialog').close();return false;">×</button><div id="modalContent"></div></form></dialog>
   <script>window.PortalBootstrapUser = <?= json_encode($bootstrapUser, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;</script>
   <script src="save-feedback.js?v=20260717-save-feedback-front-1"></script>
-  <script src="app.js?v=20260715-keep-current-menu-1"></script>
+  <script src="app.js?v=20260804-activity-photo-compress-1"></script>
   <script src="document-type.js?v=20260704-pdf-image-compress-1"></script>
   <script src="mobile-menu.js"></script>
   <script src="draft-delete.js"></script>
   <script src="periods.js"></script>
   <script src="activity-pagination.js"></script>
   <script src="classes-student-edit.js"></script>
-  <script src="activities-edit.js?v=20260709-mobile-camera-only-1"></script>
+  <script src="activities-edit.js?v=20260804-activity-photo-compress-1"></script>
   <script src="experience-fields.js?v=20260709-mobile-camera-only-1"></script>
   <script src="modal-controls.js?v=20260715-onboarding-draft-1"></script>
   <script src="report-type-badge.js"></script>

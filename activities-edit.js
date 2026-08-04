@@ -129,3 +129,79 @@ window.deleteActivity = deleteActivity;
 const activitiesList = document.querySelector('#activitiesList');
 if (activitiesList) new MutationObserver(addActivityEditButtons).observe(activitiesList, {childList: true, subtree: true});
 addActivityEditButtons();
+
+function editActivity(activityId) {
+  const activity = data.activities.find(item => String(item.id) === String(activityId));
+  if (!activity) return;
+  editingActivityPhotos = [...(activity.photos || [])];
+  editingActivityImageEditorMode = 'none';
+  open(`<h2 class="modal-title">Editar atividade</h2><p class="modal-subtitle">Atualize as informacoes e, se necessario, substitua as fotos da atividade.</p><div class="form-grid"><div class="field"><label>Titulo da atividade</label><input id="editActivityTitle" required value="${esc(activity.title)}"></div><div class="field"><label>Campo de experiencia</label><select id="editActivityArea"><option ${activity.area === 'O eu, o outro e o nos' ? 'selected' : ''}>O eu, o outro e o nos</option><option ${activity.area === 'Corpo, gestos e movimentos' ? 'selected' : ''}>Corpo, gestos e movimentos</option><option ${activity.area === 'Tracos, sons, cores e formas' ? 'selected' : ''}>Tracos, sons, cores e formas</option><option ${activity.area === 'Escuta, fala, pensamento e imaginacao' ? 'selected' : ''}>Escuta, fala, pensamento e imaginacao</option><option ${activity.area === 'Espacos, tempos, quantidades, relacoes e transformacoes' ? 'selected' : ''}>Espacos, tempos, quantidades, relacoes e transformacoes</option></select></div><div class="field"><label>Observacoes da professora</label><textarea id="editActivityNote" rows="4">${esc(activity.note)}</textarea></div><div class="field"><label>Fotos da atividade <span class="muted">(ate 30 imagens)</span></label><div id="editActivityPreviews" class="image-previews">${editingActivityPhotos.map(photo => `<img src="${photo}" alt="Foto da atividade">`).join('')}</div><div class="activity-upload-actions"><label class="secondary activity-upload-button" for="editActivityPhotos">Escolher fotos</label><label class="secondary activity-upload-button activity-camera-button" for="editActivityCamera">Abrir camera</label></div><input id="editActivityPhotos" class="activity-file-input" type="file" accept="image/*" multiple onchange="selectEditActivityPhotos(this)"><input id="editActivityCamera" class="activity-file-input" type="file" accept="image/*" capture="environment" data-append="1" onchange="selectEditActivityPhotos(this)"><small id="editActivityPhotoStatus" class="muted">As fotos serao otimizadas antes de salvar. Limite de 30 imagens.</small></div></div><div class="form-actions"><button class="secondary" type="button" onclick="document.querySelector('#modal').close()">Cancelar</button><button class="primary" id="saveEditActivityButton" type="button" onclick="saveActivityEdit('${activity.id}')">Salvar atividade</button></div>`);
+}
+
+async function selectEditActivityPhotos(input) {
+  const previous = [...editingActivityPhotos];
+  try {
+    const files = [...input.files];
+    if (!files.length) return;
+    if ((input.dataset.append ? editingActivityPhotos.length : 0) + files.length > 30) throw new Error('Selecione no maximo 30 imagens.');
+    window.PortalSaveFeedback?.showLoading('Preparando fotos...');
+    const loaded = window.PortalActivityImages
+      ? await window.PortalActivityImages.compressFiles(files, '#editActivityPhotoStatus')
+      : await Promise.all(files.map(file => window.PortalImageEditors.fileAsDataUrl(file)));
+    editingActivityPhotos = input.dataset.append ? [...editingActivityPhotos, ...loaded] : loaded;
+    editingActivityImageEditorMode = 'none';
+    window.PortalActivityImages?.renderPreviews('#editActivityPreviews', editingActivityPhotos);
+  } catch (error) {
+    editingActivityPhotos = previous;
+    window.PortalActivityImages?.renderPreviews('#editActivityPreviews', editingActivityPhotos);
+    const status = document.querySelector('#editActivityPhotoStatus');
+    if (status) status.textContent = editingActivityPhotos.length ? `${editingActivityPhotos.length} foto(s) pronta(s) para salvar.` : '';
+    alert(error.message || 'Nao foi possivel editar as imagens.');
+  } finally {
+    window.PortalSaveFeedback?.hideLoading();
+    input.value = '';
+  }
+}
+
+async function saveActivityEdit(activityId) {
+  const title = $('#editActivityTitle').value.trim();
+  if (!title) return $('#editActivityTitle').focus();
+  const button = $('#saveEditActivityButton');
+  const oldText = button?.textContent;
+  try {
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Salvando...';
+    }
+    const activePeriod = data.periods.find(item => item.active) || data.periods[0];
+    const response = await fetch('api.php?resource=activities', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        id: activityId,
+        title,
+        area: $('#editActivityArea').value,
+        note: $('#editActivityNote').value.trim() || 'Registro de vivencia da turma.',
+        photos: editingActivityPhotos.filter(photo => String(photo).startsWith('data:image/')),
+        classId: 1,
+        periodId: activePeriod?.id || 1,
+        imageEditorMode: editingActivityPhotos.length ? editingActivityImageEditorMode : 'none'
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Nao foi possivel salvar a atividade.');
+    close();
+    await loadActivities();
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = oldText || 'Salvar atividade';
+    }
+  }
+}
+
+window.editActivity = editActivity;
+window.saveActivityEdit = saveActivityEdit;
+window.selectEditActivityPhotos = selectEditActivityPhotos;

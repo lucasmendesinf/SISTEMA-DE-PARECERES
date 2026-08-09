@@ -3091,35 +3091,36 @@ try {
         $headers .= "From: Ai Prof <{$fromAddress}>\r\n";
         $replyTo = filter_var((string) ($report['professora_email'] ?? ''), FILTER_VALIDATE_EMAIL) ? (string) $report['professora_email'] : $fromAddress;
         $headers .= "Reply-To: {$replyTo}\r\n";
-        if ($driveLinks) {
-            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-            $body = '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#253c31">' . $html . '<p>Enviado por Ai Prof.</p></body></html>';
+        $respondAndSendMail = static function (string $mode, string $message, string $recipientEmail, string $subject, string $body, string $headers): void {
+            $payload = json_encode(['ok' => true, 'mode' => $mode, 'message' => $message], JSON_UNESCAPED_UNICODE);
+            if ($payload === false) $payload = '{"ok":true,"message":"E-mail em processamento."}';
+            if (function_exists('session_write_close')) @session_write_close();
             if (function_exists('fastcgi_finish_request')) {
-                echo json_encode(['ok' => true, 'mode' => 'drive_links', 'message' => 'E-mail com links do Drive em processamento. Em instantes ele sera entregue para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
+                echo $payload;
                 fastcgi_finish_request();
                 @mail($recipientEmail, $subject, $body, $headers);
                 exit;
             }
-            if (!function_exists('mail') || !mail($recipientEmail, $subject, $body, $headers)) {
-                throw new RuntimeException('Nao foi possivel enviar o e-mail. Verifique a configuracao de envio de e-mail do servidor.');
+            if (!headers_sent()) {
+                header('Content-Type: application/json; charset=UTF-8');
+                header('Content-Length: ' . strlen($payload));
+                header('Connection: close');
             }
-            echo json_encode(['ok' => true, 'mode' => 'drive_links', 'message' => 'Links do Drive enviados para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
+            echo $payload;
+            while (ob_get_level() > 0) @ob_end_flush();
+            @flush();
+            @mail($recipientEmail, $subject, $body, $headers);
             exit;
+        };
+        if ($driveLinks) {
+            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+            $body = '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#253c31">' . $html . '<p>Enviado por Ai Prof.</p></body></html>';
+            $respondAndSendMail('drive_links', 'E-mail com links do Drive em processamento. Em instantes ele sera entregue para ' . $recipientEmail . '.', $recipientEmail, $subject, $body, $headers);
         }
         if (!$emailAttachments) {
             $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
             $body = '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#253c31">' . $html . '<p>Enviado por Ai Prof.</p></body></html>';
-            if (function_exists('fastcgi_finish_request')) {
-                echo json_encode(['ok' => true, 'mode' => 'message_only', 'message' => 'E-mail sem anexos em processamento. Em instantes ele sera entregue para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
-                fastcgi_finish_request();
-                @mail($recipientEmail, $subject, $body, $headers);
-                exit;
-            }
-            if (!function_exists('mail') || !mail($recipientEmail, $subject, $body, $headers)) {
-                throw new RuntimeException('Nao foi possivel enviar o e-mail. Verifique a configuracao de envio de e-mail do servidor.');
-            }
-            echo json_encode(['ok' => true, 'mode' => 'message_only', 'message' => 'E-mail enviado sem anexos para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
-            exit;
+            $respondAndSendMail('message_only', 'E-mail sem anexos em processamento. Em instantes ele sera entregue para ' . $recipientEmail . '.', $recipientEmail, $subject, $body, $headers);
         }
         $headers .= "Content-Type: multipart/mixed; boundary=\"{$boundary}\"\r\n";
         $body = "--{$boundary}\r\n";
@@ -3135,17 +3136,7 @@ try {
             $body .= chunk_split(base64_encode($attachment['content'])) . "\r\n";
         }
         $body .= "--{$boundary}--\r\n";
-        if (function_exists('fastcgi_finish_request')) {
-            echo json_encode(['ok' => true, 'message' => 'E-mail em processamento. Em instantes ele sera entregue para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
-            fastcgi_finish_request();
-            @mail($recipientEmail, $subject, $body, $headers);
-            exit;
-        }
-        if (!function_exists('mail') || !mail($recipientEmail, $subject, $body, $headers)) {
-            throw new RuntimeException('Nao foi possivel enviar o e-mail. Verifique a configuracao de envio de e-mail do servidor.');
-        }
-        echo json_encode(['ok' => true, 'message' => 'Documento enviado para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
-        exit;
+        $respondAndSendMail('attachments', 'E-mail com anexos em processamento. Em instantes ele sera entregue para ' . $recipientEmail . '.', $recipientEmail, $subject, $body, $headers);
     }
     if ($resource === 'reports' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);

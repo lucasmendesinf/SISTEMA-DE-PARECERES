@@ -1,8 +1,8 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260809-email-without-attachment-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260809-email-drive-priority-fast-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
-  './manifest.json?v=20260809-email-without-attachment-1',
+  './manifest.json?v=20260809-email-drive-priority-fast-1',
   './pwa.js?v=20260716-reset-terms-2',
   './login.css?v=20260702-billing-modal-1',
   './style.css?v=20260804-mobile-no-input-zoom-1',

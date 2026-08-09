@@ -1,11 +1,20 @@
 .mobile-menu-close,.mobile-menu-overlay{display:none}
 
 @media (max-width:800px){
-  .sidebar{display:flex;top:0;left:0;bottom:auto;height:100dvh;height:100svh;max-height:100dvh;max-height:100svh;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-gutter:stable;padding-top:max(30px,env(safe-area-inset-top));padding-bottom:calc(72px + env(safe-area-inset-bottom));transform:translateX(-100%);transition:transform .22s ease;z-index:1001;width:252px;pointer-events:auto;box-shadow:8px 0 30px rgba(21,38,30,.2)}
-  .sidebar.open{display:flex;width:min(252px,86vw);transform:translateX(0)}
-  .sidebar nav{flex:0 0 auto}
-  .sidebar-bottom{margin-top:22px;padding-bottom:12px;flex:0 0 auto}
-  .mobile-menu-close{display:grid;place-items:center;position:absolute;z-index:1002;right:13px;top:12px;width:36px;height:36px;border:0;border-radius:8px;background:#fff;color:#236b52;font:400 28px/1 Arial,sans-serif;cursor:pointer}
+  .sidebar{display:flex;top:0;left:0;bottom:auto;height:100dvh;height:100svh;max-height:100dvh;max-height:100svh;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-gutter:stable;padding:28px 18px calc(92px + env(safe-area-inset-bottom));transform:translateX(-100%);transition:transform .22s ease;z-index:1001;width:min(312px,88vw);pointer-events:auto;box-shadow:8px 0 30px rgba(21,38,30,.2)}
+  .sidebar.open{display:flex;width:min(312px,88vw);transform:translateX(0)}
+  .sidebar .brand{font-size:30px!important;gap:11px!important;padding:0 44px 0 10px!important;line-height:1.1!important}
+  .sidebar .brand-mark{width:42px!important;height:42px!important;border-radius:10px!important;font-size:26px!important}
+  .sidebar .school{font-size:11px!important;line-height:1.25!important;margin:24px 10px 16px!important}
+  .sidebar nav{flex:0 0 auto;gap:7px!important}
+  .sidebar .nav-item{display:flex!important;align-items:center!important;gap:14px!important;min-height:52px!important;padding:13px 16px!important;border-radius:11px!important;font-size:15px!important;line-height:1.2!important}
+  .sidebar .nav-item span{width:26px!important;min-width:26px!important;font-size:22px!important;text-align:center!important}
+  .sidebar-bottom{margin-top:26px;padding-bottom:16px;flex:0 0 auto}
+  .sidebar-bottom .profile{min-height:70px!important;padding:12px 42px 12px 12px!important;border-radius:13px!important}
+  .sidebar-bottom .profile .avatar{width:46px!important;height:46px!important;font-size:13px!important}
+  .sidebar-bottom .profile strong{font-size:16px!important;line-height:1.2!important}
+  .sidebar-bottom .profile small{font-size:13px!important}
+  .mobile-menu-close{display:grid;place-items:center;position:absolute;z-index:1002;right:16px;top:14px;width:44px;height:44px;border:0;border-radius:10px;background:#fff;color:#236b52;font:400 34px/1 Arial,sans-serif;cursor:pointer}
   .mobile-menu-overlay,.mobile-menu-overlay.visible{display:none}
   body.menu-open{overflow:hidden}
 }

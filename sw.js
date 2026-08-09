@@ -1,12 +1,12 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260808-email-drive-links-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260809-mobile-menu-readable-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
-  './manifest.json?v=20260808-email-drive-links-1',
+  './manifest.json?v=20260809-mobile-menu-readable-1',
   './pwa.js?v=20260716-reset-terms-2',
   './login.css?v=20260702-billing-modal-1',
   './style.css?v=20260804-mobile-no-input-zoom-1',
-  './mobile-menu.css?v=20260709-sidebar-scroll-1',
+  './mobile-menu.css?v=20260809-mobile-menu-readable-1',
   './activity-pagination.css',
   './report-type-badge.css',
   './experience-fields.css',
@@ -20,7 +20,7 @@ const STATIC_ASSETS = [
   './finance-admin.css?v=20260703-finance-due-filter-1',
   './ai-usage-admin.css?v=20260716-ai-usage-1',
   './image-editors.css?v=20260709-activity-photo-picker-front-1',
-  './document-style.css?v=20260808-mobile-review-preview-1',
+  './document-style.css?v=20260809-mobile-avatar-preview-1',
   './tutorial-videos.css?v=20260706-video-before-onboarding-2',
   './document-image-zoom.css?v=20260702-document-image-zoom-front-1',
   './onboarding.css?v=20260716-onboarding-student-close-1',

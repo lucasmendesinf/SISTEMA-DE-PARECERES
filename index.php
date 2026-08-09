@@ -111,10 +111,10 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Ai Prof.">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="manifest.json?v=20260808-email-drive-links-1">
+  <link rel="manifest" href="manifest.json?v=20260809-mobile-menu-readable-1">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
   <link rel="stylesheet" href="style.css?v=20260804-mobile-no-input-zoom-1">
-  <link rel="stylesheet" href="mobile-menu.css?v=20260709-sidebar-scroll-1">
+  <link rel="stylesheet" href="mobile-menu.css?v=20260809-mobile-menu-readable-1">
   <link rel="stylesheet" href="activity-pagination.css">
   <link rel="stylesheet" href="report-type-badge.css">
   <link rel="stylesheet" href="experience-fields.css">
@@ -128,7 +128,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <link rel="stylesheet" href="finance-admin.css?v=20260703-finance-due-filter-1">
   <link rel="stylesheet" href="ai-usage-admin.css?v=20260716-ai-usage-1">
   <link rel="stylesheet" href="image-editors.css?v=20260709-activity-photo-picker-front-1">
-  <link rel="stylesheet" href="document-style.css?v=20260808-mobile-review-preview-1">
+  <link rel="stylesheet" href="document-style.css?v=20260809-mobile-avatar-preview-1">
   <link rel="stylesheet" href="tutorial-videos.css?v=20260706-video-before-onboarding-2">
   <link rel="stylesheet" href="document-image-zoom.css?v=20260702-document-image-zoom-front-1">
   <link rel="stylesheet" href="onboarding.css?v=20260716-onboarding-student-close-1">

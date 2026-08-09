@@ -3007,10 +3007,31 @@ try {
         $html = '<h2>' . $escape($documentLabel . ' - ' . $studentName) . '</h2>';
         $html .= '<p>' . nl2br($escape($customMessage)) . '</p>';
         $html .= '<p><strong>Aluno:</strong> ' . $escape($studentName) . '<br><strong>Turma:</strong> ' . $escape((string) ($report['turma_nome'] ?? 'Turma nao informada')) . '</p>';
-        $html .= '<p>Os arquivos do documento seguem em anexo.</p>';
+        $driveLinks = [];
+        if (!empty($input['preferDriveLinks'])) {
+            $driveQuery = $pdo->prepare("SELECT arquivo,mime_type,drive_link FROM google_drive_uploads WHERE parecer_id=? AND usuario_id=? AND status='uploaded' AND drive_link IS NOT NULL AND drive_link<>'' ORDER BY CASE WHEN mime_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document' THEN 1 WHEN mime_type='application/pdf' THEN 2 ELSE 3 END, id");
+            $driveQuery->execute([$reportId, $ownerId]);
+            foreach ($driveQuery->fetchAll(PDO::FETCH_ASSOC) as $driveRow) {
+                $link = trim((string) ($driveRow['drive_link'] ?? ''));
+                if ($link === '') continue;
+                $driveLinks[] = [
+                    'name' => $cleanFileName((string) ($driveRow['arquivo'] ?? 'Documento')),
+                    'link' => $link,
+                ];
+            }
+        }
+        if ($driveLinks) {
+            $html .= '<p>Os arquivos do documento estao disponiveis no Google Drive:</p><ul>';
+            foreach ($driveLinks as $driveLink) {
+                $html .= '<li><a href="' . $escape($driveLink['link']) . '">' . $escape($driveLink['name']) . '</a></li>';
+            }
+            $html .= '</ul>';
+        } else {
+            $html .= '<p>Os arquivos do documento seguem em anexo.</p>';
+        }
         $boundary = '__AIPROF_' . bin2hex(random_bytes(8));
         $emailAttachments = [];
-        if (!$isMultipartEmail && is_array($input['attachments'] ?? null)) {
+        if (!$driveLinks && !$isMultipartEmail && is_array($input['attachments'] ?? null)) {
             foreach ($input['attachments'] as $attachment) {
                 if (!is_array($attachment)) continue;
                 $name = $cleanFileName((string) ($attachment['name'] ?? 'documento'));
@@ -3023,7 +3044,7 @@ try {
                 $emailAttachments[] = ['name' => $name, 'mime' => $mime, 'content' => $content];
             }
         }
-        if (!empty($_FILES['attachments']) && is_array($_FILES['attachments']['tmp_name'] ?? null)) {
+        if (!$driveLinks && !empty($_FILES['attachments']) && is_array($_FILES['attachments']['tmp_name'] ?? null)) {
             foreach ($_FILES['attachments']['tmp_name'] as $index => $tmpName) {
                 if (!is_string($tmpName) || $tmpName === '' || !is_uploaded_file($tmpName)) continue;
                 $error = (int) ($_FILES['attachments']['error'][$index] ?? UPLOAD_ERR_OK);
@@ -3038,7 +3059,7 @@ try {
                 $emailAttachments[] = ['name' => $name, 'mime' => $mime, 'content' => $content];
             }
         }
-        if (!$emailAttachments) {
+        if (!$driveLinks && !$emailAttachments) {
             $fileQuery = $pdo->prepare("SELECT tipo,arquivo_nome,mime_type,arquivo FROM parecer_arquivos WHERE parecer_id=? AND usuario_id=? AND tipo IN ('docx','pdf') ORDER BY FIELD(tipo,'docx','pdf')");
             $fileQuery->execute([$reportId, $ownerId]);
             foreach ($fileQuery->fetchAll(PDO::FETCH_ASSOC) as $fileRow) {
@@ -3051,13 +3072,11 @@ try {
                 ];
             }
         }
-        if (!$emailAttachments) {
+        if (!$driveLinks && !$emailAttachments) {
             throw new RuntimeException('Nenhum arquivo final salvo foi encontrado para anexar ao e-mail. Entregue ou baixe o documento novamente para salvar os arquivos finais.');
         }
-        $totalAttachmentBytes = array_sum(array_map(static fn (array $attachment): int => strlen((string) $attachment['content']), $emailAttachments));
-        if ($totalAttachmentBytes > 22 * 1024 * 1024) {
-            throw new RuntimeException('Os anexos ficaram muito grandes para envio por e-mail. Remova algumas imagens ou envie pelo Google Drive.');
-        }
+        $totalAttachmentBytes = $driveLinks ? 0 : array_sum(array_map(static fn (array $attachment): int => strlen((string) $attachment['content']), $emailAttachments));
+        if (!$driveLinks && $totalAttachmentBytes > 22 * 1024 * 1024) throw new RuntimeException('Os anexos ficaram muito grandes para envio por e-mail. Remova algumas imagens ou envie pelo Google Drive.');
         $subject = $documentLabel . ' - ' . $studentName;
         $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? 'aiprof.local'));
         $host = preg_replace('/:\d+$/', '', $host) ?: 'aiprof.local';
@@ -3067,6 +3086,21 @@ try {
         $headers .= "From: Ai Prof <{$fromAddress}>\r\n";
         $replyTo = filter_var((string) ($report['professora_email'] ?? ''), FILTER_VALIDATE_EMAIL) ? (string) $report['professora_email'] : $fromAddress;
         $headers .= "Reply-To: {$replyTo}\r\n";
+        if ($driveLinks) {
+            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+            $body = '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#253c31">' . $html . '<p>Enviado por Ai Prof.</p></body></html>';
+            if (function_exists('fastcgi_finish_request')) {
+                echo json_encode(['ok' => true, 'mode' => 'drive_links', 'message' => 'E-mail com links do Drive em processamento. Em instantes ele sera entregue para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
+                fastcgi_finish_request();
+                @mail($recipientEmail, $subject, $body, $headers);
+                exit;
+            }
+            if (!function_exists('mail') || !mail($recipientEmail, $subject, $body, $headers)) {
+                throw new RuntimeException('Nao foi possivel enviar o e-mail. Verifique a configuracao de envio de e-mail do servidor.');
+            }
+            echo json_encode(['ok' => true, 'mode' => 'drive_links', 'message' => 'Links do Drive enviados para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         $headers .= "Content-Type: multipart/mixed; boundary=\"{$boundary}\"\r\n";
         $body = "--{$boundary}\r\n";
         $body .= "Content-Type: text/html; charset=UTF-8\r\n";

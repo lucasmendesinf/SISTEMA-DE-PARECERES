@@ -211,6 +211,16 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  function openDownloadUrl(url) {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
   async function downloadStoredFile(report, type, fallback) {
     const reportId = report?.databaseId || report?.id;
     if (!reportId || report?.status !== 'done') {
@@ -218,12 +228,8 @@
       return;
     }
     try {
-      const response = await fetch(`api.php?resource=report-files&reportId=${encodeURIComponent(reportId)}&type=${encodeURIComponent(type)}`);
-      if (!response.ok) throw new Error('Arquivo final ainda nao salvo.');
-      const blob = await response.blob();
-      const disposition = response.headers.get('Content-Disposition') || '';
-      const match = disposition.match(/filename="([^"]+)"/i);
-      downloadBlob(blob, match ? match[1] : `documento.${type}`);
+      const url = `api.php?resource=report-files&reportId=${encodeURIComponent(reportId)}&type=${encodeURIComponent(type)}&download=1`;
+      openDownloadUrl(url);
     } catch (error) {
       fallback();
       try {
@@ -314,30 +320,18 @@
       status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Preparando envio...';
     }
     try {
-      const report = await ensureFullReport(reportId);
-      if (!report) throw new Error('Documento nao encontrado para gerar anexos.');
-      if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Atualizando arquivos finais com imagens...';
-      await window.saveOfficialReportFiles(report);
-      if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Anexando arquivos oficiais e enviando e-mail...';
+      if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Verificando arquivos finais e links do Drive...';
       const sendRequest = async () => {
         const response = await fetch('api.php?resource=send-report-email', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({reportId, recipientEmail, message})
+          body: JSON.stringify({reportId, recipientEmail, message, preferDriveLinks: true})
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'Nao foi possivel enviar o e-mail.');
         return result;
       };
-      let result;
-      try {
-        result = await sendRequest();
-      } catch (error) {
-        if (!String(error?.message || '').includes('arquivo final salvo')) throw error;
-        if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Salvando arquivos finais para este documento...';
-        await window.saveOfficialReportFiles(report);
-        result = await sendRequest();
-      }
+      const result = await sendRequest();
       if (status) {
         status.classList.remove('email-send-loading');
         status.textContent = result.message || 'E-mail enviado com sucesso.';

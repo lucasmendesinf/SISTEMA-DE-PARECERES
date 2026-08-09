@@ -2936,6 +2936,15 @@ try {
             $query = $pdo->prepare("SELECT pa.arquivo_nome,pa.mime_type,pa.arquivo,pa.tamanho FROM parecer_arquivos pa JOIN pareceres p ON p.id=pa.parecer_id JOIN criancas c ON c.id=p.crianca_id WHERE pa.parecer_id=? AND pa.tipo=? AND c.usuario_id=? LIMIT 1");
             $query->execute([$reportId, $type, $ownerId]);
             $file = $query->fetch(PDO::FETCH_ASSOC);
+            if (isset($_GET['check'])) {
+                echo json_encode([
+                    'ok' => true,
+                    'exists' => (bool) $file,
+                    'name' => $file ? (string) ($file['arquivo_nome'] ?? '') : '',
+                    'size' => $file ? (int) ($file['tamanho'] ?? 0) : 0,
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
             if (!$file) throw new RuntimeException('Arquivo final ainda nao foi salvo para este documento. Finalize ou baixe o documento novamente.');
             header('Content-Type: ' . $file['mime_type']);
             header('Content-Disposition: attachment; filename="' . addcslashes((string) $file['arquivo_nome'], "\"\\") . '"');

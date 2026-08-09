@@ -229,11 +229,23 @@
     }
     try {
       const url = `api.php?resource=report-files&reportId=${encodeURIComponent(reportId)}&type=${encodeURIComponent(type)}&download=1`;
+      const checkResponse = await fetch(`api.php?resource=report-files&reportId=${encodeURIComponent(reportId)}&type=${encodeURIComponent(type)}&check=1`, {
+        headers: {'Accept': 'application/json'},
+        cache: 'no-store'
+      });
+      const check = await checkResponse.json().catch(() => ({}));
+      if (!checkResponse.ok || !check.exists) {
+        const fullReport = await ensureFullReport(report);
+        if (!fullReport) throw new Error('Documento nao encontrado para gerar o arquivo.');
+        await window.saveOfficialReportFiles(fullReport);
+      }
       openDownloadUrl(url);
     } catch (error) {
+      console.warn('Nao foi possivel baixar o arquivo final salvo. Usando geracao direta.', error);
       fallback();
       try {
-        await window.saveOfficialReportFiles(report);
+        const fullReport = await ensureFullReport(report);
+        if (fullReport) await window.saveOfficialReportFiles(fullReport);
       } catch (saveError) {
         console.warn(saveError);
       }
@@ -276,9 +288,10 @@
   }
 
   window.openDirectorEmailModal = async function openDirectorEmailModal(id) {
-    const report = await ensureFullReport(id);
-    if (!report) return alert('Documento nao encontrado.');
+    const report = data.reports.find(item => String(item.id) === String(id) || String(item.databaseId) === String(id)) || {id};
     const message = defaultMessage(report);
+    const reportId = Number(report.databaseId || report.id || id);
+    if (!reportId) return alert('Documento nao encontrado.');
     if (typeof open === 'function') {
       open(`
         <h2 class="modal-title">Enviar documento por e-mail</h2>
@@ -294,7 +307,7 @@
         <p id="directorEmailStatus" class="profile-message"></p>
         <div class="form-actions">
           <button class="secondary" type="button" onclick="document.querySelector('#modal').close()">Cancelar</button>
-          <button class="primary" type="button" id="directorEmailSendButton" onclick="sendReportToDirector(${Number(report.databaseId || report.id)})">Enviar e-mail</button>
+          <button class="primary" type="button" id="directorEmailSendButton" onclick="sendReportToDirector(${reportId})">Enviar e-mail</button>
         </div>
       `);
     }

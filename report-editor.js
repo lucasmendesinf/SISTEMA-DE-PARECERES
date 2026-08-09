@@ -590,6 +590,54 @@ async function wizardFinalizeV3() {
 async function editReport(id) {
   let report = data.reports.find(item => String(item.id) === String(id) || String(item.databaseId) === String(id));
   if (!report) return;
+  if (report.status === 'done') {
+    const openDeliveredReport = item => {
+      const student = data.students.find(studentItem => String(studentItem.id) === String(item.studentId)) || {
+        id: item.studentId,
+        name: item.name || 'Aluno',
+        birthDate: item.birthDate || '',
+        classId: item.classId || 1
+      };
+      wizard = {
+        studentId: item.studentId,
+        text: item.text || '',
+        documentType: normalizeDocumentType(item.documentType),
+        activityIds: [],
+        photoNote: '',
+        photos: [],
+        entries: item.entries || [{activityIds: item.activityIds || [], photoNote: item.photoNote || '', photos: item.photos || []}],
+        useFinalText: !!item.useFinalText,
+        finalText: item.finalText || '',
+        readOnly: true
+      };
+      wizardOpen(`
+        <p class="wizard-step">DOCUMENTO ENTREGUE</p>
+        <h2 class="modal-title">RevisÃ£o do documento</h2>
+        <p class="modal-subtitle">VisualizaÃ§Ã£o completa do documento entregue. Para editar, reabra o documento como rascunho.</p>
+        <div class="review-box">${configuredHeaderHtml()}${studentDocumentHeader(student)}${documentTypePreview()}${item.hasFullData ? documentDraftHtml() : '<p class="muted">Carregando conteÃºdo completo do documento...</p>'}</div>
+        <div class="form-actions">
+          <button class="secondary" type="button" onclick="wizardClose()">Fechar</button>
+          <button class="secondary" type="button" onclick="reopenReport(${item.id})">Reabrir documento</button>
+          <button class="secondary" type="button" onclick="openDirectorEmailModal(${item.id})">Enviar e-mail</button>
+          <button class="secondary" type="button" onclick="downloadPdf(${item.id})">Baixar PDF</button>
+          <button class="primary" type="button" onclick="downloadReport(${item.id})">Baixar DOCX</button>
+        </div>
+      `);
+    };
+    openDeliveredReport(report);
+    if (!report.hasFullData) {
+      ensureReportDetail(id)
+        .then(fullReport => {
+          if (fullReport && document.querySelector('#modal')?.open) openDeliveredReport(fullReport);
+        })
+        .catch(error => {
+          console.warn(error);
+          const box = document.querySelector('#modal .review-box');
+          if (box) box.insertAdjacentHTML('beforeend', '<p class="muted">NÃ£o foi possÃ­vel carregar as imagens agora. Tente novamente em instantes.</p>');
+        });
+    }
+    return;
+  }
   if (!report.hasFullData) {
     wizardOpen(`
       <p class="wizard-step">CARREGANDO DOCUMENTO</p>
@@ -665,14 +713,12 @@ const downloadPdfBeforeDetailLoad = window.downloadPdf?.bind(window);
 
 if (downloadReportBeforeDetailLoad) {
   window.downloadReport = async function downloadReportWithDetail(id) {
-    try { await ensureReportDetail(id); } catch (error) { console.warn(error); }
     return downloadReportBeforeDetailLoad(id);
   };
 }
 
 if (downloadPdfBeforeDetailLoad) {
   window.downloadPdf = async function downloadPdfWithDetail(id) {
-    try { await ensureReportDetail(id); } catch (error) { console.warn(error); }
     return downloadPdfBeforeDetailLoad(id);
   };
 }

@@ -3035,8 +3035,6 @@ try {
                 $html .= '<li><a href="' . $escape($driveLink['link']) . '">' . $escape($driveLink['name']) . '</a></li>';
             }
             $html .= '</ul>';
-        } else {
-            $html .= '<p>Os arquivos do documento seguem em anexo.</p>';
         }
         $boundary = '__AIPROF_' . bin2hex(random_bytes(8));
         $emailAttachments = [];
@@ -3081,9 +3079,7 @@ try {
                 ];
             }
         }
-        if (!$driveLinks && !$emailAttachments) {
-            throw new RuntimeException('Nenhum arquivo final salvo foi encontrado para anexar ao e-mail. Entregue ou baixe o documento novamente para salvar os arquivos finais.');
-        }
+        if (!$driveLinks && $emailAttachments) $html .= '<p>Os arquivos do documento seguem em anexo.</p>';
         $totalAttachmentBytes = $driveLinks ? 0 : array_sum(array_map(static fn (array $attachment): int => strlen((string) $attachment['content']), $emailAttachments));
         if (!$driveLinks && $totalAttachmentBytes > 22 * 1024 * 1024) throw new RuntimeException('Os anexos ficaram muito grandes para envio por e-mail. Remova algumas imagens ou envie pelo Google Drive.');
         $subject = $documentLabel . ' - ' . $studentName;
@@ -3108,6 +3104,21 @@ try {
                 throw new RuntimeException('Nao foi possivel enviar o e-mail. Verifique a configuracao de envio de e-mail do servidor.');
             }
             echo json_encode(['ok' => true, 'mode' => 'drive_links', 'message' => 'Links do Drive enviados para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if (!$emailAttachments) {
+            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+            $body = '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#253c31">' . $html . '<p>Enviado por Ai Prof.</p></body></html>';
+            if (function_exists('fastcgi_finish_request')) {
+                echo json_encode(['ok' => true, 'mode' => 'message_only', 'message' => 'E-mail sem anexos em processamento. Em instantes ele sera entregue para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
+                fastcgi_finish_request();
+                @mail($recipientEmail, $subject, $body, $headers);
+                exit;
+            }
+            if (!function_exists('mail') || !mail($recipientEmail, $subject, $body, $headers)) {
+                throw new RuntimeException('Nao foi possivel enviar o e-mail. Verifique a configuracao de envio de e-mail do servidor.');
+            }
+            echo json_encode(['ok' => true, 'mode' => 'message_only', 'message' => 'E-mail enviado sem anexos para ' . $recipientEmail . '.'], JSON_UNESCAPED_UNICODE);
             exit;
         }
         $headers .= "Content-Type: multipart/mixed; boundary=\"{$boundary}\"\r\n";

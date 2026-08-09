@@ -111,7 +111,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Ai Prof.">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="manifest.json?v=20260809-fast-report-actions-1">
+  <link rel="manifest" href="manifest.json?v=20260809-email-without-attachment-1">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
   <link rel="stylesheet" href="style.css?v=20260804-mobile-no-input-zoom-1">
   <link rel="stylesheet" href="mobile-menu.css?v=20260809-mobile-menu-readable-1">

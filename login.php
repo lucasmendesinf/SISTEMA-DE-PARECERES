@@ -5,6 +5,36 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
   header('Location: index.php');
   exit;
 }
+$publishedPwaVersion = '20260812-admin-update-1';
+$publishedPwaAt = '';
+try {
+  $config = require __DIR__ . '/config.php';
+  $pdo = new PDO(
+    "mysql:host={$config['host']};port={$config['port']};dbname={$config['database']};charset=utf8mb4",
+    $config['username'],
+    $config['password'],
+    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+  );
+  $query = $pdo->prepare("SELECT setting_value,updated_at FROM app_settings WHERE setting_key='pwa_release' LIMIT 1");
+  $query->execute();
+  $row = $query->fetch(PDO::FETCH_ASSOC) ?: [];
+  $payload = json_decode((string)($row['setting_value'] ?? '{}'), true);
+  if (is_array($payload) && !empty($payload['version'])) {
+    $publishedPwaVersion = 'v' . max(1, (int)$payload['version']);
+    $publishedPwaAt = trim((string)($payload['publishedAt'] ?? '')) ?: (string)($row['updated_at'] ?? '');
+  }
+} catch (Throwable $ignored) {
+  // A tela de login nao deve falhar caso o banco esteja temporariamente indisponivel.
+}
+$formatPwaDate = static function (string $value): string {
+  if ($value === '') return '';
+  try {
+    return (new DateTimeImmutable($value))->format('d/m/Y H:i');
+  } catch (Throwable $ignored) {
+    return $value;
+  }
+};
+$escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?><!doctype html>
 <html lang="pt-BR">
 <head>
@@ -18,7 +48,8 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="manifest" href="manifest.json?v=20260812-admin-update-1">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
-  <link rel="stylesheet" href="login.css?v=20260702-billing-modal-1">
+  <link rel="stylesheet" href="login.css?v=20260812-pwa-version-1">
+  <link rel="stylesheet" href="login-version.css?v=20260812-pwa-version-1">
 </head>
 <body>
   <main class="login-page">
@@ -39,7 +70,10 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
         <div id="billingLoginActions" class="billing-login-actions"></div>
         <p id="billingLoginMessage" class="login-message" role="alert"></p>
       </div>
-      <p class="login-foot">Um ambiente pensado para professoras e professores da Educacao Infantil.</p>
+      <p class="login-foot">
+        Um ambiente pensado para professoras e professores da Educacao Infantil.
+        <span class="login-version">Publicacao <?= $escape($publishedPwaVersion) ?><?= $publishedPwaAt !== '' ? ' - ' . $escape($formatPwaDate($publishedPwaAt)) : '' ?></span>
+      </p>
     </section>
   </main>
   <script>

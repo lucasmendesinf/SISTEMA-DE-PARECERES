@@ -16,7 +16,7 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Ai Prof.">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="manifest.json?v=20260812-admin-update-1">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
   <link rel="stylesheet" href="login.css?v=20260702-billing-modal-1">
 </head>
@@ -240,6 +240,6 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
 
     confirmPaymentReturn();
   </script>
-  <script src="pwa.js?v=20260705-pwa-1"></script>
+  <script src="pwa.js?v=20260812-admin-update-1"></script>
 </body>
 </html>

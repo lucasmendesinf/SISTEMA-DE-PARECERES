@@ -111,7 +111,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Ai Prof.">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="manifest.json?v=20260809-email-drive-priority-fast-1">
+  <link rel="manifest" href="manifest.json?v=20260812-admin-update-1">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
   <link rel="stylesheet" href="style.css?v=20260804-mobile-no-input-zoom-1">
   <link rel="stylesheet" href="mobile-menu.css?v=20260809-mobile-menu-readable-1">
@@ -133,6 +133,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <link rel="stylesheet" href="document-image-zoom.css?v=20260702-document-image-zoom-front-1">
   <link rel="stylesheet" href="onboarding.css?v=20260716-onboarding-student-close-1">
   <link rel="stylesheet" href="save-feedback.css?v=20260717-save-feedback-front-1">
+  <link rel="stylesheet" href="pwa-admin.css?v=20260812-admin-update-1">
   <style>.sidebar-bottom .help{display:none!important}</style>
   <style>.image-previews{display:flex;gap:8px;flex-wrap:wrap}.image-previews img,.activity-photos img{width:64px;height:64px;object-fit:cover;border-radius:7px;border:1px solid #e7ebe8}.activity-photos{display:flex;gap:6px;margin-top:14px;flex-wrap:wrap}.review-box .activity-photos{display:grid;grid-template-columns:repeat(2,minmax(0,229px));justify-content:center;gap:20px;margin:22px auto 30px;align-items:start;max-width:515px;overflow:hidden}.review-box .activity-photos img{width:100%;height:auto;max-height:409px;border-radius:0;object-fit:contain;border:0;display:block}.ai-adjust{border:0;background:none;color:#236b52;font:500 11px 'DM Sans',sans-serif;padding:7px 0 0;cursor:pointer}.ai-adjust:hover{text-decoration:underline}.linked-activities{border:1px solid #e7ebe8;border-radius:7px;max-height:210px;overflow:auto}.linked-activity{display:flex;align-items:center;gap:9px;padding:9px;border-bottom:1px solid #edf0ed;cursor:pointer}.linked-activity:last-child{border:0}.linked-activity input{width:auto}.linked-activity span{display:grid;gap:2px;flex:1}.linked-activity small{color:#73817b;font-size:11px}.linked-activity img{width:38px;height:38px;object-fit:cover;border-radius:5px}dialog.wizard{width:min(850px,calc(100% - 40px));max-width:850px}dialog.wizard::backdrop{background:rgba(20,28,25,.8)}.wizard-step{color:#236b52;font-size:11px;font-weight:700;letter-spacing:.8px}.wizard textarea{min-height:300px;font-size:15px;line-height:1.65}.review-box{background:#fff;border:1px solid #e7ebe8;border-radius:9px;padding:42px 57px;max-height:430px;overflow-y:auto;overflow-x:hidden;font-family:Arial,sans-serif;font-size:16px;line-height:1.5;text-align:justify}.review-box p{margin:0 0 18px;text-indent:1.25cm}.document-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:38px;font:600 9px Arial,sans-serif;color:#3980d4;text-align:left;white-space:pre-line}.document-header img{max-width:145px;max-height:80px;object-fit:contain;margin-left:20px}.document-student{display:flex;gap:22px;justify-content:space-between;align-items:flex-start;margin-bottom:30px;font:10pt Arial,sans-serif;text-align:left}.document-student p{margin:0 0 7px;text-indent:0}.document-student img{width:128px;height:148px;object-fit:cover;border:1px solid #25342e}.editable-paragraph,.editable-entry{position:relative;border-radius:8px;padding:7px 9px;margin:0 -9px 8px}.editable-paragraph:hover,.editable-entry:hover{background:#f7faf7}.editable-paragraph>button,.entry-actions button,.review-toolbar button,.wizard-photo-item button{font:600 11px 'DM Sans',sans-serif}.editable-paragraph>button{display:block;margin:-10px 0 12px auto;border:0;background:none;color:#236b52;cursor:pointer}.entry-actions{display:flex;justify-content:center;gap:8px;margin:-10px 0 20px}.entry-actions button{border:1px solid #d4dfd7;background:white;color:#236b52;border-radius:999px;padding:6px 10px;cursor:pointer}.review-toolbar{display:flex;gap:10px;justify-content:flex-end;margin:0 0 12px}.wizard-photo-item{position:relative}.wizard-photo-item button{position:absolute;right:-6px;top:-7px;width:22px;height:22px;border:0;border-radius:50%;background:#b74343;color:#fff;cursor:pointer;line-height:1}.file-links{display:flex;gap:8px;margin-top:5px}.file-links a{font-size:12px;color:#236b52;text-decoration:none}.dropzone{border:2px dashed #a8c6b3;border-radius:10px;padding:24px;text-align:center;color:#4b7760;background:#f4faf5;cursor:pointer}.dropzone.drag{background:#e4f1e9;border-color:#236b52}.dropzone input{display:none}.dropzone strong{display:block;color:#236b52;margin-bottom:3px}</style>
 </head>
@@ -154,6 +155,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
       <?php if ($canSee('usuarios')): ?><button class="nav-item" data-view="usuarios"><span>@</span> Usuarios</button><?php endif; ?>
       <?php if ($canSee('financeiro')): ?><button class="nav-item" data-view="financeiro"><span>$</span> Financeiro</button><?php endif; ?>
       <?php if ($canSee('consumoIa')): ?><button class="nav-item" data-view="consumoIa"><span>◫</span> Consumo IA</button><?php endif; ?>
+      <?php if ($isMaster): ?><button class="nav-item" data-view="pwaAdmin"><span>P</span> PWA</button><?php endif; ?>
     </nav>
     <div class="sidebar-bottom"><a class="help" href="https://wa.me/5541996310725" target="_blank" rel="noopener noreferrer">◌ Suporte</a><div class="profile" aria-haspopup="true" aria-expanded="false"><div class="avatar"><?= $escape($initials($bootstrapUser['name'])) ?></div><div><strong><?= $escape($bootstrapUser['name']) ?></strong><small><?= $escape($profileRole) ?></small></div></div><div class="profile-menu" hidden><button type="button" id="sidebarProfileButton">Meus dados</button><button type="button" id="sidebarLogoutButton" class="danger">Sair do sistema</button></div></div>
   </aside>
@@ -184,6 +186,20 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
     <section id="pareceres" class="view"><div class="page-title"><div><p class="eyebrow">1º SEMESTRE DE 2026</p><h1>Pareceres e Portfólios</h1><p>Crie, revise e compartilhe os registros da turma.</p></div><button class="primary" id="openGenerator">+ Novo documento</button></div><div class="notice"><span>✦</span><div><strong>Seu olhar é essencial</strong><p>Escreva livremente o parecer. Se desejar, use a opção discreta de IA para ajustar o texto que você produziu.</p></div></div><div class="panel"><div class="tabs"><button class="tab active" data-filter="all">Todos</button><button class="tab" data-filter="draft">Em elaboração</button><button class="tab" data-filter="done">Concluídos</button></div><div id="reportsList" class="report-list"></div></div></section>
     <section id="tutoriais" class="view"><div class="page-title"><div><p class="eyebrow">CENTRAL DE AJUDA</p><h1>Tutoriais</h1><p>Pesquise por titulo e assista ao video que explica a duvida.</p></div></div><div id="tutorialAdminPanel"></div><div class="panel tutorial-search-panel"><div class="toolbar"><input id="tutorialSearch" type="search" placeholder="Pesquisar tutorial por titulo..."><span id="tutorialTotal"></span></div><div id="tutorialList" class="tutorial-grid"></div></div></section>
     <section id="configuracoes" class="view"><div class="page-title"><div><p class="eyebrow">PERFIL DA PROFESSORA</p><h1>Configurações do Cabeçalho</h1><p>Personalize o cabeçalho exibido nos pareceres gerados.</p></div></div><div class="panel"><div class="form-grid"><div class="field"><label>Nome da rede ou secretaria</label><input id="headerNetwork" placeholder="Ex.: Secretaria Municipal de Educação"></div><div class="field"><label>Unidade escolar</label><input id="headerSchool" placeholder="Ex.: CMEI Nome da Unidade"></div><div class="field"><label>Endereço e contato</label><textarea id="headerContact" rows="3" placeholder="Endereço, telefone e e-mail"></textarea></div><div class="field"><label>Logo institucional</label><input id="headerLogo" type="file" accept="image/*"><div id="headerLogoPreview" class="image-previews"></div></div></div><div class="form-actions"><button class="primary" id="saveHeaderSettings">Salvar configurações</button></div></div><div class="panel mercado-pago-panel"><div class="profile-subtitle"><h3>Mercado Pago</h3><p>Cadastre as credenciais usadas para Pix e cartão recorrente.</p></div><div class="form-grid"><div class="field"><label>Access Token</label><input id="mpAccessToken" type="password" autocomplete="off" placeholder="Cole o Access Token"></div><div class="field"><label>Public Key</label><input id="mpPublicKey" autocomplete="off" placeholder="Cole a Public Key"></div><div class="field"><label>Webhook Secret</label><input id="mpWebhookSecret" type="password" autocomplete="off" placeholder="Opcional"></div><div class="field"><label>URL de sucesso</label><input id="mpSuccessUrl" placeholder="http://localhost/Pareceres/login.php?payment=success"></div><div class="field"><label>URL de falha</label><input id="mpFailureUrl" placeholder="http://localhost/Pareceres/login.php?payment=failure"></div></div><p id="mpSettingsStatus" class="profile-message"></p><div class="form-actions"><button class="primary" id="saveMercadoPagoSettings" type="button">Salvar Mercado Pago</button></div></div></section>
+    <?php if ($isMaster): ?>
+    <section id="pwaAdmin" class="view">
+      <div class="page-title"><div><p class="eyebrow">LOGIN MASTER</p><h1>Atualizacao do PWA</h1><p>Publique a versao oficial do app instalado sem fazer deploy de arquivos.</p></div></div>
+      <div class="panel pwa-admin-panel">
+        <div class="pwa-version-grid">
+          <article><span>Versao atualmente publicada</span><strong id="pwaPublishedVersion">Carregando...</strong></article>
+          <article><span>Ultima publicacao</span><strong id="pwaPublishedAt">Carregando...</strong></article>
+        </div>
+        <p class="pwa-admin-note">Use este botao depois que os arquivos novos ja estiverem publicados no servidor. As professoras receberao o aviso de atualizacao quando estiverem online.</p>
+        <p id="pwaAdminStatus" class="profile-message"></p>
+        <div class="form-actions"><button class="primary" id="publishPwaUpdate" type="button">Publicar atualizacao PWA</button></div>
+      </div>
+    </section>
+    <?php endif; ?>
   </main>
 
   <dialog id="modal"><form method="dialog" id="modalForm" novalidate><button class="close" type="button" formnovalidate aria-label="Fechar" onclick="event.preventDefault();event.stopPropagation();this.closest('dialog').close();return false;">×</button><div id="modalContent"></div></form></dialog>
@@ -217,11 +233,12 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="master-users.js?v=20260717-users-fast-1"></script>
   <script src="finance-admin.js?v=20260717-menu-permissions-1"></script>
   <script src="ai-usage-admin.js?v=20260717-menu-permissions-1"></script>
+  <script src="pwa-admin.js?v=20260812-admin-update-1"></script>
   <script src="image-editor-permissions.js?v=20260702-combined-image-editor-1"></script>
   <script src="manual-image-editor.js?v=20260709-activity-photos-30-1"></script>
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>
   <script src="image-editor-flow.js?v=20260709-activity-photos-30-1"></script>
   <script src="document-image-zoom.js?v=20260702-document-image-zoom-front-1"></script>
-  <script src="pwa.js?v=20260716-reset-terms-2"></script>
+  <script src="pwa.js?v=20260812-admin-update-1"></script>
 </body>
 </html>

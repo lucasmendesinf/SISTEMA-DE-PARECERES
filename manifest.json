@@ -2,7 +2,7 @@
   "name": "Ai Prof.",
   "short_name": "Ai Prof.",
   "description": "Sistema para criar pareceres e portfólios pedagógicos.",
-  "version": "20260809-email-drive-priority-fast-1",
+  "version": "20260812-admin-update-1",
   "id": "./",
   "start_url": "login.php?source=pwa",
   "scope": "./",

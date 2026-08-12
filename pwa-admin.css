@@ -1,0 +1,45 @@
+.pwa-admin-panel {
+  display: grid;
+  gap: 22px;
+}
+
+.pwa-version-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.pwa-version-grid article {
+  border: 1px solid #dfe8e2;
+  border-radius: 8px;
+  background: #f9fbfa;
+  padding: 18px;
+}
+
+.pwa-version-grid span {
+  display: block;
+  color: #6c7a74;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.pwa-version-grid strong {
+  color: #18342b;
+  display: block;
+  font-size: 24px;
+}
+
+.pwa-admin-note {
+  color: #65756e;
+  line-height: 1.55;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .pwa-version-grid {
+    grid-template-columns: 1fr;
+  }
+}

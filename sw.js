@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260809-email-drive-priority-fast-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260812-admin-update-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
-  './manifest.json?v=20260809-email-drive-priority-fast-1',
-  './pwa.js?v=20260716-reset-terms-2',
+  './manifest.json?v=20260812-admin-update-1',
+  './pwa.js?v=20260812-admin-update-1',
   './login.css?v=20260702-billing-modal-1',
   './style.css?v=20260804-mobile-no-input-zoom-1',
   './mobile-menu.css?v=20260809-mobile-menu-readable-1',
@@ -25,6 +25,7 @@ const STATIC_ASSETS = [
   './document-image-zoom.css?v=20260702-document-image-zoom-front-1',
   './onboarding.css?v=20260716-onboarding-student-close-1',
   './save-feedback.css?v=20260717-save-feedback-front-1',
+  './pwa-admin.css?v=20260812-admin-update-1',
   './save-feedback.js?v=20260717-save-feedback-front-1',
   './onboarding.js?v=20260717-fast-onboarding-1',
   './activities-edit.js?v=20260804-activity-save-reliable-1',
@@ -46,6 +47,7 @@ const STATIC_ASSETS = [
   './master-users.js?v=20260717-users-fast-1',
   './finance-admin.js?v=20260717-menu-permissions-1',
   './ai-usage-admin.js?v=20260717-menu-permissions-1',
+  './pwa-admin.js?v=20260812-admin-update-1',
   './assets/ai-prof-logo-transparent.png',
   './assets/pwa/icon-192.png',
   './assets/pwa/icon-512.png',
@@ -56,7 +58,6 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
   );
 });
 
@@ -66,6 +67,12 @@ self.addEventListener('activate', event => {
       .then(keys => Promise.all(keys.filter(key => key.startsWith('ai-prof-pwa-') && key !== STATIC_CACHE).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
+});
+
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'AIPROF_SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', event => {

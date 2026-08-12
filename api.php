@@ -1589,6 +1589,58 @@ try {
             exit;
         }
     }
+    if ($resource === 'pwa-version') {
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $loadPwaRelease = static function () use ($pdo): array {
+            $query = $pdo->prepare("SELECT setting_value,updated_at FROM app_settings WHERE setting_key='pwa_release' LIMIT 1");
+            $query->execute();
+            $row = $query->fetch(PDO::FETCH_ASSOC) ?: [];
+            $payload = json_decode((string) ($row['setting_value'] ?? '{}'), true);
+            if (!is_array($payload)) $payload = [];
+            return [
+                'version' => max(1, (int) ($payload['version'] ?? 1)),
+                'publishedAt' => trim((string) ($payload['publishedAt'] ?? '')) ?: ($row['updated_at'] ?? null),
+                'publishedBy' => isset($payload['publishedBy']) ? (int) $payload['publishedBy'] : null,
+                'updatedAt' => $row['updated_at'] ?? null,
+            ];
+        };
+
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            echo json_encode(['ok' => true] + $loadPwaRelease() + ['serverTime' => date('Y-m-d H:i:s')], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $masterUser = $requireMaster();
+            $pdo->beginTransaction();
+            try {
+                $query = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key='pwa_release' LIMIT 1 FOR UPDATE");
+                $query->execute();
+                $payload = json_decode((string) ($query->fetchColumn() ?: '{}'), true);
+                if (!is_array($payload)) $payload = [];
+                $now = date('Y-m-d H:i:s');
+                $next = [
+                    'version' => max(1, (int) ($payload['version'] ?? 1)) + 1,
+                    'publishedAt' => $now,
+                    'publishedBy' => (int) $masterUser['id'],
+                ];
+                $save = $pdo->prepare("INSERT INTO app_settings (setting_key,setting_value) VALUES ('pwa_release',?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
+                $save->execute([json_encode($next, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+                $pdo->commit();
+            } catch (Throwable $error) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $error;
+            }
+            echo json_encode(['ok' => true] + $next + ['serverTime' => $now], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        http_response_code(405);
+        throw new RuntimeException('Metodo nao permitido.');
+    }
     if ($resource === 'ai-review-settings') {
         $masterUser = $requireMaster();
         $settings = $getAiReviewSettings();

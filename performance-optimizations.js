@@ -7,6 +7,10 @@
   async function ensureReportDetail(reportId) {
     const report = data.reports.find(item => String(item.id) === String(reportId) || String(item.databaseId) === String(reportId));
     if (!report || report.hasFullData) return report;
+    if (!report.databaseId && report.status !== 'done') {
+      report.hasFullData = true;
+      return report;
+    }
     const databaseId = report.databaseId || report.id;
     const response = await fetch(`api.php?resource=reports&id=${encodeURIComponent(databaseId)}`);
     const detail = await response.json();

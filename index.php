@@ -202,22 +202,22 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
     <?php endif; ?>
   </main>
 
-  <dialog id="modal"><form method="dialog" id="modalForm" novalidate><button class="close" type="button" formnovalidate aria-label="Fechar" onclick="event.preventDefault();event.stopPropagation();this.closest('dialog').close();return false;">×</button><div id="modalContent"></div></form></dialog>
+  <dialog id="modal"><form method="dialog" id="modalForm" novalidate><button class="close" type="button" formnovalidate aria-label="Fechar" onclick="window.PortalCloseMainModal?.();return false;">×</button><div id="modalContent"></div></form></dialog>
   <script>window.PortalBootstrapUser = <?= json_encode($bootstrapUser, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;</script>
   <script src="save-feedback.js?v=20260717-save-feedback-front-1"></script>
-  <script src="app.js?v=20260804-activity-save-reliable-1"></script>
+  <script src="app.js?v=20260812-report-actions-id-fix-1"></script>
   <script src="document-type.js?v=20260704-pdf-image-compress-1"></script>
   <script src="mobile-menu.js"></script>
-  <script src="draft-delete.js"></script>
+  <script src="draft-delete.js?v=20260812-safe-report-id-1"></script>
   <script src="periods.js"></script>
   <script src="activity-pagination.js"></script>
-  <script src="classes-student-edit.js"></script>
+  <script src="classes-student-edit.js?v=20260812-student-birth-mask-1"></script>
   <script src="activities-edit.js?v=20260804-activity-save-reliable-1"></script>
-  <script src="experience-fields.js?v=20260709-mobile-camera-only-1"></script>
-  <script src="modal-controls.js?v=20260715-onboarding-draft-1"></script>
+  <script src="experience-fields.js?v=20260812-activity-draft-1"></script>
+  <script src="modal-controls.js?v=20260812-close-x-fix-1"></script>
   <script src="report-type-badge.js"></script>
-  <script src="report-editor.js?v=20260809-fast-report-actions-1"></script>
-  <script src="performance-optimizations.js"></script>
+  <script src="report-editor.js?v=20260812-draft-save-reliable-1"></script>
+  <script src="performance-optimizations.js?v=20260812-local-draft-open-1"></script>
   <script src="document-style-settings.js?v=20260716-force-docx-font-1"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
   <script src="billing-cycles.js?v=20260705-billing-cycles-1"></script>
@@ -229,7 +229,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="auth-profile.js?v=20260716-terms-persist-1"></script>
   <script src="google-drive-integration.js?v=20260717-drive-document-type-1"></script>
   <script src="tutorial-videos.js?v=20260717-menu-permissions-1"></script>
-  <script src="onboarding.js?v=20260717-fast-onboarding-1"></script>
+  <script src="onboarding.js?v=20260812-student-birth-mask-1"></script>
   <script src="master-users.js?v=20260717-users-fast-1"></script>
   <script src="finance-admin.js?v=20260717-menu-permissions-1"></script>
   <script src="ai-usage-admin.js?v=20260717-menu-permissions-1"></script>

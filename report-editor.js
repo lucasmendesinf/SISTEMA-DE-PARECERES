@@ -730,6 +730,45 @@ let reportAutosaveTimer = null;
 let reportAutosaveRunning = false;
 let reportAutosaveQueued = false;
 
+function persistReportDataSnapshot() {
+  try {
+    const snapshot = typeof compactForStorage === 'function' ? compactForStorage(data) : data;
+    localStorage.setItem(KEY, JSON.stringify(snapshot));
+  } catch (error) {
+    console.warn('Nao foi possivel salvar a copia local do rascunho.', error);
+  }
+}
+
+function ensureLocalWizardDraft() {
+  try {
+    if (!wizard || wizard.readOnly) return null;
+    const studentId = wizard.studentId;
+    if (!studentId || !String(wizard.text || '').trim()) return null;
+    const entries = wizardEntries();
+    const activityIds = [...new Set(entries.flatMap(entry => entry.activityIds || []))];
+    let report = data.reports.find(item => String(item.studentId) === String(studentId) && item.status !== 'done');
+    if (!report) {
+      report = {id: Date.now(), studentId, status: 'draft'};
+      data.reports.unshift(report);
+    }
+    Object.assign(report, {
+      text: wizard.text || '',
+      documentType: normalizeDocumentType(wizard.documentType),
+      activityIds,
+      entries,
+      useFinalText: !!wizard.useFinalText,
+      finalText: wizard.useFinalText ? (wizard.finalText || '') : '',
+      photoNote: entries.map(entry => entry.photoNote).filter(Boolean).join('\n\n'),
+      status: 'draft'
+    });
+    persistReportDataSnapshot();
+    return report;
+  } catch (error) {
+    console.warn('Nao foi possivel preparar o rascunho local.', error);
+    return null;
+  }
+}
+
 async function autosaveWizardDraft() {
   if (reportAutosaveRunning) {
     reportAutosaveQueued = true;
@@ -762,20 +801,9 @@ async function autosaveWizardDraft() {
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || 'Erro ao salvar rascunho automaticamente.');
     wizard.databaseId = result.id;
-    const report = data.reports.find(item => String(item.studentId) === String(wizard.studentId));
-    if (report) {
-      Object.assign(report, {
-        databaseId: result.id,
-        text: wizard.text || '',
-        documentType: normalizeDocumentType(wizard.documentType),
-        activityIds,
-        entries,
-        useFinalText: !!wizard.useFinalText,
-        finalText: wizard.useFinalText ? (wizard.finalText || finalText) : '',
-        photoNote: entries.map(entry => entry.photoNote).filter(Boolean).join('\n\n'),
-        status: 'draft'
-      });
-    }
+    const report = ensureLocalWizardDraft();
+    if (report) report.databaseId = result.id;
+    persistReportDataSnapshot();
     persistWizard();
   } catch (error) {
     console.warn(error.message || error);
@@ -797,6 +825,7 @@ window.flushWizardDraftAutosave = function flushWizardDraftAutosave() {
   if ($('#wizardText')) bufferStepOne();
   if ($('#wizardPhotoNote')) bufferStepTwo();
   clearTimeout(reportAutosaveTimer);
+  ensureLocalWizardDraft();
   autosaveWizardDraft();
 };
 
@@ -805,10 +834,76 @@ window.cancelWizardDraftAutosave = function cancelWizardDraftAutosave() {
   reportAutosaveQueued = false;
 };
 
+async function saveWizardDraftNow({notify = true, closeAfter = false} = {}) {
+  if ($('#wizardText')) bufferStepOne();
+  if ($('#wizardPhotoNote')) bufferStepTwo();
+  const student = data.students.find(item => String(item.id) === String(wizard.studentId || ''));
+  if (!student) throw new Error('Selecione um aluno antes de salvar.');
+  const localReport = ensureLocalWizardDraft();
+  if (typeof render === 'function') render();
+  const entries = wizardEntries();
+  const activityIds = [...new Set(entries.flatMap(entry => entry.activityIds || []))];
+  const finalText = typeof configuredFinalText === 'function' ? configuredFinalText() : '';
+  const response = await fetch('api.php?resource=reports', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      draft: true,
+      student: {name: student.name, birthDate: student.birthDate || '', classId: student.classId || 1},
+      text: wizard.text || '',
+      documentType: normalizeDocumentType(wizard.documentType),
+      activityIds,
+      entries,
+      useFinalText: !!wizard.useFinalText,
+      finalText: wizard.useFinalText ? (wizard.finalText || finalText) : '',
+      imageEditorMode: wizard.imageEditorMode || 'none'
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Erro ao salvar o rascunho.');
+  wizard.databaseId = result.id;
+  if (localReport) {
+    localReport.id = result.id;
+    localReport.databaseId = result.id;
+    localReport.hasFullData = true;
+  }
+  persistWizard();
+  persistReportDataSnapshot();
+  if (typeof loadReports === 'function') loadReports().catch(error => console.warn(error));
+  if (closeAfter) wizardClose();
+  if (notify) alert('Rascunho salvo com sucesso.');
+  return result;
+}
+
+window.saveInitialDraft = async function saveInitialDraftReliable() {
+  try {
+    await saveWizardDraftNow();
+  } catch (error) {
+    alert(error.message || 'Nao foi possivel salvar o rascunho.');
+  }
+};
+
+window.saveDraftEverywhere = async function saveDraftEverywhereReliable() {
+  try {
+    await saveWizardDraftNow();
+  } catch (error) {
+    alert(error.message || 'Nao foi possivel salvar o rascunho.');
+  }
+};
+
+window.saveWizardDraft = async function saveWizardDraftReliable() {
+  return window.saveDraftEverywhere();
+};
+
 const originalBufferStepOneForAutosave = window.bufferStepOne;
 if (typeof originalBufferStepOneForAutosave === 'function') {
   window.bufferStepOne = function bufferStepOneWithAutosave(...args) {
     const result = originalBufferStepOneForAutosave.apply(this, args);
+    try {
+      ensureLocalWizardDraft();
+    } catch (error) {
+      console.warn('Autosave local ignorado para manter o fluxo do parecer.', error);
+    }
     scheduleWizardAutosave();
     return result;
   };
@@ -817,6 +912,29 @@ if (typeof originalBufferStepOneForAutosave === 'function') {
 const originalBufferStepTwoForAutosave = window.bufferStepTwo;
 window.bufferStepTwo = function bufferStepTwoWithAutosave(...args) {
   const result = originalBufferStepTwoForAutosave?.apply(this, args);
+  try {
+    ensureLocalWizardDraft();
+  } catch (error) {
+    console.warn('Autosave local ignorado para manter o fluxo do parecer.', error);
+  }
   scheduleWizardAutosave();
   return result;
 };
+
+document.addEventListener('blur', event => {
+  if (event.target?.id === 'wizardText') window.flushWizardDraftAutosave?.();
+}, true);
+
+document.querySelector('#modal')?.addEventListener('close', () => {
+  if (!wizard || wizard.readOnly || !String(wizard.text || '').trim()) return;
+  ensureLocalWizardDraft();
+  persistWizard();
+  if (typeof render === 'function') render();
+  autosaveWizardDraft();
+});
+
+window.addEventListener('pagehide', () => {
+  if ($('#wizardText')) bufferStepOne();
+  ensureLocalWizardDraft();
+  persistWizard();
+});

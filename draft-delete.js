@@ -36,7 +36,11 @@ function addDraftDeleteButtons() {
     button.type = 'button';
     button.className = 'secondary delete-draft';
     button.textContent = 'Excluir rascunho';
-    button.addEventListener('click', () => deleteDraft(match[1]));
+    button.addEventListener('click', () => {
+      let reportId = match[1];
+      try { reportId = JSON.parse(reportId); } catch (_) {}
+      deleteDraft(reportId);
+    });
     continueButton.parentElement.appendChild(button);
   });
 }

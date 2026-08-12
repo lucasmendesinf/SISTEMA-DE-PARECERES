@@ -14,6 +14,22 @@ if (!function_exists('str_starts_with')) {
     }
 }
 
+function normalize_birth_date_input(?string $value): ?string
+{
+    $value = trim((string) $value);
+    if ($value === '') return null;
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) return $value;
+    if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $value, $matches)) {
+        $day = (int) $matches[1];
+        $month = (int) $matches[2];
+        $year = (int) $matches[3];
+        if (checkdate($month, $day, $year)) {
+            return sprintf('%04d-%02d-%02d', $year, $month, $day);
+        }
+    }
+    return null;
+}
+
 try {
     $config = require __DIR__ . '/config.php';
     $pdo = new PDO(
@@ -23,7 +39,7 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
 
-    $schemaVersion = '2026-07-17-users-performance-1';
+    $schemaVersion = '2026-08-12-report-draft-status-key-1';
     $addColumnIfMissing = function (PDO $pdo, string $table, string $column, string $definition): void {
         $quotedTable = '`' . str_replace('`', '``', $table) . '`';
         $stmt = $pdo->prepare("SHOW COLUMNS FROM {$quotedTable} LIKE ?");
@@ -74,6 +90,24 @@ try {
     try {
         $addColumnIfMissing($pdo, 'pareceres', 'usar_texto_final', 'usar_texto_final TINYINT(1) NOT NULL DEFAULT 0 AFTER texto');
         $addColumnIfMissing($pdo, 'pareceres', 'texto_final', 'texto_final MEDIUMTEXT NULL AFTER usar_texto_final');
+        $indexRows = $pdo->query("SHOW INDEX FROM pareceres WHERE Non_unique=0")->fetchAll(PDO::FETCH_ASSOC);
+        $uniqueIndexes = [];
+        foreach ($indexRows as $indexRow) {
+            $keyName = (string) ($indexRow['Key_name'] ?? '');
+            if ($keyName === '' || $keyName === 'PRIMARY') continue;
+            $uniqueIndexes[$keyName][(int) ($indexRow['Seq_in_index'] ?? 0)] = (string) ($indexRow['Column_name'] ?? '');
+        }
+        foreach ($uniqueIndexes as $keyName => $columns) {
+            ksort($columns);
+            if (array_values($columns) === ['crianca_id', 'periodo_id', 'tipo_documento']) {
+                $pdo->exec('ALTER TABLE pareceres DROP INDEX `' . str_replace('`', '``', $keyName) . '`');
+            }
+        }
+        $indexCheck = $pdo->prepare("SHOW INDEX FROM pareceres WHERE Key_name=?");
+        $indexCheck->execute(['uq_parecer_context_status']);
+        if (!$indexCheck->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec('ALTER TABLE pareceres ADD UNIQUE KEY uq_parecer_context_status (crianca_id, periodo_id, tipo_documento, status)');
+        }
     } catch (Throwable $e) {
         // A tabela pode ainda nao existir em uma instalacao nova; a migracao roda novamente nas proximas requisicoes.
     }
@@ -2779,10 +2813,11 @@ try {
     }
     if ($resource === 'children' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $input=json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);$name=trim((string)($input['name']??''));$classId=(int)($input['classId']??1);if($name==='')throw new RuntimeException('Nome do aluno é obrigatório.');
+        $birthDate=normalize_birth_date_input((string)($input['birthDate']??''));
         $photo=null;$mime=null;if(!empty($input['photo'])&&preg_match('#^data:([\w/+.-]+);base64,(.+)$#',$input['photo'],$m)){$photo=base64_decode($m[2],true);$mime=$m[1];}
         $classCheck=$pdo->prepare('SELECT id FROM turmas WHERE id=? AND usuario_id=?');$classCheck->execute([$classId,$ownerId]);if(!$classCheck->fetchColumn())throw new RuntimeException('Turma nao encontrada para este login.');
         $id=(int)($input['databaseId']??0);if($id){$ownerCheck=$pdo->prepare('SELECT id FROM criancas WHERE id=? AND usuario_id=?');$ownerCheck->execute([$id,$ownerId]);if(!$ownerCheck->fetchColumn())throw new RuntimeException('Aluno nao encontrado para este login.');}if(!$id){$find=$pdo->prepare('SELECT id FROM criancas WHERE nome=? AND turma_id=? AND usuario_id=? LIMIT 1');$find->execute([$name,$classId,$ownerId]);$id=(int)$find->fetchColumn();}
-        if($id){$sql='UPDATE criancas SET nome=?,turma_id=?,data_nascimento=?'.($photo?',foto=?,foto_mime=?':'').' WHERE id=? AND usuario_id=?';$params=[$name,$classId,$input['birthDate']?:null];if($photo){$params[]=$photo;$params[]=$mime;}$params[]=$id;$params[]=$ownerId;$pdo->prepare($sql)->execute($params);}else{$pdo->prepare('INSERT INTO criancas (usuario_id,nome,turma_id,data_nascimento,foto,foto_mime) VALUES (?,?,?,?,?,?)')->execute([$ownerId,$name,$classId,$input['birthDate']?:null,$photo,$mime]);$id=(int)$pdo->lastInsertId();}
+        if($id){$sql='UPDATE criancas SET nome=?,turma_id=?,data_nascimento=?'.($photo?',foto=?,foto_mime=?':'').' WHERE id=? AND usuario_id=?';$params=[$name,$classId,$birthDate];if($photo){$params[]=$photo;$params[]=$mime;}$params[]=$id;$params[]=$ownerId;$pdo->prepare($sql)->execute($params);}else{$pdo->prepare('INSERT INTO criancas (usuario_id,nome,turma_id,data_nascimento,foto,foto_mime) VALUES (?,?,?,?,?,?)')->execute([$ownerId,$name,$classId,$birthDate,$photo,$mime]);$id=(int)$pdo->lastInsertId();}
         echo json_encode(['id'=>$id]);exit;
     }
     if ($resource === 'classes' && $_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -3208,7 +3243,7 @@ try {
         $pdo->beginTransaction();
         $classCheck = $pdo->prepare('SELECT id FROM turmas WHERE id = ? AND usuario_id=?'); $classCheck->execute([$classId,$ownerId]);
         if (!$classCheck->fetchColumn()) { $classCheck=$pdo->prepare('SELECT id FROM turmas WHERE usuario_id=? ORDER BY id LIMIT 1');$classCheck->execute([$ownerId]);$classId=(int)$classCheck->fetchColumn(); }
-        $birth = !empty($student['birthDate']) ? $student['birthDate'] : null;
+        $birth = normalize_birth_date_input((string) ($student['birthDate'] ?? ''));
         $child = $pdo->prepare('SELECT id FROM criancas WHERE nome = ? AND turma_id = ? AND usuario_id=? LIMIT 1'); $child->execute([$name, $classId, $ownerId]);
         $childId = (int) $child->fetchColumn();
         if (!$childId) { $insertChild=$pdo->prepare('INSERT INTO criancas (usuario_id,turma_id,nome,data_nascimento) VALUES (?,?,?,?)'); $insertChild->execute([$ownerId,$classId,$name,$birth]); $childId=(int)$pdo->lastInsertId(); }
@@ -3216,8 +3251,8 @@ try {
         if (!$periodId) { $periodQuery=$pdo->prepare('SELECT id FROM periodos_avaliativos WHERE usuario_id=? ORDER BY id DESC LIMIT 1');$periodQuery->execute([$ownerId]);$periodId=(int)$periodQuery->fetchColumn(); }
         $useFinalText = !empty($input['useFinalText']) ? 1 : 0;
         $finalText = trim((string) ($input['finalText'] ?? ''));
-        $upsert=$pdo->prepare("INSERT INTO pareceres (crianca_id,periodo_id,texto,usar_texto_final,texto_final,tipo_documento,status) VALUES (?,?,?,?,?,?,'rascunho') ON DUPLICATE KEY UPDATE texto=VALUES(texto),usar_texto_final=VALUES(usar_texto_final),texto_final=VALUES(texto_final),tipo_documento=VALUES(tipo_documento),status=IF(status='concluido','concluido','rascunho')"); $upsert->execute([$childId,$periodId,$text,$useFinalText,$finalText,$documentType]);
-        $reportId=(int)$pdo->lastInsertId(); if(!$reportId){$find=$pdo->prepare('SELECT id FROM pareceres WHERE crianca_id=? AND periodo_id=? AND tipo_documento=?');$find->execute([$childId,$periodId,$documentType]);$reportId=(int)$find->fetchColumn();}
+        $upsert=$pdo->prepare("INSERT INTO pareceres (crianca_id,periodo_id,texto,usar_texto_final,texto_final,tipo_documento,status) VALUES (?,?,?,?,?,?,'rascunho') ON DUPLICATE KEY UPDATE texto=VALUES(texto),usar_texto_final=VALUES(usar_texto_final),texto_final=VALUES(texto_final),tipo_documento=VALUES(tipo_documento),status='rascunho'"); $upsert->execute([$childId,$periodId,$text,$useFinalText,$finalText,$documentType]);
+        $reportId=(int)$pdo->lastInsertId(); if(!$reportId){$find=$pdo->prepare("SELECT id FROM pareceres WHERE crianca_id=? AND periodo_id=? AND tipo_documento=? AND status='rascunho' ORDER BY id DESC LIMIT 1");$find->execute([$childId,$periodId,$documentType]);$reportId=(int)$find->fetchColumn();}
         $ownedActivities=[];
         $activityOwnerCheck=$pdo->prepare('SELECT id FROM atividades WHERE id=? AND usuario_id=?');
         foreach(($input['activityIds']??[]) as $activityId){$activityId=(int)$activityId;$activityOwnerCheck->execute([$activityId,$ownerId]);if($activityOwnerCheck->fetchColumn())$ownedActivities[]=$activityId;}

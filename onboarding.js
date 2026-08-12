@@ -192,7 +192,7 @@
 
   function studentListHtml() {
     if (!state.studentDrafts.length) return '';
-    return `<div class="onboarding-student-list">${state.studentDrafts.map((student, index) => `<div><strong>${esc(student.name)}</strong><span>${esc(student.birthDate || 'Data nao informada')}</span><button class="text-button" type="button" data-remove-student="${index}">Remover</button></div>`).join('')}</div>`;
+    return `<div class="onboarding-student-list">${state.studentDrafts.map((student, index) => `<div><strong>${esc(student.name)}</strong><span>${esc(student.birthDate ? birthDateToDisplay(student.birthDate) : 'Data nao informada')}</span><button class="text-button" type="button" data-remove-student="${index}">Remover</button></div>`).join('')}</div>`;
   }
 
   function stepStudents() {
@@ -204,7 +204,7 @@
       <p class="modal-subtitle">Inclua pelo menos um aluno para liberar o uso do sistema. Voce pode cadastrar os demais depois.</p>
       <div class="form-grid">
         <div class="field"><label>Nome completo</label><input id="onboardStudentName" value="${esc(studentInput.name)}" placeholder="Ex.: Beatriz Souza"></div>
-        <div class="field"><label>Data de nascimento</label><input id="onboardStudentBirth" type="date" value="${esc(studentInput.birthDate)}"></div>
+        <div class="field"><label>Data de nascimento</label><input id="onboardStudentBirth" ${birthDateInputAttrs(studentInput.birthDate || '')}></div>
         <div class="field"><label>Turma</label><select id="onboardStudentClass">${options}</select></div>
         <div class="field"><label>Foto do aluno <span class="muted">(opcional)</span></label><input id="onboardStudentPhoto" type="file" accept="image/*"></div>
       </div>
@@ -306,7 +306,7 @@
 
   async function addStudentDraft() {
     const name = $('#onboardStudentName').value.trim();
-    const birthDate = $('#onboardStudentBirth').value;
+    const birthDate = readBirthDate('#onboardStudentBirth');
     const classId = Number($('#onboardStudentClass').value);
     if (!name) { $('#onboardStudentName').focus(); throw new Error('Informe o nome do aluno.'); }
     if (!birthDate) { $('#onboardStudentBirth').focus(); throw new Error('Informe a data de nascimento do aluno.'); }

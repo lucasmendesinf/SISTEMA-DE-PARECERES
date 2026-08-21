@@ -1,5 +1,5 @@
 (() => {
-  const PWA_VERSION = '20260812-admin-update-1';
+  const PWA_VERSION = '20260821-forgot-password-1';
   const VERSION_ENDPOINT = 'api.php?resource=pwa-version';
   const LOCAL_VERSION_KEY = 'ai-prof-pwa-published-version';
   const RELOAD_FLAG = 'ai-prof-pwa-reload-once';

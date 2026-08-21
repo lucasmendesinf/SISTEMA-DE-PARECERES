@@ -39,7 +39,7 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
 
-    $schemaVersion = '2026-08-12-report-draft-status-key-1';
+    $schemaVersion = '2026-08-21-password-reset-1';
     $addColumnIfMissing = function (PDO $pdo, string $table, string $column, string $definition): void {
         $quotedTable = '`' . str_replace('`', '``', $table) . '`';
         $stmt = $pdo->prepare("SHOW COLUMNS FROM {$quotedTable} LIKE ?");
@@ -81,6 +81,9 @@ try {
     $addColumnIfMissing($pdo, 'usuarios', 'terms_accepted_at', 'terms_accepted_at DATETIME NULL AFTER mercado_pago_last_payment_id');
     $addColumnIfMissing($pdo, 'usuarios', 'terms_version', 'terms_version VARCHAR(40) NULL AFTER terms_accepted_at');
     $addColumnIfMissing($pdo, 'usuarios', 'terms_ip', 'terms_ip VARCHAR(45) NULL AFTER terms_version');
+    $addColumnIfMissing($pdo, 'usuarios', 'password_reset_token_hash', 'password_reset_token_hash VARCHAR(255) NULL AFTER terms_ip');
+    $addColumnIfMissing($pdo, 'usuarios', 'password_reset_expires_at', 'password_reset_expires_at DATETIME NULL AFTER password_reset_token_hash');
+    $addColumnIfMissing($pdo, 'usuarios', 'password_reset_requested_at', 'password_reset_requested_at DATETIME NULL AFTER password_reset_expires_at');
     $addIndexIfMissing($pdo, 'usuarios', 'idx_usuarios_perfil_nome', '(perfil, nome)');
     $addIndexIfMissing($pdo, 'usuarios', 'idx_usuarios_billing_due', '(perfil, billing_next_due_date, nome)');
     $addColumnIfMissing($pdo, 'turmas', 'usuario_id', 'usuario_id BIGINT UNSIGNED NULL AFTER id');
@@ -1497,6 +1500,62 @@ try {
     if ($resource === 'auth' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         $action = $input['action'] ?? '';
+        if ($action === 'request_password_reset') {
+            $email = trim((string) ($input['email'] ?? ''));
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                throw new RuntimeException('Informe um e-mail valido para redefinir a senha.');
+            }
+            $genericMessage = 'Se este e-mail estiver cadastrado, enviaremos um codigo para redefinir sua senha.';
+            $user = $pdo->prepare('SELECT id,nome,email,ativo FROM usuarios WHERE email=? LIMIT 1');
+            $user->execute([$email]);
+            $row = $user->fetch(PDO::FETCH_ASSOC);
+            if ($row && (int) ($row['ativo'] ?? 0) === 1) {
+                $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                $updateReset = $pdo->prepare('UPDATE usuarios SET password_reset_token_hash=?, password_reset_expires_at=DATE_ADD(NOW(), INTERVAL 30 MINUTE), password_reset_requested_at=NOW() WHERE id=?');
+                $updateReset->execute([password_hash($code, PASSWORD_DEFAULT), (int) $row['id']]);
+                $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? 'aiprof.local'));
+                $host = preg_replace('/:\d+$/', '', $host) ?: 'aiprof.local';
+                $host = preg_match('/^[a-z0-9.-]+$/', $host) ? $host : 'aiprof.local';
+                $fromAddress = 'no-reply@' . $host;
+                $subject = 'Redefinicao de senha - Ai Prof.';
+                $body = "Ola, " . trim((string) ($row['nome'] ?? '')) . ".\n\n";
+                $body .= "Recebemos uma solicitacao para redefinir sua senha no Ai Prof.\n";
+                $body .= "Use este codigo na tela de login: {$code}\n\n";
+                $body .= "Este codigo vence em 30 minutos. Se voce nao solicitou a redefinicao, ignore este e-mail.\n\n";
+                $body .= "Ai Prof.";
+                $headers = "MIME-Version: 1.0\r\n";
+                $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+                $headers .= "From: Ai Prof <{$fromAddress}>\r\n";
+                if (!@mail((string) $row['email'], $subject, $body, $headers)) {
+                    error_log('Ai Prof password reset mail failed for user ' . (int) $row['id']);
+                }
+            }
+            echo json_encode(['ok' => true, 'message' => $genericMessage], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($action === 'confirm_password_reset') {
+            $email = trim((string) ($input['email'] ?? ''));
+            $code = preg_replace('/\D+/', '', (string) ($input['code'] ?? ''));
+            $newPassword = (string) ($input['newPassword'] ?? '');
+            $confirmPassword = (string) ($input['confirmPassword'] ?? '');
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) throw new RuntimeException('Informe o e-mail cadastrado.');
+            if ($code === '' || strlen($code) < 4) throw new RuntimeException('Informe o codigo recebido por e-mail.');
+            if ($newPassword === '' || strlen($newPassword) < 6) throw new RuntimeException('A nova senha deve ter pelo menos 6 caracteres.');
+            if ($newPassword !== $confirmPassword) throw new RuntimeException('A confirmação da senha não confere.');
+            $user = $pdo->prepare('SELECT id,password_reset_token_hash,password_reset_expires_at FROM usuarios WHERE email=? AND ativo=1 LIMIT 1');
+            $user->execute([$email]);
+            $row = $user->fetch(PDO::FETCH_ASSOC);
+            $hash = (string) ($row['password_reset_token_hash'] ?? '');
+            $expiresAt = (string) ($row['password_reset_expires_at'] ?? '');
+            $isExpired = $expiresAt === '' || strtotime($expiresAt) < time();
+            if (!$row || $hash === '' || $isExpired || !password_verify($code, $hash)) {
+                throw new RuntimeException('Codigo invalido ou expirado. Solicite uma nova redefinicao de senha.');
+            }
+            $updatePassword = $pdo->prepare('UPDATE usuarios SET senha_hash=?, password_reset_token_hash=NULL, password_reset_expires_at=NULL, password_reset_requested_at=NULL WHERE id=?');
+            $updatePassword->execute([password_hash($newPassword, PASSWORD_DEFAULT), (int) $row['id']]);
+            echo json_encode(['ok' => true, 'message' => 'Senha redefinida com sucesso. Entre usando sua nova senha.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         if ($action === 'login') {
             $email = trim((string) ($input['email'] ?? ''));
             $password = (string) ($input['password'] ?? '');

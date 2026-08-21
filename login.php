@@ -5,7 +5,7 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
   header('Location: index.php');
   exit;
 }
-$publishedPwaVersion = '20260812-admin-update-1';
+$publishedPwaVersion = '20260821-forgot-password-1';
 $publishedPwaAt = '';
 try {
   $config = require __DIR__ . '/config.php';
@@ -46,9 +46,9 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Ai Prof.">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="manifest.json?v=20260812-admin-update-1">
+  <link rel="manifest" href="manifest.json?v=20260821-forgot-password-1">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
-  <link rel="stylesheet" href="login.css?v=20260812-pwa-version-1">
+  <link rel="stylesheet" href="login.css?v=20260821-forgot-password-1">
   <link rel="stylesheet" href="login-version.css?v=20260812-pwa-version-1">
 </head>
 <body>
@@ -63,7 +63,27 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
         <label>Senha<input id="password" type="password" autocomplete="current-password" placeholder="Sua senha" required></label>
         <p id="loginMessage" class="login-message" role="alert"></p>
         <button class="login-submit" type="submit">Entrar no Ai Prof.</button>
+        <button id="forgotPasswordOpen" class="login-forgot-link" type="button">Esqueci minha senha</button>
       </form>
+      <section id="passwordResetBox" class="password-reset-box" aria-labelledby="passwordResetTitle" hidden>
+        <h2 id="passwordResetTitle">Redefinir senha</h2>
+        <p id="passwordResetIntro">Informe seu e-mail cadastrado para receber o codigo de confirmacao.</p>
+        <label>E-mail<input id="resetEmail" type="email" autocomplete="email" placeholder="seuemail@escola.edu.br"></label>
+        <div id="passwordResetRequestStep" class="password-reset-actions">
+          <button id="passwordResetRequest" class="billing-button" type="button">Enviar codigo</button>
+          <button id="passwordResetCancel" class="billing-button" type="button">Voltar</button>
+        </div>
+        <form id="passwordResetConfirmForm" class="password-reset-confirm" hidden novalidate>
+          <label>Codigo recebido<input id="resetCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="000000"></label>
+          <label>Nova senha<input id="resetNewPassword" type="password" autocomplete="new-password" placeholder="Minimo de 6 caracteres"></label>
+          <label>Confirmar nova senha<input id="resetConfirmPassword" type="password" autocomplete="new-password" placeholder="Repita a nova senha"></label>
+          <div class="password-reset-actions">
+            <button class="login-submit" type="submit">Alterar senha</button>
+            <button id="passwordResetBack" class="billing-button" type="button">Voltar</button>
+          </div>
+        </form>
+        <p id="passwordResetMessage" class="login-message" role="alert"></p>
+      </section>
       <div id="billingLogin" class="billing-login" hidden>
         <strong>Pagamento do plano</strong>
         <p id="billingLoginSummary"></p>
@@ -83,6 +103,18 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
     const billingSummary = document.querySelector('#billingLoginSummary');
     const billingActions = document.querySelector('#billingLoginActions');
     const billingMessage = document.querySelector('#billingLoginMessage');
+    const forgotPasswordOpen = document.querySelector('#forgotPasswordOpen');
+    const passwordResetBox = document.querySelector('#passwordResetBox');
+    const passwordResetRequestStep = document.querySelector('#passwordResetRequestStep');
+    const passwordResetRequest = document.querySelector('#passwordResetRequest');
+    const passwordResetCancel = document.querySelector('#passwordResetCancel');
+    const passwordResetBack = document.querySelector('#passwordResetBack');
+    const passwordResetConfirmForm = document.querySelector('#passwordResetConfirmForm');
+    const passwordResetMessage = document.querySelector('#passwordResetMessage');
+    const resetEmail = document.querySelector('#resetEmail');
+    const resetCode = document.querySelector('#resetCode');
+    const resetNewPassword = document.querySelector('#resetNewPassword');
+    const resetConfirmPassword = document.querySelector('#resetConfirmPassword');
     const cycleLabels = {monthly: 'mensal', annual: 'anual'};
     const money = value => Number(value || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
     const escapeHtml = value => String(value || '').replace(/[&<>'"]/g, char => ({
@@ -99,6 +131,88 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
         return JSON.parse(text);
       } catch (_) {
         throw new Error('O servidor retornou uma resposta invalida. Verifique os logs PHP da hospedagem.');
+      }
+    }
+
+    function openPasswordReset() {
+      message.textContent = '';
+      billingBox.hidden = true;
+      billingMessage.textContent = '';
+      passwordResetMessage.textContent = '';
+      resetEmail.value = document.querySelector('#email').value.trim();
+      passwordResetRequestStep.hidden = false;
+      passwordResetConfirmForm.hidden = true;
+      passwordResetBox.hidden = false;
+      resetEmail.focus();
+    }
+
+    function closePasswordReset() {
+      passwordResetBox.hidden = true;
+      passwordResetMessage.textContent = '';
+      passwordResetRequest.disabled = false;
+      passwordResetConfirmForm.querySelector('button[type="submit"]').disabled = false;
+      document.querySelector('#email').focus();
+    }
+
+    async function requestPasswordReset() {
+      passwordResetMessage.textContent = '';
+      passwordResetRequest.disabled = true;
+      passwordResetRequest.textContent = 'Enviando...';
+      try {
+        const response = await fetch('api.php?resource=auth', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({action: 'request_password_reset', email: resetEmail.value})
+        });
+        const data = await readJson(response);
+        if (!response.ok) throw new Error(data.error || 'Nao foi possivel solicitar a redefinicao.');
+        passwordResetMessage.textContent = data.message || 'Confira seu e-mail para continuar.';
+        passwordResetRequestStep.hidden = true;
+        passwordResetConfirmForm.hidden = false;
+        resetCode.focus();
+      } catch (error) {
+        passwordResetMessage.textContent = error.message || 'Nao foi possivel solicitar a redefinicao.';
+      } finally {
+        passwordResetRequest.disabled = false;
+        passwordResetRequest.textContent = 'Enviar codigo';
+      }
+    }
+
+    async function confirmPasswordReset(event) {
+      event.preventDefault();
+      passwordResetMessage.textContent = '';
+      const button = passwordResetConfirmForm.querySelector('button[type="submit"]');
+      button.disabled = true;
+      button.textContent = 'Alterando...';
+      try {
+        const response = await fetch('api.php?resource=auth', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            action: 'confirm_password_reset',
+            email: resetEmail.value,
+            code: resetCode.value,
+            newPassword: resetNewPassword.value,
+            confirmPassword: resetConfirmPassword.value
+          })
+        });
+        const data = await readJson(response);
+        if (!response.ok) throw new Error(data.error || 'Nao foi possivel alterar a senha.');
+        document.querySelector('#email').value = resetEmail.value;
+        document.querySelector('#password').value = '';
+        resetCode.value = '';
+        resetNewPassword.value = '';
+        resetConfirmPassword.value = '';
+        passwordResetMessage.textContent = data.message || 'Senha redefinida com sucesso.';
+        setTimeout(() => {
+          closePasswordReset();
+          document.querySelector('#password').focus();
+        }, 1200);
+      } catch (error) {
+        passwordResetMessage.textContent = error.message || 'Nao foi possivel alterar a senha.';
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Alterar senha';
       }
     }
 
@@ -244,6 +358,20 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
       }
     }
 
+    forgotPasswordOpen.addEventListener('click', openPasswordReset);
+    passwordResetCancel.addEventListener('click', closePasswordReset);
+    passwordResetRequest.addEventListener('click', requestPasswordReset);
+    passwordResetConfirmForm.addEventListener('submit', confirmPasswordReset);
+    passwordResetBack.addEventListener('click', () => {
+      passwordResetMessage.textContent = '';
+      passwordResetConfirmForm.hidden = true;
+      passwordResetRequestStep.hidden = false;
+      resetCode.value = '';
+      resetNewPassword.value = '';
+      resetConfirmPassword.value = '';
+      resetEmail.focus();
+    });
+
     form.addEventListener('submit', async event => {
       event.preventDefault();
       message.textContent = '';
@@ -274,6 +402,6 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
 
     confirmPaymentReturn();
   </script>
-  <script src="pwa.js?v=20260812-admin-update-1"></script>
+  <script src="pwa.js?v=20260821-forgot-password-1"></script>
 </body>
 </html>

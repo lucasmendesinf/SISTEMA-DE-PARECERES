@@ -8,6 +8,9 @@
   const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true || document.referrer.startsWith('android-app://');
   const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isIOSSafari = () => isIOS() && /safari/i.test(navigator.userAgent) && !/crios|fxios|edgios|opios|mercury/i.test(navigator.userAgent);
+  const isChrome = () => /chrome|crios|chromium/i.test(navigator.userAgent) && !/edg|edgios|opr|opios|samsungbrowser/i.test(navigator.userAgent);
+  const isEdge = () => /edg|edgios/i.test(navigator.userAgent);
+  const canShowManualInstall = () => isIOS() || isChrome() || isEdge();
   const isMobile = () => window.matchMedia?.('(hover: none) and (pointer: coarse)').matches || Math.min(window.innerWidth, window.innerHeight) <= 820;
 
   function dismissedRecently() {
@@ -45,7 +48,7 @@
       button.disabled = false;
       button.classList.remove('pwa-installed-button');
       button.textContent = button.dataset.pwaInstallButton === 'nudge' && isIOS() ? 'Ver como instalar' : 'Instalar AiProf';
-      button.hidden = installState === 'unavailable' && !isIOS();
+      button.hidden = installState === 'unavailable' && !canShowManualInstall();
     });
   }
 
@@ -91,6 +94,34 @@
     return {title, intro, steps};
   }
 
+  function chromeInstructionsHtml() {
+    const mobile = isMobile();
+    const title = mobile ? 'Instale o AiProf no Google Chrome' : 'Instalar AiProf no Chrome';
+    const intro = mobile
+      ? 'Adicione o AiProf a tela inicial pelo Google Chrome para acessar como um aplicativo.'
+      : 'Instale o AiProf pelo Google Chrome para abrir em uma janela de aplicativo.';
+    const steps = mobile
+      ? `
+        <div class="pwa-install-flow" aria-hidden="true">
+          <span>Menu do Chrome</span><b></b><span>Adicionar</span><b></b><span>AiProf</span>
+        </div>
+        <div class="pwa-install-steps">
+          <article><strong>1. Toque no menu do Chrome</strong><p>Use o botao de tres pontos no canto superior do navegador.</p></article>
+          <article><strong>2. Escolha "Adicionar a tela inicial"</strong><p>Em alguns aparelhos, a opcao pode aparecer como "Instalar app".</p></article>
+          <article><strong>3. Confirme em "Adicionar" ou "Instalar"</strong><p>O icone do AiProf ficara disponivel na tela inicial.</p></article>
+        </div>`
+      : `
+        <div class="pwa-install-flow" aria-hidden="true">
+          <span>Barra do Chrome</span><b></b><span>Instalar</span><b></b><span>AiProf</span>
+        </div>
+        <div class="pwa-install-steps">
+          <article><strong>1. Procure o icone de instalar na barra de endereco</strong><p>Quando disponivel, o Chrome mostra um icone de instalacao ao lado do endereco.</p></article>
+          <article><strong>2. Ou abra o menu do Chrome</strong><p>Clique nos tres pontos e escolha "Instalar AiProf" ou "Salvar e compartilhar" &gt; "Instalar pagina como app".</p></article>
+          <article><strong>3. Confirme a instalacao</strong><p>O AiProf abrira em uma janela propria, como aplicativo.</p></article>
+        </div>`;
+    return {title, intro, steps};
+  }
+
   function ensureInstallModal() {
     let modal = $('#pwaInstallModal');
     if (modal) return modal;
@@ -111,11 +142,13 @@
     const modal = ensureInstallModal();
     const content = isIOS()
       ? iosInstructionsHtml()
-      : {
-        title: 'Instalar AiProf',
-        intro: 'Se o navegador nao abriu o instalador automaticamente, use a opcao de instalar aplicativo no menu do navegador.',
-        steps: '<div class="pwa-install-steps"><article><strong>Use o menu do navegador</strong><p>Procure por Instalar aplicativo ou Adicionar a tela inicial.</p></article></div>'
-      };
+      : isChrome() || isEdge()
+        ? chromeInstructionsHtml()
+        : {
+          title: 'Instalar AiProf',
+          intro: 'Se o navegador nao abriu o instalador automaticamente, use a opcao de instalar aplicativo no menu do navegador.',
+          steps: '<div class="pwa-install-steps"><article><strong>Use o menu do navegador</strong><p>Procure por Instalar aplicativo ou Adicionar a tela inicial.</p></article></div>'
+        };
     modal.innerHTML = `
       <div class="pwa-install-modal" role="dialog" aria-modal="true" aria-labelledby="pwaInstallTitle">
         <button class="pwa-install-close" type="button" aria-label="Fechar">x</button>
@@ -145,17 +178,18 @@
 
   function ensureInstallNudge() {
     if (isStandalone() || !isMobile() || dismissedRecently() || $('#pwaInstallNudge')) return;
-    if (installState === 'unavailable' && !isIOS()) return;
+    if (installState === 'unavailable' && !canShowManualInstall()) return;
     const main = document.querySelector('main');
     if (!main) return;
     const ios = isIOS();
+    const chrome = !ios && (isChrome() || isEdge());
     const nudge = document.createElement('div');
     nudge.id = 'pwaInstallNudge';
     nudge.className = 'pwa-install-nudge';
     nudge.innerHTML = `
       <div>
-        <strong>${ios ? 'Instale o AiProf no seu iPhone' : 'Tenha o AiProf sempre a mao'}</strong>
-        <span>${ios ? 'Acesse diretamente pela sua Tela de Inicio, como um aplicativo.' : 'Instale o AiProf no seu celular e acesse direto pela tela inicial.'}</span>
+        <strong>${ios ? 'Instale o AiProf no seu iPhone' : chrome ? 'Instale o AiProf no Google Chrome' : 'Tenha o AiProf sempre a mao'}</strong>
+        <span>${ios ? 'Acesse diretamente pela sua Tela de Inicio, como um aplicativo.' : chrome ? 'Acesse pela tela inicial ou em uma janela de aplicativo.' : 'Instale o AiProf no seu celular e acesse direto pela tela inicial.'}</span>
       </div>
       <div class="pwa-install-actions">
         <button class="primary" type="button" data-pwa-install-button="nudge">${ios ? 'Ver como instalar' : 'Instalar AiProf'}</button>
@@ -212,7 +246,7 @@
   window.AiProfPwaInstall = {refresh: refreshInstallUi, install: startInstall, isInstalled: isStandalone};
 
   document.addEventListener('DOMContentLoaded', () => {
-    installState = isIOS() ? 'ios' : 'unavailable';
+    installState = canShowManualInstall() ? 'manual' : 'unavailable';
     refreshInstallUi();
     setTimeout(refreshInstallUi, 800);
   });

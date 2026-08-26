@@ -79,7 +79,13 @@
     try {
       localStorage.setItem(draftKey(), JSON.stringify({...state.draft, studentDrafts: state.studentDrafts}));
     } catch (error) {
-      console.warn('Nao foi possivel salvar o rascunho do cadastro inicial.', error);
+      try {
+        const slimStudentDrafts = state.studentDrafts.map(student => ({...student, photo: ''}));
+        const slimHeader = {...(state.draft.header || {}), logo: ''};
+        localStorage.setItem(draftKey(), JSON.stringify({...state.draft, header: slimHeader, studentDrafts: slimStudentDrafts}));
+      } catch (fallbackError) {
+        console.warn('Nao foi possivel salvar o rascunho do cadastro inicial.', fallbackError);
+      }
     }
   }
 
@@ -236,6 +242,49 @@
     });
   }
 
+  function imageFromDataUrl(dataUrl) {
+    return new Promise(resolve => {
+      if (!dataUrl) return resolve(null);
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => resolve(null);
+      image.src = dataUrl;
+    });
+  }
+
+  async function compactImageFile(file, options = {}) {
+    if (!file) return '';
+    const dataUrl = await fileAsDataUrl(file);
+    if (!file.type?.startsWith('image/')) return dataUrl;
+    const image = await imageFromDataUrl(dataUrl);
+    if (!image) return dataUrl;
+    const maxWidth = options.maxWidth || 900;
+    const maxHeight = options.maxHeight || 900;
+    const quality = options.quality || 0.82;
+    const scale = Math.min(1, maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
+    if (scale >= 1 && dataUrl.length < 650000) return dataUrl;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', quality);
+  }
+
+  function safeSetHeaderCache(settings) {
+    try {
+      localStorage.setItem('parecer-cabecalho-professora-v1', JSON.stringify(settings));
+    } catch (error) {
+      try {
+        localStorage.setItem('parecer-cabecalho-professora-v1', JSON.stringify({...settings, logo: ''}));
+      } catch (fallbackError) {
+        console.warn('Nao foi possivel salvar o cabecalho localmente.', fallbackError);
+      }
+    }
+  }
+
   function setLoading(button, loading) {
     button.disabled = loading;
     button.textContent = loading ? 'Salvando...' : (button.dataset.label || 'Proximo');
@@ -276,12 +325,12 @@
     if (!network) { $('#onboardNetwork').focus(); throw new Error('Informe o nome da rede ou secretaria.'); }
     if (!school) { $('#onboardSchool').focus(); throw new Error('Informe a unidade escolar.'); }
     if (!contact) { $('#onboardContact').focus(); throw new Error('Informe o endereco e contato da escola.'); }
-    const logo = await fileAsDataUrl($('#onboardLogo').files[0]) || state.draft.header?.logo || state.header.logo || '';
+    const logo = await compactImageFile($('#onboardLogo').files[0], {maxWidth: 900, maxHeight: 900, quality: 0.82}) || state.draft.header?.logo || state.header.logo || '';
     state.header = {network, school, contact, logo};
     state.draft.header = state.header;
     persistDraft();
     await request('header-settings', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(state.header)});
-    localStorage.setItem('parecer-cabecalho-professora-v1', JSON.stringify(state.header));
+    safeSetHeaderCache(state.header);
   }
 
   async function savePeriod() {
@@ -310,7 +359,7 @@
     const classId = Number($('#onboardStudentClass').value);
     if (!name) { $('#onboardStudentName').focus(); throw new Error('Informe o nome do aluno.'); }
     if (!birthDate) { $('#onboardStudentBirth').focus(); throw new Error('Informe a data de nascimento do aluno.'); }
-    const photo = await fileAsDataUrl($('#onboardStudentPhoto').files[0]);
+    const photo = await compactImageFile($('#onboardStudentPhoto').files[0], {maxWidth: 960, maxHeight: 960, quality: 0.82});
     state.studentDrafts.push({name, birthDate, classId, photo});
     state.draft.studentInput = {};
     persistDraft();
@@ -395,7 +444,7 @@
       if (!file) return;
       const preview = $('#onboardLogoPreview');
       preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Logo">`;
-      fileAsDataUrl(file).then(logo => {
+      compactImageFile(file, {maxWidth: 900, maxHeight: 900, quality: 0.82}).then(logo => {
         state.draft.header = {...(state.draft.header || {}), logo};
         persistDraft();
       });

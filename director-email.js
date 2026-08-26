@@ -10,6 +10,47 @@
     '"': '&quot;'
   }[char]));
 
+  function imageFromDataUrl(dataUrl) {
+    return new Promise(resolve => {
+      if (!dataUrl) return resolve(null);
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => resolve(null);
+      image.src = dataUrl;
+    });
+  }
+
+  async function compactHeaderLogo(file) {
+    if (!file || !file.type?.startsWith('image/')) {
+      return file && typeof fileAsDataUrl === 'function' ? fileAsDataUrl(file) : '';
+    }
+    const dataUrl = typeof fileAsDataUrl === 'function' ? await fileAsDataUrl(file) : '';
+    const image = await imageFromDataUrl(dataUrl);
+    if (!image) return dataUrl;
+    const scale = Math.min(1, 900 / image.naturalWidth, 900 / image.naturalHeight);
+    if (scale >= 1 && dataUrl.length < 650000) return dataUrl;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.82);
+  }
+
+  function safeSetHeaderCache(settings) {
+    try {
+      localStorage.setItem(headerKey, JSON.stringify(settings));
+    } catch (error) {
+      try {
+        localStorage.setItem(headerKey, JSON.stringify({...settings, logo: ''}));
+      } catch (fallbackError) {
+        console.warn('Nao foi possivel salvar o cabecalho localmente.', fallbackError);
+      }
+    }
+  }
+
   function ensureFinalTextField() {
     if ($('#headerFinalText')) return;
     const contactField = $('#headerContact')?.closest('.field');
@@ -42,7 +83,7 @@
       const logoFile = $('#headerLogo')?.files?.[0];
       const old = JSON.parse(localStorage.getItem(headerKey) || '{}');
       let logo = old.logo || '';
-      if (logoFile && typeof fileAsDataUrl === 'function') logo = await fileAsDataUrl(logoFile);
+      if (logoFile) logo = await compactHeaderLogo(logoFile);
       const settings = {
         ...old,
         network: $('#headerNetwork')?.value.trim() || '',
@@ -59,7 +100,7 @@
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) return alert(result.error || 'Nao foi possivel salvar o cabecalho.');
-      localStorage.setItem(headerKey, JSON.stringify(settings));
+      safeSetHeaderCache(settings);
       await window.loadHeaderSettings();
       window.applyDocumentStylePreview?.();
       alert('Cabecalho salvo com sucesso.');

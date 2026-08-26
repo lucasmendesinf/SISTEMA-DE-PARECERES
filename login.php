@@ -477,6 +477,9 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
 
     forgotPasswordOpen.addEventListener('click', openPasswordReset);
     signupOpen.addEventListener('click', openSignup);
+    if (new URLSearchParams(window.location.search).get('signup') === '1') {
+      openSignup();
+    }
     signupCancel.addEventListener('click', closeSignup);
     signupForm.addEventListener('submit', submitSignup);
     passwordResetCancel.addEventListener('click', closePasswordReset);

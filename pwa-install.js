@@ -12,6 +12,7 @@
   const isEdge = () => /edg|edgios/i.test(navigator.userAgent);
   const canShowManualInstall = () => isIOS() || isChrome() || isEdge();
   const isMobile = () => window.matchMedia?.('(hover: none) and (pointer: coarse)').matches || Math.min(window.innerWidth, window.innerHeight) <= 820;
+  const waitsForNativePrompt = () => !isIOS() && isMobile() && (isChrome() || isEdge()) && !deferredPrompt && installState !== 'available';
 
   function dismissedRecently() {
     const value = Number(localStorage.getItem(DISMISS_KEY) || 0);
@@ -45,9 +46,10 @@
         button.textContent = 'AiProf instalado';
         return;
       }
-      button.disabled = false;
+      const waitingNativePrompt = waitsForNativePrompt();
+      button.disabled = waitingNativePrompt;
       button.classList.remove('pwa-installed-button');
-      button.textContent = button.dataset.pwaInstallButton === 'nudge' && isIOS() ? 'Ver como instalar' : 'Instalar AiProf';
+      button.textContent = waitingNativePrompt ? 'Preparando instalacao...' : button.dataset.pwaInstallButton === 'nudge' && isIOS() ? 'Ver como instalar' : 'Instalar AiProf';
       button.hidden = installState === 'unavailable' && !canShowManualInstall();
     });
   }
@@ -98,8 +100,8 @@
     const mobile = isMobile();
     const title = mobile ? 'Instale o AiProf no Google Chrome' : 'Instalar AiProf no Chrome';
     const intro = mobile
-      ? 'Adicione o AiProf a tela inicial pelo Google Chrome para acessar como um aplicativo.'
-      : 'Instale o AiProf pelo Google Chrome para abrir em uma janela de aplicativo.';
+      ? 'Se o Chrome nao liberar o instalador automatico, use a opcao do menu do navegador.'
+      : 'Se o Chrome nao liberar o instalador automatico, use o icone de instalar ou o menu do navegador.';
     const steps = mobile
       ? `
         <div class="pwa-install-flow" aria-hidden="true">
@@ -183,16 +185,17 @@
     if (!main) return;
     const ios = isIOS();
     const chrome = !ios && (isChrome() || isEdge());
+    const waitingNativePrompt = waitsForNativePrompt();
     const nudge = document.createElement('div');
     nudge.id = 'pwaInstallNudge';
     nudge.className = 'pwa-install-nudge';
     nudge.innerHTML = `
       <div>
         <strong>${ios ? 'Instale o AiProf no seu iPhone' : chrome ? 'Instale o AiProf no Google Chrome' : 'Tenha o AiProf sempre a mao'}</strong>
-        <span>${ios ? 'Acesse diretamente pela sua Tela de Inicio, como um aplicativo.' : chrome ? 'Acesse pela tela inicial ou em uma janela de aplicativo.' : 'Instale o AiProf no seu celular e acesse direto pela tela inicial.'}</span>
+        <span>${ios ? 'Acesse diretamente pela sua Tela de Inicio, como um aplicativo.' : chrome ? waitingNativePrompt ? 'O Chrome esta preparando o instalador nativo. Aguarde alguns segundos.' : 'Acesse pela tela inicial ou em uma janela de aplicativo.' : 'Instale o AiProf no seu celular e acesse direto pela tela inicial.'}</span>
       </div>
       <div class="pwa-install-actions">
-        <button class="primary" type="button" data-pwa-install-button="nudge">${ios ? 'Ver como instalar' : 'Instalar AiProf'}</button>
+        <button class="primary" type="button" data-pwa-install-button="nudge" ${waitingNativePrompt ? 'disabled' : ''}>${waitingNativePrompt ? 'Preparando instalacao...' : ios ? 'Ver como instalar' : 'Instalar AiProf'}</button>
         <button class="secondary" type="button" data-pwa-install-dismiss>Agora nao</button>
       </div>`;
     const header = main.querySelector('header');
@@ -209,6 +212,10 @@
     if (isStandalone()) return;
     if (isIOS()) {
       openInstallModal();
+      return;
+    }
+    if (waitsForNativePrompt()) {
+      setButtonState();
       return;
     }
     if (deferredPrompt) {
@@ -249,6 +256,8 @@
     installState = canShowManualInstall() ? 'manual' : 'unavailable';
     refreshInstallUi();
     setTimeout(refreshInstallUi, 800);
+    setTimeout(refreshInstallUi, 2200);
+    setTimeout(refreshInstallUi, 5000);
   });
 
   window.addEventListener('portal:user-ready', refreshInstallUi);

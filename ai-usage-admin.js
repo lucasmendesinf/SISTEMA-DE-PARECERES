@@ -68,7 +68,7 @@
           <div class="panel-head"><div><h2>Precos por modelo</h2><p>Alteracoes preservam o historico ja registrado.</p></div><button class="primary" id="saveAiModelPrice" type="button">Salvar preco</button></div>
           <div class="ai-usage-settings">
             <div class="field"><label>Provedor</label><input id="aiPriceProvider" value="Groq"></div>
-            <div class="field"><label>Modelo</label><input id="aiPriceModel" value="llama-3.3-70b-versatile"></div>
+            <div class="field"><label>Modelo</label><input id="aiPriceModel" value="openai/gpt-oss-120b"></div>
             <div class="field"><label>Nome exibido</label><input id="aiPriceName" value="Llama 3.3 70B Versatile"></div>
             <div class="field"><label>Entrada / 1M</label><input id="aiPriceInput" type="number" step="0.0000000001" min="0"></div>
             <div class="field"><label>Saida / 1M</label><input id="aiPriceOutput" type="number" step="0.0000000001" min="0"></div>
@@ -193,7 +193,7 @@
     const activePrice = (state.prices || []).find(price => price.is_active == 1 && price.provider === 'Groq') || (state.prices || []).find(price => price.is_active == 1);
     if (activePrice) {
       document.querySelector('#aiPriceProvider').value = activePrice.provider || 'Groq';
-      document.querySelector('#aiPriceModel').value = activePrice.model_id || 'llama-3.3-70b-versatile';
+      document.querySelector('#aiPriceModel').value = activePrice.model_id || 'openai/gpt-oss-120b';
       document.querySelector('#aiPriceName').value = activePrice.display_name || activePrice.model_id || '';
       document.querySelector('#aiPriceInput').value = activePrice.input_price_per_million || '';
       document.querySelector('#aiPriceOutput').value = activePrice.output_price_per_million || '';

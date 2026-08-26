@@ -5,7 +5,7 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
   header('Location: index.php');
   exit;
 }
-$publishedPwaVersion = '20260826-android-icon-1';
+$publishedPwaVersion = '20260826-groq-model-1';
 $publishedPwaAt = '';
 try {
   $config = require __DIR__ . '/config.php';
@@ -46,9 +46,9 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Ai Prof.">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="manifest.json?v=20260826-android-icon-1">
+  <link rel="manifest" href="manifest.json?v=20260826-groq-model-1">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
-  <link rel="stylesheet" href="login.css?v=20260826-android-icon-1">
+  <link rel="stylesheet" href="login.css?v=20260826-groq-model-1">
   <link rel="stylesheet" href="login-version.css?v=20260812-pwa-version-1">
 </head>
 <body>
@@ -522,6 +522,6 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
 
     confirmPaymentReturn();
   </script>
-  <script src="pwa.js?v=20260826-android-icon-1"></script>
+  <script src="pwa.js?v=20260826-groq-model-1"></script>
 </body>
 </html>

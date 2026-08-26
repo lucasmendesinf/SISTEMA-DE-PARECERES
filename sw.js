@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260826-android-icon-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260826-groq-model-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
-  './manifest.json?v=20260826-android-icon-1',
-  './pwa.js?v=20260826-android-icon-1',
-  './login.css?v=20260826-android-icon-1',
+  './manifest.json?v=20260826-groq-model-1',
+  './pwa.js?v=20260826-groq-model-1',
+  './login.css?v=20260826-groq-model-1',
   './style.css?v=20260804-mobile-no-input-zoom-1',
   './mobile-menu.css?v=20260809-mobile-menu-readable-1',
   './activity-pagination.css',
@@ -25,7 +25,7 @@ const STATIC_ASSETS = [
   './document-image-zoom.css?v=20260702-document-image-zoom-front-1',
   './onboarding.css?v=20260716-onboarding-student-close-1',
   './save-feedback.css?v=20260717-save-feedback-front-1',
-  './pwa-admin.css?v=20260826-android-icon-1',
+  './pwa-admin.css?v=20260826-groq-model-1',
   './save-feedback.js?v=20260717-save-feedback-front-1',
   './onboarding.js?v=20260717-fast-onboarding-1',
   './activities-edit.js?v=20260804-activity-save-reliable-1',
@@ -34,7 +34,7 @@ const STATIC_ASSETS = [
   './app.js?v=20260804-activity-save-reliable-1',
   './report-editor.js?v=20260809-fast-report-actions-1',
   './document-style-settings.js?v=20260716-force-docx-font-1',
-  './text-ai-review.js?v=20260717-generate-text-label-1',
+  './text-ai-review.js?v=20260826-groq-model-1',
   './document-button-fix.js?v=20260717-require-student-1',
   './director-email.js?v=20260809-fast-report-actions-1',
   './terms-consent.js?v=20260716-terms-before-onboarding-1',
@@ -46,8 +46,8 @@ const STATIC_ASSETS = [
   './image-editor-flow.js?v=20260709-activity-photos-30-1',
   './master-users.js?v=20260717-users-fast-1',
   './finance-admin.js?v=20260717-menu-permissions-1',
-  './ai-usage-admin.js?v=20260717-menu-permissions-1',
-  './pwa-admin.js?v=20260826-android-icon-1',
+  './ai-usage-admin.js?v=20260826-groq-model-1',
+  './pwa-admin.js?v=20260826-groq-model-1',
   './assets/ai-prof-logo-transparent.png',
   './assets/pwa/icon-192.png',
   './assets/pwa/icon-512.png',

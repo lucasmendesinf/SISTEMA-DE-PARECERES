@@ -1,5 +1,5 @@
 (() => {
-  const PWA_VERSION = '20260826-android-icon-1';
+  const PWA_VERSION = '20260826-groq-model-1';
   const VERSION_ENDPOINT = 'api.php?resource=pwa-version';
   const LOCAL_VERSION_KEY = 'ai-prof-pwa-published-version';
   const RELOAD_FLAG = 'ai-prof-pwa-reload-once';

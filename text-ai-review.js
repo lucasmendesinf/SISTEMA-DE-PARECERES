@@ -367,7 +367,7 @@
           <label class="checkline"><input id="aiLlamaEnabled" type="checkbox"> Llama via API ativo</label>
           <div class="field"><label>URL base da API</label><input id="aiLlamaBaseUrl" placeholder="https://api.groq.com/openai/v1"></div>
           <div class="field"><label>API Key do Llama</label><input id="aiLlamaApiKey" type="password" autocomplete="off" placeholder="Cole a API Key ou deixe em branco para manter"></div>
-          <div class="field"><label>Modelo Llama</label><input id="aiLlamaModel" placeholder="llama-3.3-70b-versatile"></div>
+          <div class="field"><label>Modelo Llama</label><input id="aiLlamaModel" placeholder="openai/gpt-oss-120b"></div>
           <small class="muted">Use uma API compatível com OpenAI Chat Completions, como Groq, Together ou OpenRouter.</small>
         </div>
         <div class="field"><label>Limite diario por professora</label><input id="aiDailyUserLimit" type="number" min="1" max="500"></div>
@@ -401,7 +401,7 @@
       document.querySelector('#aiLlamaEnabled').checked = !!settings.llamaEnabled;
       document.querySelector('#aiLlamaBaseUrl').value = settings.llamaBaseUrl || 'https://api.groq.com/openai/v1';
       document.querySelector('#aiLlamaApiKey').placeholder = settings.llamaApiKeyConfigured ? `Configurada: ${settings.llamaApiKeyMasked}` : 'Cole a API Key do provedor';
-      document.querySelector('#aiLlamaModel').value = settings.llamaModel || 'llama-3.3-70b-versatile';
+      document.querySelector('#aiLlamaModel').value = settings.llamaModel || 'openai/gpt-oss-120b';
       document.querySelector('#aiDailyUserLimit').value = settings.dailyUserLimit || 10;
       document.querySelector('#aiDailySchoolLimit').value = settings.dailySchoolLimit || 100;
       toggleAiProviderFields();

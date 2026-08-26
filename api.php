@@ -39,7 +39,7 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
 
-    $schemaVersion = '2026-08-21-password-reset-1';
+    $schemaVersion = '2026-08-26-groq-model-1';
     $addColumnIfMissing = function (PDO $pdo, string $table, string $column, string $definition): void {
         $quotedTable = '`' . str_replace('`', '``', $table) . '`';
         $stmt = $pdo->prepare("SHOW COLUMNS FROM {$quotedTable} LIKE ?");
@@ -278,8 +278,8 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec("INSERT INTO ai_model_prices
         (provider,model_id,display_name,input_price_per_million,output_price_per_million,cached_input_price_per_million,currency,is_active)
-        SELECT 'Groq','llama-3.3-70b-versatile','Llama 3.3 70B Versatile',0.5900000000,0.7900000000,0.0000000000,'USD',1
-        WHERE NOT EXISTS (SELECT 1 FROM ai_model_prices WHERE provider='Groq' AND model_id='llama-3.3-70b-versatile' AND is_active=1)");
+        SELECT 'Groq','openai/gpt-oss-120b','GPT OSS 120B',0.1500000000,0.6000000000,0.0000000000,'USD',1
+        WHERE NOT EXISTS (SELECT 1 FROM ai_model_prices WHERE provider='Groq' AND model_id='openai/gpt-oss-120b' AND is_active=1)");
     $pdo->exec("INSERT INTO billing_cycles (name,slug,month_count,amount,active) VALUES
         ('Mensal','monthly',1,0.00,1),
         ('Trimestral','quarterly',3,0.00,1),
@@ -632,7 +632,7 @@ try {
                 'priority' => 2,
                 'base_url' => trim((string) (getenv('LLAMA_API_BASE_URL') ?: getenv('OLLAMA_BASE_URL') ?: ($config['llama']['base_url'] ?? $config['ollama']['base_url'] ?? 'https://api.groq.com/openai/v1'))),
                 'api_key' => trim((string) (getenv('LLAMA_API_KEY') ?: getenv('OLLAMA_API_KEY') ?: ($config['llama']['api_key'] ?? $config['ollama']['api_key'] ?? ''))),
-                'model' => trim((string) (getenv('LLAMA_MODEL') ?: getenv('OLLAMA_MODEL') ?: ($config['llama']['model'] ?? $config['ollama']['model'] ?? 'llama-3.3-70b-versatile'))),
+                'model' => trim((string) (getenv('LLAMA_MODEL') ?: getenv('OLLAMA_MODEL') ?: ($config['llama']['model'] ?? $config['ollama']['model'] ?? 'openai/gpt-oss-120b'))),
             ],
         ],
     ];
@@ -651,8 +651,8 @@ try {
         if ($llamaUrl !== '' && trim((string) ($settings['providers']['llama']['base_url'] ?? '')) === '') $settings['providers']['llama']['base_url'] = $llamaUrl;
         if ($llamaKey !== '' && trim((string) ($settings['providers']['llama']['api_key'] ?? '')) === '') $settings['providers']['llama']['api_key'] = $llamaKey;
         if ($llamaModel !== '' && trim((string) ($settings['providers']['llama']['model'] ?? '')) === '') $settings['providers']['llama']['model'] = $llamaModel;
-        if (trim((string) ($settings['providers']['llama']['model'] ?? '')) === 'llama3.1') {
-            $settings['providers']['llama']['model'] = 'llama-3.3-70b-versatile';
+        if (in_array(trim((string) ($settings['providers']['llama']['model'] ?? '')), ['llama3.1', 'llama-3.3-70b-versatile', 'openai/gpt-oss-120b'], true)) {
+            $settings['providers']['llama']['model'] = 'openai/gpt-oss-120b';
         }
         if (trim((string) ($settings['providers']['llama']['base_url'] ?? '')) === 'http://127.0.0.1:11434') {
             $settings['providers']['llama']['base_url'] = 'https://api.groq.com/openai/v1';
@@ -677,7 +677,7 @@ try {
             'llamaBaseUrl' => (string) ($llama['base_url'] ?? 'https://api.groq.com/openai/v1'),
             'llamaApiKeyConfigured' => trim((string) ($llama['api_key'] ?? '')) !== '',
             'llamaApiKeyMasked' => $maskSecret((string) ($llama['api_key'] ?? '')),
-            'llamaModel' => (string) ($llama['model'] ?? 'llama-3.3-70b-versatile'),
+            'llamaModel' => (string) ($llama['model'] ?? 'openai/gpt-oss-120b'),
         ];
     };
     $aiSchoolHash = static function (int $userId) use ($pdo): string {
@@ -1810,8 +1810,8 @@ try {
             $provider = in_array((string) ($input['provider'] ?? 'gemini'), ['gemini', 'llama'], true) ? (string) $input['provider'] : 'gemini';
             $llamaBaseUrl = rtrim(trim((string) ($input['llamaBaseUrl'] ?? ($currentLlama['base_url'] ?? 'https://api.groq.com/openai/v1'))), '/');
             $llamaApiKey = trim((string) ($input['llamaApiKey'] ?? ''));
-            $llamaModel = trim((string) ($input['llamaModel'] ?? ($currentLlama['model'] ?? 'llama-3.3-70b-versatile'))) ?: 'llama-3.3-70b-versatile';
-            if ($llamaModel === 'llama3.1') $llamaModel = 'llama-3.3-70b-versatile';
+            $llamaModel = trim((string) ($input['llamaModel'] ?? ($currentLlama['model'] ?? 'openai/gpt-oss-120b'))) ?: 'openai/gpt-oss-120b';
+            if (in_array($llamaModel, ['llama3.1', 'llama-3.3-70b-versatile', 'openai/gpt-oss-120b'], true)) $llamaModel = 'openai/gpt-oss-120b';
             $settings = [
                 'enabled' => !empty($input['enabled']),
                 'provider' => $provider,
@@ -2030,7 +2030,7 @@ try {
                 if ($provider['name'] === 'llama') {
                     $baseUrl = rtrim(trim((string) ($provider['settings']['base_url'] ?? '')), '/');
                     $apiKey = trim((string) ($provider['settings']['api_key'] ?? ''));
-                    $model = trim((string) ($provider['settings']['model'] ?? 'llama-3.3-70b-versatile')) ?: 'llama-3.3-70b-versatile';
+                    $model = trim((string) ($provider['settings']['model'] ?? 'openai/gpt-oss-120b')) ?: 'openai/gpt-oss-120b';
                     if ($baseUrl === '') throw new RuntimeException('URL base da API do Llama nao configurada.');
                     if ($apiKey === '') throw new RuntimeException('API Key do Llama nao configurada.');
                     if (!function_exists('curl_init')) throw new RuntimeException('Extensao cURL do PHP nao habilitada.');

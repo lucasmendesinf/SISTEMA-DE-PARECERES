@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260821-forgot-password-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260826-android-icon-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
-  './manifest.json?v=20260821-forgot-password-1',
-  './pwa.js?v=20260821-forgot-password-1',
-  './login.css?v=20260702-billing-modal-1',
+  './manifest.json?v=20260826-android-icon-1',
+  './pwa.js?v=20260826-android-icon-1',
+  './login.css?v=20260826-android-icon-1',
   './style.css?v=20260804-mobile-no-input-zoom-1',
   './mobile-menu.css?v=20260809-mobile-menu-readable-1',
   './activity-pagination.css',
@@ -25,7 +25,7 @@ const STATIC_ASSETS = [
   './document-image-zoom.css?v=20260702-document-image-zoom-front-1',
   './onboarding.css?v=20260716-onboarding-student-close-1',
   './save-feedback.css?v=20260717-save-feedback-front-1',
-  './pwa-admin.css?v=20260821-forgot-password-1',
+  './pwa-admin.css?v=20260826-android-icon-1',
   './save-feedback.js?v=20260717-save-feedback-front-1',
   './onboarding.js?v=20260717-fast-onboarding-1',
   './activities-edit.js?v=20260804-activity-save-reliable-1',
@@ -47,11 +47,14 @@ const STATIC_ASSETS = [
   './master-users.js?v=20260717-users-fast-1',
   './finance-admin.js?v=20260717-menu-permissions-1',
   './ai-usage-admin.js?v=20260717-menu-permissions-1',
-  './pwa-admin.js?v=20260821-forgot-password-1',
+  './pwa-admin.js?v=20260826-android-icon-1',
   './assets/ai-prof-logo-transparent.png',
   './assets/pwa/icon-192.png',
   './assets/pwa/icon-512.png',
-  './assets/pwa/icon-maskable-512.png'
+  './assets/pwa/icon-maskable-512.png',
+  './assets/pwa/icon-android-192.png',
+  './assets/pwa/icon-android-512.png',
+  './assets/pwa/icon-android-maskable-512.png'
 ];
 
 self.addEventListener('install', event => {

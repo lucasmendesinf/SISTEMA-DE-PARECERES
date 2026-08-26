@@ -1497,9 +1497,70 @@ try {
         echo json_encode($createMercadoPagoPayment($row, $method), JSON_UNESCAPED_UNICODE);
         exit;
     }
+    if ($resource === 'billing-public-plans' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+        echo json_encode(['cycles' => $publicBillingCycles()], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     if ($resource === 'auth' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
         $action = $input['action'] ?? '';
+        if ($action === 'register_trial') {
+            $name = trim((string) ($input['name'] ?? ''));
+            $email = trim((string) ($input['email'] ?? ''));
+            $phone = trim((string) ($input['phone'] ?? ''));
+            $password = (string) ($input['password'] ?? '');
+            $confirmPassword = (string) ($input['confirmPassword'] ?? '');
+            $termsAccepted = !empty($input['termsAccepted']);
+            if ($name === '') throw new RuntimeException('Informe seu nome.');
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) throw new RuntimeException('Informe um e-mail valido.');
+            if (strlen($password) < 6) throw new RuntimeException('A senha deve ter pelo menos 6 caracteres.');
+            if ($password !== $confirmPassword) throw new RuntimeException('A confirmação da senha não confere.');
+            if (!$termsAccepted) throw new RuntimeException('Aceite os termos de uso para criar sua conta.');
+            $exists = $pdo->prepare('SELECT id FROM usuarios WHERE email=? LIMIT 1');
+            $exists->execute([$email]);
+            if ($exists->fetchColumn()) throw new RuntimeException('Ja existe uma conta cadastrada com este e-mail.');
+            $trialDays = 7;
+            $trialDueDate = (new DateTimeImmutable('today'))->modify('+' . $trialDays . ' days')->format('Y-m-d');
+            $cycle = $loadBillingCycle(null, 'monthly');
+            $permissions = ['alunos', 'turmas', 'periodos', 'atividades', 'pareceres', 'portfolio', 'tutoriais', 'configuracoes', 'drive'];
+            $ip = substr((string) ($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45);
+            $insert = $pdo->prepare("INSERT INTO usuarios (nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,billing_plan,billing_cycle,billing_cycle_id,billing_amount,billing_payment_method,billing_status,billing_next_due_date,billing_notes,billing_trial_days,terms_accepted_at,terms_version,terms_ip,senha_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            $insert->execute([
+                $name,
+                $email,
+                $phone ?: null,
+                'cliente',
+                json_encode($permissions, JSON_UNESCAPED_UNICODE),
+                1,
+                'both',
+                'Basico',
+                $legacyCycleFromMonths((int) $cycle['months']),
+                $cycle['id'],
+                number_format((float) $cycle['amount'], 2, '.', ''),
+                'both',
+                'trial',
+                $trialDueDate,
+                'Cadastro publico com teste gratuito de 7 dias.',
+                $trialDays,
+                date('Y-m-d H:i:s'),
+                $termsVersion,
+                $ip ?: null,
+                password_hash($password, PASSWORD_DEFAULT),
+            ]);
+            $userId = (int) $pdo->lastInsertId();
+            $query = $pdo->prepare("SELECT id,nome,email,telefone,perfil,permissoes,ativo,image_editor_permission,{$billingSelect},terms_accepted_at,terms_version,terms_ip FROM usuarios WHERE id=? LIMIT 1");
+            $query->execute([$userId]);
+            $row = $query->fetch(PDO::FETCH_ASSOC);
+            if (!$row) throw new RuntimeException('Conta criada, mas nao foi possivel iniciar a sessao automaticamente.');
+            $permissionsRow = json_decode((string) ($row['permissoes'] ?? '[]'), true);
+            $row['permissions'] = is_array($permissionsRow) ? $permissionsRow : [];
+            session_regenerate_id(true);
+            $_SESSION['user_id'] = $userId;
+            $public = $publicUser($row);
+            $storeBootstrapUser($public);
+            echo json_encode(['ok' => true, 'user' => $public, 'message' => 'Conta criada com sucesso. Seu teste gratuito de 7 dias foi ativado.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         if ($action === 'request_password_reset') {
             $email = trim((string) ($input['email'] ?? ''));
             if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {

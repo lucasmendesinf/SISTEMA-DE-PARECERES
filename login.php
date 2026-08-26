@@ -5,7 +5,7 @@ if (!empty($_SESSION['user_id']) && !$hasPaymentReturn) {
   header('Location: index.php');
   exit;
 }
-$publishedPwaVersion = '20260821-forgot-password-1';
+$publishedPwaVersion = '20260826-android-icon-1';
 $publishedPwaAt = '';
 try {
   $config = require __DIR__ . '/config.php';
@@ -46,9 +46,9 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Ai Prof.">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="manifest.json?v=20260821-forgot-password-1">
+  <link rel="manifest" href="manifest.json?v=20260826-android-icon-1">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
-  <link rel="stylesheet" href="login.css?v=20260821-forgot-password-1">
+  <link rel="stylesheet" href="login.css?v=20260826-android-icon-1">
   <link rel="stylesheet" href="login-version.css?v=20260812-pwa-version-1">
 </head>
 <body>
@@ -64,6 +64,7 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
         <p id="loginMessage" class="login-message" role="alert"></p>
         <button class="login-submit" type="submit">Entrar no Ai Prof.</button>
         <button id="forgotPasswordOpen" class="login-forgot-link" type="button">Esqueci minha senha</button>
+        <button id="signupOpen" class="login-signup-link" type="button">Criar conta gratis</button>
       </form>
       <section id="passwordResetBox" class="password-reset-box" aria-labelledby="passwordResetTitle" hidden>
         <h2 id="passwordResetTitle">Redefinir senha</h2>
@@ -83,6 +84,23 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
           </div>
         </form>
         <p id="passwordResetMessage" class="login-message" role="alert"></p>
+      </section>
+      <section id="signupBox" class="signup-box" aria-labelledby="signupTitle" hidden>
+        <h2 id="signupTitle">Criar conta gratis</h2>
+        <p>Comece com 7 dias de teste gratuito. Depois, escolha o plano e periodo de pagamento.</p>
+        <form id="signupForm" class="signup-form" novalidate>
+          <label>Nome completo<input id="signupName" type="text" autocomplete="name" placeholder="Seu nome"></label>
+          <label>E-mail<input id="signupEmail" type="email" autocomplete="email" placeholder="seuemail@escola.edu.br"></label>
+          <label>Telefone<input id="signupPhone" type="tel" autocomplete="tel" placeholder="Ex: (41) 99631-0725"></label>
+          <label>Senha<input id="signupPassword" type="password" autocomplete="new-password" placeholder="Minimo de 6 caracteres"></label>
+          <label>Confirmar senha<input id="signupConfirmPassword" type="password" autocomplete="new-password" placeholder="Repita a senha"></label>
+          <label class="signup-check"><input id="signupTerms" type="checkbox"> <span>Li e aceito os termos de uso e responsabilidade.</span></label>
+          <div class="password-reset-actions">
+            <button class="login-submit" type="submit">Criar conta e iniciar teste</button>
+            <button id="signupCancel" class="billing-button" type="button">Voltar</button>
+          </div>
+        </form>
+        <p id="signupMessage" class="login-message" role="alert"></p>
       </section>
       <div id="billingLogin" class="billing-login" hidden>
         <strong>Pagamento do plano</strong>
@@ -115,6 +133,18 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
     const resetCode = document.querySelector('#resetCode');
     const resetNewPassword = document.querySelector('#resetNewPassword');
     const resetConfirmPassword = document.querySelector('#resetConfirmPassword');
+    const signupOpen = document.querySelector('#signupOpen');
+    const signupBox = document.querySelector('#signupBox');
+    const signupForm = document.querySelector('#signupForm');
+    const signupCancel = document.querySelector('#signupCancel');
+    const signupMessage = document.querySelector('#signupMessage');
+    const signupName = document.querySelector('#signupName');
+    const signupEmail = document.querySelector('#signupEmail');
+    const signupPhone = document.querySelector('#signupPhone');
+    const signupPassword = document.querySelector('#signupPassword');
+    const signupConfirmPassword = document.querySelector('#signupConfirmPassword');
+    const signupTerms = document.querySelector('#signupTerms');
+    let publicBillingCyclesPromise = null;
     const cycleLabels = {monthly: 'mensal', annual: 'anual'};
     const money = value => Number(value || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
     const escapeHtml = value => String(value || '').replace(/[&<>'"]/g, char => ({
@@ -124,6 +154,16 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
       "'": '&#39;',
       '"': '&quot;'
     }[char]));
+    function hideAccessPanels() {
+      passwordResetBox.hidden = true;
+      signupBox.hidden = true;
+      billingBox.hidden = true;
+      message.textContent = '';
+      billingMessage.textContent = '';
+      passwordResetMessage.textContent = '';
+      signupMessage.textContent = '';
+    }
+
     async function readJson(response) {
       const text = await response.text();
       if (!text.trim()) throw new Error('O servidor nao retornou resposta. Verifique a configuracao do banco em producao.');
@@ -135,10 +175,7 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
     }
 
     function openPasswordReset() {
-      message.textContent = '';
-      billingBox.hidden = true;
-      billingMessage.textContent = '';
-      passwordResetMessage.textContent = '';
+      hideAccessPanels();
       resetEmail.value = document.querySelector('#email').value.trim();
       passwordResetRequestStep.hidden = false;
       passwordResetConfirmForm.hidden = true;
@@ -216,6 +253,78 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
       }
     }
 
+    function openSignup() {
+      hideAccessPanels();
+      signupEmail.value = document.querySelector('#email').value.trim();
+      signupPassword.value = '';
+      signupConfirmPassword.value = '';
+      signupTerms.checked = false;
+      signupBox.hidden = false;
+      signupName.focus();
+    }
+
+    function closeSignup() {
+      signupBox.hidden = true;
+      signupMessage.textContent = '';
+      document.querySelector('#email').focus();
+    }
+
+    async function submitSignup(event) {
+      event.preventDefault();
+      signupMessage.textContent = '';
+      const button = signupForm.querySelector('button[type="submit"]');
+      button.disabled = true;
+      button.textContent = 'Criando conta...';
+      try {
+        const response = await fetch('api.php?resource=auth', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            action: 'register_trial',
+            name: signupName.value,
+            email: signupEmail.value,
+            phone: signupPhone.value,
+            password: signupPassword.value,
+            confirmPassword: signupConfirmPassword.value,
+            termsAccepted: signupTerms.checked
+          })
+        });
+        const data = await readJson(response);
+        if (!response.ok) throw new Error(data.error || 'Nao foi possivel criar sua conta.');
+        signupMessage.textContent = data.message || 'Conta criada com sucesso.';
+        location.href = 'index.php';
+      } catch (error) {
+        signupMessage.textContent = error.message || 'Nao foi possivel criar sua conta.';
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Criar conta e iniciar teste';
+      }
+    }
+
+    async function loadPublicBillingCycles() {
+      if (!publicBillingCyclesPromise) {
+        publicBillingCyclesPromise = fetch('api.php?resource=billing-public-plans')
+          .then(readJson)
+          .then(data => Array.isArray(data.cycles) ? data.cycles : [])
+          .catch(() => []);
+      }
+      return publicBillingCyclesPromise;
+    }
+
+    async function fillBillingCycles(selectedCycleId) {
+      const select = document.querySelector('#billingCycleSelect');
+      if (!select) return;
+      const cycles = await loadPublicBillingCycles();
+      select.innerHTML = '';
+      cycles.forEach(cycle => {
+        const option = document.createElement('option');
+        option.value = cycle.id || '';
+        option.textContent = `${cycle.name || 'Periodo'} - ${money(cycle.amount || 0)}`;
+        if (Number(cycle.id) === Number(selectedCycleId)) option.selected = true;
+        select.append(option);
+      });
+    }
+
     async function confirmPaymentReturn() {
       const params = new URLSearchParams(location.search);
       if (!params.has('payment') && !params.has('payment_id') && !params.has('collection_id') && !params.has('preapproval_id')) return;
@@ -237,6 +346,14 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
       billingBox.hidden = false;
       billingSummary.textContent = `${billing.plan || 'Plano'} ${billing.cycleLabel || cycleLabels[billing.cycle] || 'mensal'} - ${money(billing.amount)}`;
       billingActions.innerHTML = '';
+      const planChoice = document.createElement('div');
+      planChoice.className = 'billing-plan-choice';
+      planChoice.innerHTML = `
+        <label>Plano desejado<input id="billingPlanName" type="text" value="${escapeHtml(billing.plan || 'Basico')}" maxlength="80"></label>
+        <label>Periodo<select id="billingCycleSelect"></select></label>
+      `;
+      billingActions.append(planChoice);
+      fillBillingCycles(billing.cycleId);
       (data.paymentMethods || []).forEach(method => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -255,7 +372,7 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
         const response = await fetch('api.php?resource=billing-public', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({email: document.querySelector('#email').value, method})
+          body: JSON.stringify({email: document.querySelector('#email').value, method, plan: document.querySelector('#billingPlanName')?.value || '', cycleId: Number(document.querySelector('#billingCycleSelect')?.value || 0)})
         });
         const data = await readJson(response);
         if (!response.ok) throw new Error(data.error || 'Nao foi possivel iniciar o pagamento.');
@@ -359,6 +476,9 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
     }
 
     forgotPasswordOpen.addEventListener('click', openPasswordReset);
+    signupOpen.addEventListener('click', openSignup);
+    signupCancel.addEventListener('click', closeSignup);
+    signupForm.addEventListener('submit', submitSignup);
     passwordResetCancel.addEventListener('click', closePasswordReset);
     passwordResetRequest.addEventListener('click', requestPasswordReset);
     passwordResetConfirmForm.addEventListener('submit', confirmPasswordReset);
@@ -402,6 +522,6 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
 
     confirmPaymentReturn();
   </script>
-  <script src="pwa.js?v=20260821-forgot-password-1"></script>
+  <script src="pwa.js?v=20260826-android-icon-1"></script>
 </body>
 </html>

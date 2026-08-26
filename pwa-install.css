@@ -104,3 +104,102 @@
     flex: 1;
   }
 }
+.pwa-install-intro {
+  margin: 0 0 18px;
+  color: #53635c;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.pwa-install-flow {
+  display: grid;
+  grid-template-columns: 1fr 22px 1fr 22px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.pwa-install-flow span {
+  display: grid;
+  place-items: center;
+  min-height: 52px;
+  border: 1px solid #d5e7d8;
+  border-radius: 10px;
+  background: #eef7f1;
+  color: #236b52;
+  font-weight: 800;
+  font-size: 12px;
+  text-align: center;
+}
+
+.pwa-install-flow b {
+  position: relative;
+  height: 2px;
+  background: #8fb7a5;
+}
+
+.pwa-install-flow b::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-top: 2px solid #8fb7a5;
+  border-right: 2px solid #8fb7a5;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.pwa-install-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 22px;
+}
+
+.pwa-install-steps article {
+  border: 1px solid #e2e9e4;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fbfdfb;
+}
+
+.pwa-install-steps strong {
+  display: block;
+  color: #25342e;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.pwa-install-steps p {
+  margin: 0;
+  color: #62726b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (max-width: 430px) {
+  .pwa-install-modal {
+    padding: 24px 20px;
+  }
+
+  .pwa-install-modal h2 {
+    font-size: 27px;
+  }
+
+  .pwa-install-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .pwa-install-flow b {
+    width: 2px;
+    height: 16px;
+    justify-self: center;
+  }
+
+  .pwa-install-flow b::after {
+    right: 50%;
+    top: auto;
+    bottom: 0;
+    transform: translateX(50%) rotate(135deg);
+  }
+}

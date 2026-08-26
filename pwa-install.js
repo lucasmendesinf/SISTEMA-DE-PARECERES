@@ -7,6 +7,7 @@
   const $ = selector => document.querySelector(selector);
   const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true || document.referrer.startsWith('android-app://');
   const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isIOSSafari = () => isIOS() && /safari/i.test(navigator.userAgent) && !/crios|fxios|edgios|opios|mercury/i.test(navigator.userAgent);
   const isMobile = () => window.matchMedia?.('(hover: none) and (pointer: coarse)').matches || Math.min(window.innerWidth, window.innerHeight) <= 820;
 
   function dismissedRecently() {
@@ -35,7 +36,7 @@
     const installed = isStandalone();
     buttons.forEach(button => {
       if (installed) {
-        button.hidden = false;
+        button.hidden = true;
         button.disabled = true;
         button.classList.add('pwa-installed-button');
         button.textContent = 'AiProf instalado';
@@ -43,7 +44,7 @@
       }
       button.disabled = false;
       button.classList.remove('pwa-installed-button');
-      button.textContent = 'Instalar AiProf';
+      button.textContent = button.dataset.pwaInstallButton === 'nudge' && isIOS() ? 'Ver como instalar' : 'Instalar AiProf';
       button.hidden = installState === 'unavailable' && !isIOS();
     });
   }
@@ -65,6 +66,31 @@
     setButtonState();
   }
 
+  function iosInstructionsHtml() {
+    const safari = isIOSSafari();
+    const intro = safari
+      ? 'Adicione o AiProf a Tela de Inicio para acessar o sistema como um aplicativo.'
+      : 'Para instalar o AiProf no iPhone, abra esta pagina no Safari.';
+    const title = safari ? 'Instale o AiProf no seu iPhone' : 'Abra no Safari para instalar';
+    const steps = safari
+      ? `
+        <div class="pwa-install-flow" aria-hidden="true">
+          <span>Compartilhar</span><b></b><span>Adicionar</span><b></b><span>AiProf</span>
+        </div>
+        <div class="pwa-install-steps">
+          <article><strong>1. Toque em Compartilhar</strong><p>Use o botao de compartilhamento do Safari.</p></article>
+          <article><strong>2. Selecione "Adicionar a Tela de Inicio"</strong><p>Essa opcao cria o icone do AiProf no celular.</p></article>
+          <article><strong>3. Ative "Abrir como App da Web"</strong><p>Quando essa opcao aparecer, mantenha ativada.</p></article>
+          <article><strong>4. Toque em "Adicionar"</strong><p>Depois disso, abra o AiProf pelo icone na Tela de Inicio.</p></article>
+        </div>`
+      : `
+        <div class="pwa-install-steps">
+          <article><strong>1. Abra esta pagina no Safari</strong><p>Copie o endereco atual ou acesse o AiProf pelo Safari do iPhone/iPad.</p></article>
+          <article><strong>2. Toque em Instalar AiProf novamente</strong><p>No Safari, mostraremos as etapas para adicionar a Tela de Inicio.</p></article>
+        </div>`;
+    return {title, intro, steps};
+  }
+
   function ensureInstallModal() {
     let modal = $('#pwaInstallModal');
     if (modal) return modal;
@@ -72,18 +98,6 @@
     modal.id = 'pwaInstallModal';
     modal.className = 'pwa-install-backdrop';
     modal.hidden = true;
-    modal.innerHTML = `
-      <div class="pwa-install-modal" role="dialog" aria-modal="true" aria-labelledby="pwaInstallTitle">
-        <button class="pwa-install-close" type="button" aria-label="Fechar">x</button>
-        <p class="eyebrow">AIPROF NO CELULAR</p>
-        <h2 id="pwaInstallTitle">Instalar AiProf no iPhone</h2>
-        <ol>
-          <li>Toque no botao <strong>Compartilhar</strong> do Safari.</li>
-          <li>Escolha <strong>Adicionar a Tela de Inicio</strong>.</li>
-          <li>Confirme em <strong>Adicionar</strong>.</li>
-        </ol>
-        <button class="primary" type="button" data-pwa-install-ok>Entendi</button>
-      </div>`;
     document.body.append(modal);
     modal.addEventListener('click', event => {
       if (event.target === modal || event.target.closest('.pwa-install-close') || event.target.closest('[data-pwa-install-ok]')) {
@@ -93,8 +107,30 @@
     return modal;
   }
 
-  function openInstallModal() {
+  function renderInstallModal() {
     const modal = ensureInstallModal();
+    const content = isIOS()
+      ? iosInstructionsHtml()
+      : {
+        title: 'Instalar AiProf',
+        intro: 'Se o navegador nao abriu o instalador automaticamente, use a opcao de instalar aplicativo no menu do navegador.',
+        steps: '<div class="pwa-install-steps"><article><strong>Use o menu do navegador</strong><p>Procure por Instalar aplicativo ou Adicionar a tela inicial.</p></article></div>'
+      };
+    modal.innerHTML = `
+      <div class="pwa-install-modal" role="dialog" aria-modal="true" aria-labelledby="pwaInstallTitle">
+        <button class="pwa-install-close" type="button" aria-label="Fechar">x</button>
+        <p class="eyebrow">AIPROF NO CELULAR</p>
+        <h2 id="pwaInstallTitle">${content.title}</h2>
+        <p class="pwa-install-intro">${content.intro}</p>
+        ${content.steps}
+        <button class="primary" type="button" data-pwa-install-ok>Entendi</button>
+      </div>`;
+    return modal;
+  }
+
+  function openInstallModal() {
+    if (isStandalone()) return;
+    const modal = renderInstallModal();
     modal.hidden = false;
     document.body.classList.add('pwa-install-modal-open');
     modal.querySelector('[data-pwa-install-ok]')?.focus();
@@ -112,16 +148,17 @@
     if (installState === 'unavailable' && !isIOS()) return;
     const main = document.querySelector('main');
     if (!main) return;
+    const ios = isIOS();
     const nudge = document.createElement('div');
     nudge.id = 'pwaInstallNudge';
     nudge.className = 'pwa-install-nudge';
     nudge.innerHTML = `
       <div>
-        <strong>Tenha o AiProf sempre a mao</strong>
-        <span>Instale o AiProf no seu celular e acesse direto pela tela inicial.</span>
+        <strong>${ios ? 'Instale o AiProf no seu iPhone' : 'Tenha o AiProf sempre a mao'}</strong>
+        <span>${ios ? 'Acesse diretamente pela sua Tela de Inicio, como um aplicativo.' : 'Instale o AiProf no seu celular e acesse direto pela tela inicial.'}</span>
       </div>
       <div class="pwa-install-actions">
-        <button class="primary" type="button" data-pwa-install-button="nudge">Instalar AiProf</button>
+        <button class="primary" type="button" data-pwa-install-button="nudge">${ios ? 'Ver como instalar' : 'Instalar AiProf'}</button>
         <button class="secondary" type="button" data-pwa-install-dismiss>Agora nao</button>
       </div>`;
     const header = main.querySelector('header');
@@ -136,6 +173,10 @@
 
   async function startInstall() {
     if (isStandalone()) return;
+    if (isIOS()) {
+      openInstallModal();
+      return;
+    }
     if (deferredPrompt) {
       const prompt = deferredPrompt;
       deferredPrompt = null;
@@ -143,10 +184,6 @@
       prompt.prompt();
       try { await prompt.userChoice; } catch (_) {}
       setButtonState();
-      return;
-    }
-    if (isIOS()) {
-      openInstallModal();
       return;
     }
     openInstallModal();

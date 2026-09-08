@@ -91,6 +91,32 @@
       shell.querySelector('#manualDiscardImage')?.addEventListener('click', () => close({action: 'discard'}));
       shell.querySelector('#manualNextImage')?.addEventListener('click', () => close({action: 'next'}));
 
+      function confirmEditedPhoto(photo) {
+        return new Promise(confirmResolve => {
+          const review = document.createElement('div');
+          review.className = 'image-editor-review';
+          review.innerHTML = `
+            <div class="image-editor-review-box">
+              <h3>Imagem editada</h3>
+              <p>Confira o resultado antes de seguir.</p>
+              <img src="${photo}" alt="Previa da imagem editada">
+              <div class="image-editor-review-actions">
+                <button class="secondary" type="button" data-action="edit">Voltar para edicao</button>
+                <button class="primary" type="button" data-action="use">Usar imagem</button>
+              </div>
+            </div>`;
+          shell.querySelector('.image-editor-panel')?.append(review);
+          review.querySelector('[data-action="edit"]').onclick = () => {
+            review.remove();
+            confirmResolve(false);
+          };
+          review.querySelector('[data-action="use"]').onclick = () => {
+            review.remove();
+            confirmResolve(true);
+          };
+        });
+      }
+
       function fitCropStage() {
         if (!cropper) return;
         const stage = shell.querySelector('.image-editor-stage');
@@ -176,9 +202,10 @@
           ctx.fillText(`Area ${index + 1}`, selection.x + 7, Math.max(16, selection.y - 7));
           ctx.fillStyle = '#fff';
           ctx.strokeStyle = active ? '#236b52' : '#c23b3b';
+          const handleSize = window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ? 18 : 10;
           [[selection.x, selection.y], [selection.x + selection.w, selection.y], [selection.x, selection.y + selection.h], [selection.x + selection.w, selection.y + selection.h]].forEach(([x, y]) => {
-            ctx.fillRect(x - 5, y - 5, 10, 10);
-            ctx.strokeRect(x - 5, y - 5, 10, 10);
+            ctx.fillRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
+            ctx.strokeRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
           });
           ctx.restore();
         });
@@ -199,7 +226,8 @@
           ['nw', s.x, s.y], ['ne', s.x + s.w, s.y],
           ['sw', s.x, s.y + s.h], ['se', s.x + s.w, s.y + s.h]
         ];
-        return handles.find(([, hx, hy]) => Math.abs(x - hx) <= 10 && Math.abs(y - hy) <= 10)?.[0] || '';
+        const tolerance = window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ? 28 : 12;
+        return handles.find(([, hx, hy]) => Math.abs(x - hx) <= tolerance && Math.abs(y - hy) <= tolerance)?.[0] || '';
       }
 
       function nativeHitSelection(x, y) {
@@ -301,19 +329,23 @@
         nativeSelection();
         pushNativeState();
         drawNative();
-        canvasEl.onmousedown = event => {
+        canvasEl.style.touchAction = 'none';
+        canvasEl.onpointerdown = event => {
+          event.preventDefault();
           const point = nativePointer(event);
           const hitSelection = nativeHitSelection(point.x, point.y);
           if (hitSelection) nativeEditor.selection = hitSelection;
           const selection = nativeSelection();
           const handle = nativeHitHandle(point.x, point.y);
-          if (handle) nativeEditor.drag = {mode: 'resize', handle, start: point, original: {...selection}};
-          else if (point.x >= selection.x && point.x <= selection.x + selection.w && point.y >= selection.y && point.y <= selection.y + selection.h) {
-            nativeEditor.drag = {mode: 'move', dx: point.x - selection.x, dy: point.y - selection.y};
+          if (handle) {
+            nativeEditor.drag = {mode: 'resize', handle, pointerId: event.pointerId, original: {...selection}};
+          } else if (point.x >= selection.x && point.x <= selection.x + selection.w && point.y >= selection.y && point.y <= selection.y + selection.h) {
+            nativeEditor.drag = {mode: 'move', pointerId: event.pointerId, dx: point.x - selection.x, dy: point.y - selection.y};
           }
+          if (nativeEditor.drag && canvasEl.setPointerCapture) canvasEl.setPointerCapture(event.pointerId);
           drawNative();
         };
-        canvasEl.onmousemove = event => {
+        canvasEl.onpointermove = event => {
           const point = nativePointer(event);
           const selection = nativeEditor.selection || nativeSelection();
           if (!nativeEditor.drag) {
@@ -321,6 +353,8 @@
             canvasEl.style.cursor = nativeHitHandle(point.x, point.y) ? 'nwse-resize' : (hitSelection ? 'move' : 'default');
             return;
           }
+          event.preventDefault();
+          if (nativeEditor.drag.pointerId !== undefined && event.pointerId !== nativeEditor.drag.pointerId) return;
           if (nativeEditor.drag.mode === 'move') {
             selection.x = point.x - nativeEditor.drag.dx;
             selection.y = point.y - nativeEditor.drag.dy;
@@ -337,8 +371,19 @@
           nativeClamp(selection);
           drawNative();
         };
-        canvasEl.onmouseup = () => { nativeEditor.drag = null; };
-        canvasEl.onmouseleave = () => { nativeEditor.drag = null; canvasEl.style.cursor = 'default'; };
+        const finishPointerDrag = event => {
+          if (nativeEditor.drag?.pointerId !== undefined && event?.pointerId !== nativeEditor.drag.pointerId) return;
+          if (nativeEditor.drag && canvasEl.releasePointerCapture) {
+            try { canvasEl.releasePointerCapture(nativeEditor.drag.pointerId); } catch (_) {}
+          }
+          nativeEditor.drag = null;
+        };
+        canvasEl.onpointerup = finishPointerDrag;
+        canvasEl.onpointercancel = finishPointerDrag;
+        canvasEl.onpointerleave = event => {
+          if (event.pointerType === 'mouse') finishPointerDrag(event);
+          canvasEl.style.cursor = 'default';
+        };
       }
 
       async function enterCanvas(src) {
@@ -590,7 +635,8 @@
         if (nativeEditor) {
           drawNative(false);
           const photo = nativeEditor.canvas.toDataURL('image/jpeg', .9);
-          close(queue ? {action: 'save', photo} : photo);
+          if (await confirmEditedPhoto(photo)) close(queue ? {action: 'save', photo} : photo);
+          else drawNative(true);
           return;
         }
         const active = fabricCanvas?.getActiveObject();
@@ -599,7 +645,7 @@
           fabricCanvas.renderAll();
         }
         const photo = fabricCanvas ? fabricCanvas.toDataURL({format: 'jpeg', quality: .9}) : currentUrl;
-        close(queue ? {action: 'save', photo} : photo);
+        if (await confirmEditedPhoto(photo)) close(queue ? {action: 'save', photo} : photo);
       };
     });
   }

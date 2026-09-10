@@ -1,0 +1,33 @@
+{
+  "cookies": [
+    {
+      "name": "PHPSESSID",
+      "value": "khhckd4i7prpfi2eecq1o22i6g",
+      "domain": "aiprof.calutec.com.br",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://aiprof.calutec.com.br",
+      "localStorage": [
+        {
+          "name": "portal-pareceres-active-view-v1",
+          "value": "inicio"
+        },
+        {
+          "name": "portal-pareceres-cache-reset-v3",
+          "value": "1"
+        },
+        {
+          "name": "portal-pareceres-v1",
+          "value": "{\"classes\":[{\"id\":1,\"name\":\"Jardim II A\",\"stage\":\"Educação Infantil\",\"shift\":\"Manhã\"}],\"periods\":[{\"id\":1,\"name\":\"1º semestre de 2026\",\"start\":\"01/02/2026\",\"end\":\"30/06/2026\",\"active\":true}],\"students\":[],\"activities\":[],\"reports\":[]}"
+        }
+      ]
+    }
+  ]
+}

@@ -75,7 +75,8 @@ function wizardPreviewImages() {
   return (wizard.photos || []).map((src, index) => `
     <div class="wizard-photo-item">
       <img src="${src}" alt="Prévia da imagem ${index + 1}">
-      <button type="button" onclick="removeWizardPhoto(${index})" aria-label="Remover imagem">×</button>
+      <button class="wizard-photo-remove" type="button" onclick="removeWizardPhoto(${index})" aria-label="Remover imagem">×</button>
+      <button class="wizard-photo-edit" type="button" onclick="editWizardPhoto(${index})">Editar</button>
     </div>
   `).join('');
 }
@@ -117,13 +118,40 @@ function removeWizardPhoto(index) {
   if (previews) previews.innerHTML = wizardPreviewImages();
 }
 
+async function editWizardPhoto(index) {
+  if (wizard.isProcessingPhotos) return;
+  const photo = (wizard.photos || [])[index];
+  if (!photo || !window.PortalImageEditors?.processDataUrls) return;
+  try {
+    setWizardPhotoProcessing(true, 'Abrindo imagem para edicao...');
+    const result = await window.PortalImageEditors.processDataUrls([photo], 1, {reviewEach: true});
+    if (result.photos?.[0]) {
+      wizard.photos[index] = result.photos[0];
+      wizard.imageEditorMode = result.mode;
+      bufferStepTwo();
+    }
+  } catch (error) {
+    alert(error.message || 'Nao foi possivel reeditar a imagem.');
+  } finally {
+    setWizardPhotoProcessing(false);
+  }
+}
+
 async function wizardPhotoCheck(input) {
   if (!input?.files?.length) return;
   try {
+    const currentPhotos = Array.isArray(wizard.photos) ? wizard.photos : [];
+    const remainingSlots = Math.max(0, 3 - currentPhotos.length);
+    if (!remainingSlots) {
+      input.value = '';
+      alert('Este bloco ja possui 3 imagens. Remova uma foto antes de adicionar outra.');
+      return;
+    }
     setWizardPhotoProcessing(true, 'Carregando imagens no sistema...');
-    const result = await window.PortalImageEditors.processFiles(input.files, 3);
-    wizard.photos = result.photos;
+    const result = await window.PortalImageEditors.processFiles(input.files, remainingSlots);
+    wizard.photos = [...currentPhotos, ...(result.photos || [])].slice(0, 3);
     wizard.imageEditorMode = result.mode;
+    input.value = '';
     setWizardPhotoProcessing(false);
     bufferStepTwo();
   } catch (error) {
@@ -159,8 +187,8 @@ function wizardActivitiesV2() {
     <div class="field">
       <label>Fotos da atividade <span class="muted">(até 3 imagens por bloco)</span></label>
       <label id="wizardDropzone" class="dropzone" ondragover="wizardDrag(event)" ondragleave="wizardLeave()" ondrop="wizardDrop(event)">
-        <strong>${wizard.photos?.length ? 'Clique para trocar as imagens' : 'Arraste as imagens aqui'}</strong>
-        <span>${wizard.photos?.length ? 'Ao escolher novos arquivos, as imagens atuais deste bloco serão substituídas.' : 'ou clique para escolher arquivos'}</span>
+        <strong>${wizard.photos?.length ? 'Adicionar mais imagens' : 'Arraste as imagens aqui'}</strong>
+        <span>${wizard.photos?.length ? 'As imagens ja editadas continuam abaixo; voce pode reeditar, remover ou acrescentar novas.' : 'ou clique para escolher arquivos'}</span>
         <input id="wizardPhotos" type="file" accept="image/*" multiple onchange="wizardPhotoCheck(this)">
       </label>
       <div id="wizardPreviews" class="image-previews editable-previews">${wizardPreviewImages()}</div>
@@ -185,7 +213,7 @@ function finishEntryEdit() {
   delete wizard.editingEntryIndex;
   clearActiveWizardEntry();
   persistWizard();
-  wizardReviewV2();
+  wizardReviewV2({skipBuffer: true});
 }
 
 function mainParagraphs() {
@@ -518,9 +546,9 @@ async function useRegisteredActivities() {
   wizardActivitiesV2();
 }
 
-async function wizardReviewV2() {
+async function wizardReviewV2(options = {}) {
   if (wizard.isProcessingPhotos) return alert('Aguarde a edicao das imagens terminar antes de avancar.');
-  bufferStepTwo();
+  if (!options.skipBuffer) bufferStepTwo();
   const current = currentWizardEntry();
   if (current.activityIds.length && !current.photoNote && !current.photos.length) await importSelectedRegisteredActivities();
   persistWizard();

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260908-mobile-image-editor-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260910-report-entry-edit-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -33,7 +33,7 @@ const STATIC_ASSETS = [
   './experience-fields.js?v=20260709-mobile-camera-only-1',
   './modal-controls.js?v=20260715-onboarding-draft-1',
   './app.js?v=20260804-activity-save-reliable-1',
-  './report-editor.js?v=20260809-fast-report-actions-1',
+  './report-editor.js?v=20260910-report-entry-edit-1',
   './document-style-settings.js?v=20260716-force-docx-font-1',
   './text-ai-review.js?v=20260908-mobile-image-editor-1',
   './document-button-fix.js?v=20260717-require-student-1',

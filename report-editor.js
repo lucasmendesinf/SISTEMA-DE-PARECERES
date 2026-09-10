@@ -49,14 +49,14 @@ function setRegisteredActivitySelectionLock(activeInput, locked) {
 }
 
 function wizardEntries() {
-  const entries = (wizard.entries || []).map(normalizeWizardEntry).filter(hasWizardEntryContent);
+  const entries = (wizard.entries || []).map(normalizeWizardEntry);
   const current = currentWizardEntry();
   if (Number.isInteger(wizard.editingEntryIndex)) {
-    if (hasWizardEntryContent(current)) entries[wizard.editingEntryIndex] = current;
-    return entries.filter(hasWizardEntryContent);
+    entries[wizard.editingEntryIndex] = current;
+  } else if (hasWizardEntryContent(current)) {
+    entries.push(current);
   }
-  if (hasWizardEntryContent(current)) entries.push(current);
-  return entries;
+  return entries.filter(hasWizardEntryContent);
 }
 
 function bufferStepTwo() {
@@ -210,10 +210,8 @@ function wizardActivitiesV2() {
 function finishEntryEdit() {
   if (wizard.isProcessingPhotos) return alert('Aguarde o carregamento das imagens terminar.');
   bufferStepTwo();
-  delete wizard.editingEntryIndex;
-  clearActiveWizardEntry();
-  persistWizard();
-  wizardReviewV2({skipBuffer: true});
+  // Keep the active fields linked to their block when returning to review.
+  return wizardReviewV2({skipBuffer: true});
 }
 
 function mainParagraphs() {
@@ -576,7 +574,6 @@ async function wizardFinalizeV3() {
   try {
     if (wizard.isProcessingPhotos) return alert('Aguarde a edicao das imagens terminar antes de finalizar.');
     bufferStepTwo();
-    delete wizard.editingEntryIndex;
     const report = wizardReport();
     const student = data.students.find(item => String(item.id) === String(report.studentId));
     const response = await fetch('api.php?resource=reports', {

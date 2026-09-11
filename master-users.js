@@ -344,6 +344,7 @@
     cycleSelect.addEventListener('change', syncCycle);
     syncCycle();
     const syncTrial = () => {
+      if (statusSelect.value === 'exempt') return;
       const days = Math.max(0, Number(trialDaysInput.value || 0));
       if (days > 0) {
         statusSelect.value = 'trial';

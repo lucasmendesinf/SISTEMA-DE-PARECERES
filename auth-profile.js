@@ -31,13 +31,15 @@
   const paymentLabels = {pix: 'Pix', card: 'Cartao recorrente', both: 'Pix ou cartao', manual: 'Manual'};
   const billingStatusLabels = {trial: 'Teste', pending: 'Pendente', active: 'Ativo', overdue: 'Atrasado', canceled: 'Cancelado', exempt: 'Isento'};
   const money = value => Number(value || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
-  const billingMethods = billing => billing?.paymentMethod === 'pix' ? ['pix'] : billing?.paymentMethod === 'card' ? ['card'] : ['pix', 'card'];
+  const isBillingExempt = () => user?.billing?.status === 'exempt';
+  const billingMethods = billing => billing?.status === 'exempt' ? [] : billing?.paymentMethod === 'pix' ? ['pix'] : billing?.paymentMethod === 'card' ? ['card'] : ['pix', 'card'];
   const supportWhatsAppUrl = 'https://wa.me/5541996310725';
   let billingCycles = [];
 
   async function request(method = 'GET', body) {
     const response = await fetch(api, {
       method,
+      cache: 'no-store',
       headers: body ? {'Content-Type': 'application/json'} : {},
       body: body ? JSON.stringify(body) : undefined
     });
@@ -58,6 +60,7 @@
   async function billingRequest(method = 'GET', body) {
     const response = await fetch(billingApi, {
       method,
+      cache: 'no-store',
       headers: body ? {'Content-Type': 'application/json'} : {},
       body: body ? JSON.stringify(body) : undefined
     });
@@ -77,7 +80,7 @@
 
   function billingChoiceFields(scope = 'profile') {
     const billing = user?.billing || {};
-    if (!billingCycles.length) return '';
+    if (isBillingExempt() || !billingCycles.length) return '';
     return `
       <div class="billing-choice" data-billing-choice="${scope}">
         <label>Plano
@@ -205,6 +208,7 @@
 
   function renderBillingBanner() {
     document.querySelector('#billingTopBanner')?.remove();
+    if (isBillingExempt()) return;
     const alert = user?.billingAlert;
     if (!alert?.message) return;
     const header = document.querySelector('main > header');
@@ -226,8 +230,10 @@
 
   function renderBillingLockModal() {
     document.querySelector('#billingLockModal')?.remove();
-    document.body.classList.toggle('billing-locked', !!user?.billingLock);
-    if (!user?.billingLock) return;
+    const locked = !isBillingExempt() && !!user?.billingLock;
+    document.body.classList.toggle('billing-locked', locked);
+    if (isBillingExempt()) closeBillingModal();
+    if (!locked) return;
     const billing = user.billing || {};
     const methods = billingMethods(billing);
     const modal = document.createElement('div');
@@ -281,8 +287,16 @@
     modal.querySelector('[data-lock-pay-method]')?.focus();
   }
 
+  function clearLocalCache() {
+    try {
+      Object.keys(localStorage)
+        .filter(key => key.startsWith('portal-pareceres') || key.startsWith('parecer-cabecalho-professora') || key.startsWith('parecer-em-andamento') || key.startsWith('portal-activity-draft'))
+        .forEach(key => localStorage.removeItem(key));
+    } catch (_) {}
+  }
+
   async function logout() {
-    try { await request('POST', {action: 'logout'}); } finally { location.href = 'login.php'; }
+    try { await request('POST', {action: 'logout'}); } finally { clearLocalCache(); location.href = 'login.php'; }
   }
 
   function closeProfileMenu() {
@@ -353,6 +367,14 @@
             <button id="logoutButton" class="secondary" type="button">Sair da conta</button>
           </div>
         </form>
+        ${isBillingExempt() ? `
+        <div class="billing-panel">
+          <div class="profile-subtitle"><h3>Plano</h3></div>
+          <dl class="billing-summary">
+            <div><dt>Plano</dt><dd>${escapeHtml(billing.plan || 'Basico')}</dd></div>
+            <div><dt>Status</dt><dd>Isento</dd></div>
+          </dl>
+        </div>` : `
         <div class="billing-panel">
           <div class="profile-subtitle">
             <h3>Cobranca do plano</h3>
@@ -373,7 +395,7 @@
             ${methods.includes('card') ? '<button class="secondary" type="button" data-pay-method="card">Cadastrar cartao</button>' : ''}
             ${methods.length ? '' : '<span class="billing-no-method">Nenhuma forma de pagamento liberada. Entre em contato com o suporte.</span>'}
           </div>
-        </div>
+        </div>`}
         <form id="passwordForm" class="profile-form password-form">
           <div class="profile-subtitle">
             <h3>Alterar senha</h3>
@@ -485,6 +507,7 @@
   }
 
   function openBillingPaymentScreen() {
+    if (isBillingExempt()) return;
     openProfile();
     setTimeout(() => {
       const panel = document.querySelector('#perfil .billing-panel');
@@ -494,6 +517,7 @@
   }
 
   function redirectOverdueBillingOnce() {
+    if (isBillingExempt()) return;
     const alert = user?.billingAlert;
     if (alert?.status !== 'overdue_grace') return;
     const billing = user?.billing || {};
@@ -542,7 +566,9 @@
       renderBillingLockModal();
       redirectOverdueBillingOnce();
     });
-    if (user.billingWarning && !user.billingAlert) setTimeout(() => alert(user.billingWarning), 300);
+    if (!isBillingExempt() && user.billingWarning && !user.billingAlert) {
+      setTimeout(() => { if (!isBillingExempt() && user.billingWarning) alert(user.billingWarning); }, 300);
+    }
     const profile = document.querySelector('.sidebar-bottom .profile');
     profile?.setAttribute('role', 'button');
     profile?.setAttribute('tabindex', '0');

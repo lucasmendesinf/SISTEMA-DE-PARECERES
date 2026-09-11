@@ -1,5 +1,5 @@
 (() => {
-  const headerKey = 'parecer-cabecalho-professora-v1';
+  const headerKey = typeof HEADER_KEY !== 'undefined' ? HEADER_KEY : 'parecer-cabecalho-professora-v1';
 
   const $ = selector => document.querySelector(selector);
   const escapeHtml = value => String(value || '').replace(/[&<>'"]/g, char => ({

@@ -1,8 +1,10 @@
-const KEY='portal-pareceres-v1';
-const HEADER_KEY='parecer-cabecalho-professora-v1';
+const CURRENT_USER_ID=window.PortalBootstrapUser?.id||'anon';
+const KEY=`portal-pareceres-v1__u${CURRENT_USER_ID}`;
+const HEADER_KEY=`parecer-cabecalho-professora-v1__u${CURRENT_USER_ID}`;
 const CACHE_RESET_KEY='portal-pareceres-cache-reset-v3';
 if(!localStorage.getItem(CACHE_RESET_KEY)){localStorage.removeItem(KEY);localStorage.removeItem('parecer-em-andamento-v2');localStorage.setItem(CACHE_RESET_KEY,'1')}
 if((localStorage.getItem(KEY)||'').length>1500000){localStorage.removeItem(KEY);localStorage.removeItem('parecer-em-andamento-v2')}
+['portal-pareceres-v1','parecer-cabecalho-professora-v1','parecer-em-andamento-v2','portal-activity-draft-v1'].forEach(legacyKey=>localStorage.removeItem(legacyKey));
 const initial={classes:[{id:1,name:'Jardim II A',stage:'Educação Infantil',shift:'Manhã'}],periods:[{id:1,name:'1º semestre de 2026',start:'01/02/2026',end:'30/06/2026',active:true}],students:[],activities:[],reports:[]};
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||initial, filter='all';
 data.classes=data.classes||initial.classes;data.periods=data.periods||initial.periods;data.students.forEach(s=>{if(!s.classId)s.classId=data.classes[0]?.id});
@@ -12,7 +14,7 @@ function normalizeBirthDateInput(value){value=String(value||'').trim();if(/^\d{4
 function applyBirthDateMask(input){let d=String(input.value||'').replace(/\D/g,'').slice(0,8);input.value=d.replace(/^(\d{2})(\d)/,'$1/$2').replace(/^(\d{2})\/(\d{2})(\d)/,'$1/$2/$3')}
 function birthDateInputAttrs(value=''){return `type="text" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" value="${esc(birthDateToDisplay(value))}" oninput="applyBirthDateMask(this)"`}
 function readBirthDate(selector){let input=$(selector),normalized=normalizeBirthDateInput(input?.value||'');if(input&&normalized)input.value=birthDateToDisplay(normalized);return normalized}
-const ACTIVITY_DRAFT_KEY='portal-activity-draft-v1';
+const ACTIVITY_DRAFT_KEY=`portal-activity-draft-v1__u${CURRENT_USER_ID}`;
 function activityDraft(){try{return JSON.parse(localStorage.getItem(ACTIVITY_DRAFT_KEY)||'{}')||{}}catch(error){return {}}}
 function saveActivityDraft(){let title=$('#activityTitle')?.value||'',area=$('#activityArea')?.value||'',note=$('#activityNote')?.value||'';if(title||area||note)localStorage.setItem(ACTIVITY_DRAFT_KEY,JSON.stringify({title,area,note,updatedAt:new Date().toISOString()}));else localStorage.removeItem(ACTIVITY_DRAFT_KEY)}
 function clearActivityDraft(){localStorage.removeItem(ACTIVITY_DRAFT_KEY)}
@@ -96,7 +98,7 @@ function deliverReport(id){let r=data.reports.find(x=>x.id===id);r.status='done'
 function downloadPdf(id){let r=data.reports.find(x=>x.id===id),s=data.students.find(x=>String(x.id)===String(r.studentId));let form=document.createElement('form');form.method='post';form.action='download_pdf.php';form.target='_blank';[['name',s.name],['text',r.text]].forEach(([name,value])=>{let input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.appendChild(input)});document.body.appendChild(form);form.submit();form.remove()}
 $('#openGenerator').onclick=generatorV4;
 
-const WIZARD_KEY='parecer-em-andamento-v2';
+const WIZARD_KEY=`parecer-em-andamento-v2__u${CURRENT_USER_ID}`;
 function persistWizard(){localStorage.setItem(WIZARD_KEY,JSON.stringify(wizard))}
 function clearWizard(){localStorage.removeItem(WIZARD_KEY)}
 function wizardStart(newRegistration=false,draft=null){let options=data.students.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');if(newRegistration){clearWizard();wizard={}}else if(draft){wizard=draft}else{let saved=JSON.parse(localStorage.getItem(WIZARD_KEY)||'null');wizard=saved||{}}wizardOpen(`<p class="wizard-step">ETAPA 1 DE 3 · TEXTO PRINCIPAL</p><h2 class="modal-title">Novo parecer pedagógico</h2><p class="modal-subtitle">Registre as observações mais importantes. O rascunho é salvo automaticamente neste dispositivo.</p><div class="form-grid"><div class="field"><label>Aluno</label><select id="wizardStudent" onchange="bufferStepOne()">${options}</select></div><div class="field"><label>Informações principais do parecer</label><textarea id="wizardText" oninput="bufferStepOne()" placeholder="Descreva conquistas, interações, interesses, autonomia e aspectos que merecem acompanhamento...">${esc(wizard.text||'')}</textarea><button class="ai-adjust" type="button" onclick="adjustTextWithAI();bufferStepOne()">✦ Ajustar texto com IA</button></div></div><div class="form-actions"><button class="secondary" type="button" onclick="wizardClose()">Voltar</button><button class="secondary" type="button" onclick="saveInitialDraft()">Salvar rascunho</button><button class="primary" type="button" onclick="wizardActivitiesV2()">Próximo</button></div>`);if(wizard.studentId)$('#wizardStudent').value=wizard.studentId}

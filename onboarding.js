@@ -274,11 +274,12 @@
   }
 
   function safeSetHeaderCache(settings) {
+    const headerKey = typeof HEADER_KEY !== 'undefined' ? HEADER_KEY : 'parecer-cabecalho-professora-v1';
     try {
-      localStorage.setItem('parecer-cabecalho-professora-v1', JSON.stringify(settings));
+      localStorage.setItem(headerKey, JSON.stringify(settings));
     } catch (error) {
       try {
-        localStorage.setItem('parecer-cabecalho-professora-v1', JSON.stringify({...settings, logo: ''}));
+        localStorage.setItem(headerKey, JSON.stringify({...settings, logo: ''}));
       } catch (fallbackError) {
         console.warn('Nao foi possivel salvar o cabecalho localmente.', fallbackError);
       }

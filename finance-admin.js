@@ -104,6 +104,7 @@
 
   function clientSituation(client) {
     const billing = client.billing || {};
+    if (billing.status === 'exempt') return 'exempt';
     if (!billing.nextDueDate) return ['pending', 'overdue'].includes(billing.status) ? 'danger' : (billing.status || 'active');
     const today = new Date();
     today.setHours(0, 0, 0, 0);

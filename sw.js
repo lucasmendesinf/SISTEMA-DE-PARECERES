@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20260910-student-period-guard-1';
+const CACHE_VERSION = 'ai-prof-pwa-20260911-billing-exempt-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -40,14 +40,14 @@ const STATIC_ASSETS = [
   './document-button-fix.js?v=20260717-require-student-1',
   './director-email.js?v=20260908-mobile-image-editor-1',
   './terms-consent.js?v=20260716-terms-before-onboarding-1',
-  './auth-profile.js?v=20260716-terms-persist-1',
+  './auth-profile.js?v=20260911-per-user-cache-fix-1',
   './marketing-notice.js?v=20260717-menu-permissions-1',
   './google-drive-integration.js?v=20260717-drive-document-type-1',
   './tutorial-videos.js?v=20260717-menu-permissions-1',
   './manual-image-editor.js?v=20260908-mobile-image-editor-1',
   './image-editor-flow.js?v=20260908-mobile-image-editor-1',
-  './master-users.js?v=20260717-users-fast-1',
-  './finance-admin.js?v=20260717-menu-permissions-1',
+  './master-users.js?v=20260911-billing-exempt-1',
+  './finance-admin.js?v=20260911-billing-exempt-1',
   './ai-usage-admin.js?v=20260908-mobile-image-editor-1',
   './pwa-admin.js?v=20260908-mobile-image-editor-1',
   './pwa-install.js?v=20260908-mobile-image-editor-1',

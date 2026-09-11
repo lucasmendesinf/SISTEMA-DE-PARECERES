@@ -239,7 +239,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="image-editor-permissions.js?v=20260702-combined-image-editor-1"></script>
   <script src="manual-image-editor.js?v=20260908-mobile-image-editor-1"></script>
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>
-  <script src="image-editor-flow.js?v=20260908-mobile-image-editor-1"></script>
+  <script src="image-editor-flow.js?v=20260911-keep-photo-on-editor-close-1"></script>
   <script src="document-image-zoom.js?v=20260702-document-image-zoom-front-1"></script>
   <script src="pwa.js?v=20260908-mobile-image-editor-1"></script>
 </body>

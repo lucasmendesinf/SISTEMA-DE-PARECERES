@@ -105,6 +105,8 @@
         const result = await editDataUrl(normalized, mode, {queue: {index, total: list.length}});
         if (typeof result === 'string') output.push(result);
         else if (result?.action === 'save' && result.photo) output.push(result.photo);
+        else if (result?.action === 'discard') { /* usuario pediu para descartar esta imagem */ }
+        else output.push(normalized); // editor fechado (x) ou "proxima imagem" sem editar: mantem a foto original em vez de perde-la silenciosamente
         continue;
       }
       output.push(await editDataUrl(normalized, mode));

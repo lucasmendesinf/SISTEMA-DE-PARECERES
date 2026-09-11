@@ -42,6 +42,8 @@ async function openEditor(browser, device, documentType) {
     window.wizard = {studentId: 1, documentType: type, text: 'Texto principal QA.',
       entries: [], activityIds: [], photos: [qaPhoto], photoNote: 'Vivencia original.'};
     window.persistWizard = () => localStorage.setItem(WIZARD_KEY, JSON.stringify(wizard));
+    window.clearWizard = () => localStorage.removeItem(WIZARD_KEY);
+    window.wizardClose = () => $('#modal').close();
     window.wizardOpen = html => {
       const modal = $('#modal');
       modal.innerHTML = html;
@@ -66,6 +68,122 @@ async function openEditor(browser, device, documentType) {
   }
   await page.evaluate(() => wizardActivitiesV2());
   return {context, page, errors};
+}
+
+async function prepareAvailability(page) {
+  await page.evaluate(() => {
+    data.students = [1, 2, 3, 4, 5].map(id => ({id, name: 'Aluno QA ' + id, classId: 1}));
+    data.periods = [{id: 20, name: 'Semestre atual', active: true}, {id: 10, name: 'Semestre anterior'}];
+    data.reports = [
+      {id: 101, studentId: 1, periodId: 20, status: 'done'},
+      {id: 102, studentId: 2, periodId: 20, status: 'draft'},
+      {id: 103, studentId: 3, periodId: 10, status: 'done'},
+      {id: 105, studentId: 5, periodId: 20, status: 'done', documentType: 'portfolio'}
+    ].map(report => ({documentType: 'parecer', text: 'Documento existente.', hasFullData: true,
+      databaseId: report.id, entries: report.status === 'done' ? [{activityIds: [], photoNote: 'Foto QA', photos: [qaPhoto]}] : [], ...report}));
+    const originalFetch = window.fetch;
+    window.fetch = async (url, options = {}) => {
+      if (options.body) return originalFetch(url, options);
+      return {ok: true, json: async () => structuredClone(url.includes('resource=periods') ? data.periods : data.reports)};
+    };
+  });
+}
+
+for (const [deviceName, device] of [['desktop', {viewport: {width: 1440, height: 900}}], ['mobile', devices['Pixel 7']]]) {
+  test(`${deviceName}: new document blocks students only for the same period and type`, async () => {
+    const browser = await chromium.launch();
+    try {
+      const {page, errors} = await openEditor(browser, device, 'parecer');
+      await prepareAvailability(page);
+      await page.evaluate(() => wizardStart(true));
+      await page.waitForFunction(() => !document.querySelector('#wizardStudent').disabled);
+      assert.deepEqual(await page.locator('#wizardStudent option').evaluateAll(options => options.map(option => [option.value, option.disabled])), [
+        ['', false], ['1', true], ['2', true], ['3', false], ['4', false], ['5', false]
+      ]);
+      assert.equal(await page.locator('#wizardStudent').inputValue(), '');
+      assert.equal(await page.getByRole('button', {name: 'Pr\u00f3ximo', exact: true}).isDisabled(), true);
+      await page.locator('#wizardStudent').selectOption('3');
+      await page.locator('#wizardText').fill('Novo semestre.');
+      assert.equal(await page.getByRole('button', {name: 'Pr\u00f3ximo', exact: true}).isEnabled(), true);
+      const reports = await page.evaluate(() => data.reports.filter(report => String(report.studentId) === '3'));
+      assert.deepEqual(reports.map(report => [report.periodId, report.status]).sort(), [[10, 'done'], [20, 'draft']]);
+      await page.locator('#wizardDocumentType').selectOption('portfolio');
+      assert.equal(await page.locator('#wizardStudent option[value="1"]').isEnabled(), true);
+      assert.equal(await page.locator('#wizardStudent option[value="5"]').isDisabled(), true);
+      assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+  });
+
+  test(`${deviceName}: continuing drafts and explicitly reopening keep the document editable`, async () => {
+    const browser = await chromium.launch();
+    try {
+      const {page, errors} = await openEditor(browser, device, 'parecer');
+      await prepareAvailability(page);
+      await page.evaluate(() => editReport(102));
+      assert.equal(await page.locator('#wizardStudent').inputValue(), '2');
+      assert.equal(await page.locator('#wizardStudent option[value="2"]').isEnabled(), true);
+      await page.locator('#wizardText').fill('Rascunho em andamento.');
+      await page.getByRole('button', {name: 'Salvar rascunho', exact: true}).click();
+      await page.waitForFunction(() => qaRequests.some(request => request.reportId === 102));
+      assert.equal(await page.evaluate(() => qaRequests.find(request => request.reportId === 102).periodId), 20);
+      await page.evaluate(() => editReport(103));
+      await page.getByRole('button', {name: 'Reabrir documento', exact: true}).click();
+      await page.locator('#wizardPhotoNote').waitFor();
+      await page.getByRole('button', {name: 'Voltar', exact: true}).click();
+      assert.equal(await page.locator('#wizardStudent').inputValue(), '3');
+      await page.locator('#wizardText').fill('Revisao do semestre anterior.');
+      await page.getByRole('button', {name: 'Salvar rascunho', exact: true}).click();
+      await page.waitForFunction(() => qaRequests.some(request => request.reportId === 103));
+      assert.equal(await page.evaluate(() => qaRequests.find(request => request.reportId === 103).periodId), 10);
+      assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+  });
+
+  test(`${deviceName}: delayed autosave does not bind a different selected student`, async () => {
+    const browser = await chromium.launch();
+    try {
+      const {page, errors} = await openEditor(browser, device, 'parecer');
+      await prepareAvailability(page);
+      await page.evaluate(() => wizardStart(true));
+      await page.waitForFunction(() => !document.querySelector('#wizardStudent').disabled);
+      await page.locator('#wizardStudent').selectOption('4');
+      await page.locator('#wizardText').fill('Texto do aluno 4.');
+      await page.evaluate(() => {
+        cancelWizardDraftAutosave();
+        window.fetch = () => new Promise(resolve => { window.resolveQASave = resolve; });
+        window.pendingQASave = autosaveWizardDraft();
+      });
+      await page.locator('#wizardStudent').selectOption('3');
+      await page.locator('#wizardText').fill('Texto do aluno 3.');
+      await page.evaluate(async () => {
+        cancelWizardDraftAutosave();
+        resolveQASave({ok: true, json: async () => ({id: 888})});
+        await pendingQASave;
+      });
+      const state = await page.evaluate(() => ({student: wizard.studentId, id: wizard.databaseId,
+        saved: data.reports.find(report => report.databaseId === 888).studentId}));
+      assert.equal(state.student, '3');
+      assert.equal(state.id, undefined);
+      assert.equal(String(state.saved), '4');
+      assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+  });
+
+  test(`${deviceName}: failed availability lookup keeps creation blocked`, async () => {
+    const browser = await chromium.launch();
+    try {
+      const {page} = await openEditor(browser, device, 'parecer');
+      await prepareAvailability(page);
+      await page.evaluate(() => {
+        window.fetch = async () => ({ok: false});
+        wizardStart(true);
+      });
+      await page.waitForFunction(() => wizard.availabilityFailed);
+      assert.equal(await page.locator('#wizardStudent').isDisabled(), true);
+      assert.equal(await page.getByRole('button', {name: 'Pr\u00f3ximo', exact: true}).isDisabled(), true);
+      assert.equal(await page.getByRole('button', {name: 'Salvar rascunho', exact: true}).isDisabled(), true);
+    } finally { await browser.close(); }
+  });
 }
 
 async function assertEntries(page, expectedNotes, message) {

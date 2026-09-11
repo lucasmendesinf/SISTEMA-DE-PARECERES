@@ -580,6 +580,7 @@ async function wizardFinalizeV3() {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
+        ...wizardPersistenceContext(),
         student: {name: student.name, birthDate: student.birthDate || '', classId: student.classId || 1},
         text: report.text,
         documentType: report.documentType,
@@ -593,6 +594,7 @@ async function wizardFinalizeV3() {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Falha ao salvar no banco.');
     report.databaseId = result.id;
+    wizard.databaseId = result.id;
     report.hasFullData = true;
     report.status = 'review';
     save();
@@ -613,6 +615,7 @@ async function wizardFinalizeV3() {
 }
 
 async function editReport(id) {
+  wizardAvailabilityReports = null;
   let report = data.reports.find(item => String(item.id) === String(id) || String(item.databaseId) === String(id));
   if (!report) return;
   if (report.status === 'done') {
@@ -624,6 +627,8 @@ async function editReport(id) {
         classId: item.classId || 1
       };
       wizard = {
+        databaseId: item.databaseId || item.id,
+        periodId: item.periodId,
         studentId: item.studentId,
         text: item.text || '',
         documentType: normalizeDocumentType(item.documentType),
@@ -679,6 +684,9 @@ async function editReport(id) {
   }
   if (!report) return;
   wizard = {
+    databaseId: report.databaseId,
+    localReportId: report.id,
+    periodId: report.periodId,
     studentId: report.studentId,
     text: report.text || '',
     documentType: normalizeDocumentType(report.documentType),
@@ -771,12 +779,13 @@ function ensureLocalWizardDraft() {
     if (!studentId || !String(wizard.text || '').trim()) return null;
     const entries = wizardEntries();
     const activityIds = [...new Set(entries.flatMap(entry => entry.activityIds || []))];
-    let report = data.reports.find(item => String(item.studentId) === String(studentId) && item.status !== 'done');
+    let report = currentWizardReport();
     if (!report) {
       report = {id: Date.now(), studentId, status: 'draft'};
       data.reports.unshift(report);
     }
     Object.assign(report, {
+      periodId: wizard.periodId || activeWizardPeriodId(),
       text: wizard.text || '',
       documentType: normalizeDocumentType(wizard.documentType),
       activityIds,
@@ -786,6 +795,7 @@ function ensureLocalWizardDraft() {
       photoNote: entries.map(entry => entry.photoNote).filter(Boolean).join('\n\n'),
       status: 'draft'
     });
+    wizard.localReportId = report.id;
     persistReportDataSnapshot();
     return report;
   } catch (error) {
@@ -804,6 +814,9 @@ async function autosaveWizardDraft() {
   const text = String(wizard.text || '').trim();
   const entries = wizardEntries();
   if (!text && !entries.length) return;
+  const sourceWizard = wizard;
+  const savedContext = {studentId: student.id, documentType: wizard.documentType, periodId: wizard.periodId || activeWizardPeriodId()};
+  const localReport = ensureLocalWizardDraft();
   reportAutosaveRunning = true;
   try {
     const activityIds = [...new Set(entries.flatMap(entry => entry.activityIds || []))];
@@ -813,6 +826,7 @@ async function autosaveWizardDraft() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         draft: true,
+        ...wizardPersistenceContext(),
         student: {name: student.name, birthDate: student.birthDate || '', classId: student.classId || 1},
         text: wizard.text || '',
         documentType: normalizeDocumentType(wizard.documentType),
@@ -825,10 +839,11 @@ async function autosaveWizardDraft() {
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || 'Erro ao salvar rascunho automaticamente.');
-    wizard.databaseId = result.id;
-    const report = ensureLocalWizardDraft();
-    if (report) report.databaseId = result.id;
+    if (localReport) localReport.databaseId = result.id;
     persistReportDataSnapshot();
+    // A delayed save must not bind another student/type to the previous document.
+    if (wizard !== sourceWizard || !matchesWizardReport(savedContext, wizard.studentId, wizard.documentType, wizard.periodId || activeWizardPeriodId())) return;
+    wizard.databaseId = result.id;
     persistWizard();
   } catch (error) {
     console.warn(error.message || error);
@@ -874,6 +889,7 @@ async function saveWizardDraftNow({notify = true, closeAfter = false} = {}) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       draft: true,
+      ...wizardPersistenceContext(),
       student: {name: student.name, birthDate: student.birthDate || '', classId: student.classId || 1},
       text: wizard.text || '',
       documentType: normalizeDocumentType(wizard.documentType),

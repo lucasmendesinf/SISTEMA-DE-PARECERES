@@ -26,26 +26,117 @@ function wizardActivitiesV2(){
   wizardOpen(`<p class="wizard-step">ETAPA 2 DE 3 · ATIVIDADES E FOTOS</p><h2 class="modal-title">Vivências realizadas</h2><p class="modal-subtitle">Selecione atividades já cadastradas ou adicione uma nova vivência.</p><div class="field"><label>Atividades cadastradas</label><div class="linked-activities">${activities}</div><button class="ai-adjust" type="button" onclick="useRegisteredActivities()">+ Usar atividades selecionadas no documento</button></div><div class="field"><label>Fotos da atividade <span class="muted">(até 3 imagens)</span></label><label id="wizardDropzone" class="dropzone" ondragover="wizardDrag(event)" ondragleave="wizardLeave()" ondrop="wizardDrop(event)"><strong>Arraste as imagens aqui</strong><span>ou clique para escolher arquivos</span><input id="wizardPhotos" type="file" accept="image/*" multiple onchange="wizardPhotoCheck(this)"></label><div id="wizardPreviews" class="image-previews">${previews}</div></div><div class="field"><label>Informações sobre a brincadeira ou as fotos</label><textarea id="wizardPhotoNote" rows="4" oninput="bufferStepTwo()" placeholder="Descreva o que aconteceu, o que o aluno explorou ou demonstrou nas imagens...">${esc(wizard.photoNote||'')}</textarea><button class="ai-adjust" type="button" onclick="adjustTextWithAI();bufferStepTwo()">✦ Revisar texto com IA</button><small class="muted">Organiza a escrita e a pontuação, sem mudar as informações registradas.</small></div><div class="form-actions"><button class="secondary" type="button" onclick="wizardStart()">Voltar</button><button class="secondary" type="button" onclick="saveDraftEverywhere()">Salvar rascunho</button><button class="primary" type="button" onclick="wizardReviewV2()">Próximo</button></div>`);
 }
 
+let wizardAvailabilityReports = null;
+
+function activeWizardPeriodId() {
+  return (data.periods.find(period => period.active) || data.periods[0])?.id || '';
+}
+
+function matchesWizardReport(report, studentId, documentType, periodId) {
+  return String(report.studentId) === String(studentId)
+    && normalizeDocumentType(report.documentType) === normalizeDocumentType(documentType)
+    && String(report.periodId || '') === String(periodId || '');
+}
+
+function currentWizardReport() {
+  return data.reports.find(report => report.status !== 'done'
+    && matchesWizardReport(report, wizard.studentId, wizard.documentType, wizard.periodId || activeWizardPeriodId()));
+}
+
+function wizardStudentUnavailable(studentId) {
+  const reports = [...(wizardAvailabilityReports || data.reports), ...data.reports.filter(report => !report.databaseId)];
+  return reports.some(report => {
+    if (!matchesWizardReport(report, studentId, wizard.documentType, wizard.periodId || activeWizardPeriodId())) return false;
+    const isCurrent = (wizard.databaseId && String(report.databaseId || report.id) === String(wizard.databaseId))
+      || (wizard.localReportId && String(report.id) === String(wizard.localReportId));
+    return report.status === 'done' || !isCurrent;
+  });
+}
+
+function refreshWizardStudentOptions() {
+  const select = $('#wizardStudent');
+  if (!select) return;
+  const selected = String(wizard.studentId || '');
+  const pending = wizard.loadingAvailability || wizard.availabilityFailed;
+  const placeholder = wizard.loadingAvailability ? 'Carregando alunos...' : wizard.availabilityFailed ? 'Nao foi possivel consultar os pareceres' : 'Selecione um aluno';
+  select.innerHTML = `<option value="">${placeholder}</option>` + data.students.map(student => {
+    const disabled = wizardStudentUnavailable(student.id);
+    return `<option value="${esc(String(student.id))}" ${disabled ? 'disabled style="color:#888"' : ''}>${esc(student.name)}${disabled ? ' - Documento ja criado neste periodo' : ''}</option>`;
+  }).join('');
+  select.disabled = !!pending;
+  const option = [...select.options].find(item => item.value === selected && !item.disabled);
+  select.value = option?.value || '';
+  wizard.studentId = select.value;
+  $('#wizardDocumentType').disabled = !!pending;
+  document.querySelectorAll('#modal .form-actions button').forEach(button => {
+    if (button.getAttribute('onclick') !== 'wizardClose()') button.disabled = !!pending || !select.value;
+  });
+}
+
+async function loadWizardAvailability() {
+  const current = wizard;
+  try {
+    const responses = await Promise.all([
+      fetch('api.php?resource=reports&summary=1', {cache: 'no-store'}),
+      fetch('api.php?resource=periods', {cache: 'no-store'})
+    ]);
+    if (responses.some(response => !response.ok)) throw new Error('Nao foi possivel consultar os pareceres do periodo. Feche e tente novamente.');
+    const [reports, periods] = await Promise.all(responses.map(response => response.json()));
+    if (!Array.isArray(reports) || !Array.isArray(periods)) throw new Error('Resposta invalida ao consultar os pareceres.');
+    if (wizard !== current) return;
+    wizardAvailabilityReports = reports;
+    data.periods = periods;
+    wizard.periodId = activeWizardPeriodId();
+    // Preserve local unsent drafts while refreshing the document context.
+    reports.forEach(report => {
+      const cached = data.reports.find(item => String(item.databaseId || item.id) === String(report.id));
+      if (cached) Object.assign(cached, {periodId: report.periodId, status: report.status});
+    });
+  } catch (error) {
+    if (wizard !== current) return;
+    wizard.availabilityFailed = true;
+    alert(error.message);
+  } finally {
+    if (wizard === current) {
+      wizard.loadingAvailability = false;
+      refreshWizardStudentOptions();
+    }
+  }
+}
+
+function wizardPersistenceContext() {
+  return {reportId: wizard.databaseId || null, periodId: wizard.periodId || activeWizardPeriodId()};
+}
+
 function wizardStart(newRegistration=false,draft=null){
-  let options=data.students.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
-  if(newRegistration){clearWizard();wizard={}}else if(draft){wizard=draft}else{wizard=JSON.parse(localStorage.getItem(WIZARD_KEY)||'null')||{}};
+  let options='<option value="">Selecione um aluno</option>';
+  if(newRegistration){clearWizard();wizard={loadingAvailability:true};wizardAvailabilityReports=null}else if(draft){wizard=draft}else{wizard=JSON.parse(localStorage.getItem(WIZARD_KEY)||'null')||{}};
+  wizard.periodId = wizard.periodId || activeWizardPeriodId();
   wizard.documentType=normalizeDocumentType(wizard.documentType);
   wizardOpen(`<p class="wizard-step">ETAPA 1 DE 3 · TEXTO PRINCIPAL</p><h2 class="modal-title">Novo documento pedag\u00f3gico</h2><p class="modal-subtitle">Escolha o tipo de documento e registre as observa\u00e7\u00f5es mais importantes. O rascunho \u00e9 salvo neste dispositivo.</p><div class="form-grid"><div class="field"><label>Aluno</label><select id="wizardStudent" onchange="bufferStepOne()">${options}</select></div><div class="field"><label>Tipo de documento</label><select id="wizardDocumentType" onchange="bufferStepOne()"><option value="parecer">Parecer Pedag\u00f3gico</option><option value="portfolio">Portf\u00f3lio</option></select></div><div class="field"><label>Informa\u00e7\u00f5es sobre o aluno</label><textarea id="wizardText" oninput="bufferStepOne()" placeholder="Descreva as informa\u00e7\u00f5es do aluno: conquistas, intera\u00e7\u00f5es, interesses, autonomia e aspectos que merecem acompanhamento...">${esc(wizard.text||'')}</textarea><button class="ai-adjust" type="button" onclick="adjustTextWithAI();bufferStepOne()">✦ Ajustar texto com IA</button></div></div><div class="form-actions"><button class="secondary" type="button" onclick="wizardClose()">Voltar</button><button class="secondary" type="button" onclick="saveInitialDraft()">Salvar rascunho</button><button class="primary" type="button" onclick="wizardActivitiesV2()">Pr\u00f3ximo</button></div>`);
   if(wizard.studentId)$('#wizardStudent').value=wizard.studentId;
   $('#wizardDocumentType').value=wizard.documentType;
+  refreshWizardStudentOptions();
+  if (newRegistration) loadWizardAvailability();
 }
 
 function bufferStepOne(){
   let student=$('#wizardStudent'),text=$('#wizardText'),type=$('#wizardDocumentType');
+  if ((student && String(wizard.studentId || '') !== student.value)
+    || (type && normalizeDocumentType(wizard.documentType) !== normalizeDocumentType(type.value))) {
+    delete wizard.databaseId;
+    delete wizard.localReportId;
+  }
   if(student)wizard.studentId=student.value;
   if(text)wizard.text=text.value;
   if(type)wizard.documentType=normalizeDocumentType(type.value);
+  refreshWizardStudentOptions();
   persistWizard();
 }
 
 function wizardReport(){
   let entries=wizardEntries(),activityIds=[...new Set(entries.flatMap(item=>item.activityIds||[]))],photos=entries.flatMap(item=>item.photos||[]),photoNote=entries.map(item=>item.photoNote).filter(Boolean).join('\n\n'),documentType=normalizeDocumentType(wizard.documentType);
-  let found=data.reports.find(r=>String(r.studentId)===String(wizard.studentId)&&normalizeDocumentType(r.documentType)===documentType),payload={text:wizard.text||'',activityIds,photoNote,photos,entries,documentType};
+  let found=currentWizardReport(),payload={text:wizard.text||'',activityIds,photoNote,photos,entries,documentType,periodId:wizard.periodId||activeWizardPeriodId()};
   if(found){Object.assign(found,payload);return found}
   let report={id:Date.now(),studentId:wizard.studentId,status:'draft',...payload};data.reports.unshift(report);return report;
 }

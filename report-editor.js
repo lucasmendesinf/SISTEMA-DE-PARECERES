@@ -197,7 +197,7 @@ function wizardActivitiesV2() {
       <label>Informações sobre a brincadeira ou as fotos</label>
       <textarea id="wizardPhotoNote" rows="4" oninput="bufferStepTwo()" placeholder="Descreva o que aconteceu, o que o aluno explorou ou demonstrou nas imagens...">${esc(wizard.photoNote || '')}</textarea>
       <button class="ai-adjust" type="button" onclick="adjustTextWithAI();bufferStepTwo()">✦ Revisar texto com IA</button>
-      <small class="muted">Organiza a escrita e a pontuação, sem mudar as informações registradas.</small>
+      <small class="muted">Organiza a escrita e a pontuação, sem mudar as informações registradas.</small><small class="muted">Dica: escreva [NOME] onde quiser que apareça o nome do aluno ao finalizar o documento.</small>
     </div>
     <div class="form-actions">
       <button class="secondary" type="button" onclick="${editing ? 'finishEntryEdit()' : 'wizardStart()'}">${editing ? 'Salvar e voltar' : 'Voltar'}</button>
@@ -266,6 +266,7 @@ function editAllMainText() {
       <label>Informações sobre o aluno</label>
       <textarea id="wizardText" oninput="bufferStepOne()" placeholder="Descreva as informações do aluno...">${esc(wizard.text || '')}</textarea>
       <button class="ai-adjust" type="button" onclick="adjustTextWithAI();bufferStepOne()">✦ Ajustar texto com IA</button>
+      <small class="muted">Dica: escreva [NOME] onde quiser que apareça o nome do aluno ao finalizar o documento.</small>
     </div>
     <div class="form-actions">
       <button class="secondary" type="button" onclick="wizardReviewV2()">Voltar para revisão</button>
@@ -570,12 +571,28 @@ async function wizardReviewV2(options = {}) {
   `);
 }
 
+function applyNameTag(text, studentName) {
+  const value = String(text || '');
+  const name = String(studentName || '').trim();
+  if (!value || !name) return value;
+  return value.replace(/\[nome\]/gi, name);
+}
+
+function applyNameTagToWizard(studentName) {
+  if (!studentName) return;
+  wizard.text = applyNameTag(wizard.text, studentName);
+  wizard.photoNote = applyNameTag(wizard.photoNote, studentName);
+  wizard.finalText = applyNameTag(wizard.finalText, studentName);
+  (wizard.entries || []).forEach(entry => { entry.photoNote = applyNameTag(entry.photoNote, studentName); });
+}
+
 async function wizardFinalizeV3() {
   try {
     if (wizard.isProcessingPhotos) return alert('Aguarde a edicao das imagens terminar antes de finalizar.');
     bufferStepTwo();
+    const student = data.students.find(item => String(item.id) === String(wizard.studentId));
+    applyNameTagToWizard(student?.name);
     const report = wizardReport();
-    const student = data.students.find(item => String(item.id) === String(report.studentId));
     const response = await fetch('api.php?resource=reports', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},

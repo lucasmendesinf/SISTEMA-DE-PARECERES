@@ -48,6 +48,31 @@ function setRegisteredActivitySelectionLock(activeInput, locked) {
   });
 }
 
+// Divide os blocos de vivencia por paragrafo: cada linha (cada Enter) do texto
+// vira um bloco proprio, com "Editar texto/imagens" e "Remover bloco".
+// - Todos os pedacos ficam vinculados as mesmas atividades, para que em
+//   qualquer um deles seja possivel escolher fotos da atividade.
+// - As fotos do bloco original ficam no ultimo pedaco. Como o PDF e o Word ja
+//   mostram o texto do bloco linha a linha e as fotos depois, o documento final
+//   fica identico ao de antes da divisao.
+function splitEntriesByParagraph(entries) {
+  return entries.flatMap(entry => {
+    const paragraphs = entryNoteParagraphs(entry.photoNote);
+    if (paragraphs.length <= 1) return [entry];
+    return paragraphs.map((paragraph, index) => ({
+      activityIds: [...(entry.activityIds || [])],
+      photoNote: paragraph,
+      photos: index === paragraphs.length - 1 ? [...(entry.photos || [])] : []
+    }));
+  });
+}
+
+// Paragrafos do texto de um bloco de vivencia: cada linha nao vazia e um
+// paragrafo (o PDF e o Word tambem quebram o texto do bloco por linha).
+function entryNoteParagraphs(value) {
+  return String(value || '').split(/\r\n|\r|\n/u).map(part => part.trim()).filter(Boolean);
+}
+
 function wizardEntries() {
   const entries = (wizard.entries || []).map(normalizeWizardEntry);
   const current = currentWizardEntry();
@@ -56,7 +81,7 @@ function wizardEntries() {
   } else if (hasWizardEntryContent(current)) {
     entries.push(current);
   }
-  return entries.filter(hasWizardEntryContent);
+  return splitEntriesByParagraph(entries.filter(hasWizardEntryContent));
 }
 
 function bufferStepTwo() {
@@ -171,7 +196,10 @@ function wizardActivitiesV2() {
   const editing = Number.isInteger(wizard.editingEntryIndex);
   const selectedActivityIds = (wizard.activityIds || []).map(String);
   const hasActiveSelection = selectedActivityIds.length > 0;
-  const addedIds = addedActivityIdsOutsideCurrentEntry();
+  // Editando um bloco, atividades ja usadas em outros blocos continuam
+  // clicaveis (para pegar fotos delas para este bloco); em bloco novo/vazio
+  // ficam bloqueadas para nao importar a mesma atividade duas vezes.
+  const addedIds = editing ? new Set() : addedActivityIdsOutsideCurrentEntry();
   // Bloco aberto que ja tem texto ou fotos (editando, ou parecer reaberto com um
   // bloco so): a atividade vinculada mostra o botao para escolher outras fotos.
   const activeBlockHasContent = !!(String(wizard.photoNote || '').trim() || (wizard.photos || []).length);
@@ -212,11 +240,18 @@ function wizardActivitiesV2() {
       <button class="primary" type="button" onclick="wizardReviewV2()">Próximo</button>
     </div>
   `);
+  // Editando um bloco: mostra na lista a atividade vinculada a ele.
+  if (editing) {
+    const linked = document.querySelector('#modal .wizard-activity:checked')?.closest('.linked-activity');
+    if (linked) requestAnimationFrame(() => linked.scrollIntoView({block: 'nearest'}));
+  }
 }
 
 function finishEntryEdit() {
   if (wizard.isProcessingPhotos) return alert('Aguarde o carregamento das imagens terminar.');
   bufferStepTwo();
+  // Ao voltar para a revisao, rola ate o bloco que estava sendo editado.
+  wizard.focusEntryIndex = wizard.editingEntryIndex;
   // Keep the active fields linked to their block when returning to review.
   return wizardReviewV2({skipBuffer: true});
 }
@@ -306,7 +341,9 @@ function removeEntry(index) {
 }
 
 function openDraftWithSavedImages() {
-  const entries = (wizard.entries || []).map(normalizeWizardEntry).filter(hasWizardEntryContent);
+  // Blocos salvos com varios paragrafos sao divididos (um bloco por paragrafo).
+  const entries = splitEntriesByParagraph((wizard.entries || []).map(normalizeWizardEntry).filter(hasWizardEntryContent));
+  wizard.entries = entries;
   if (entries.length === 1) {
     wizard.entries = [];
     delete wizard.editingEntryIndex;
@@ -331,16 +368,13 @@ function documentDraftHtml() {
       ${readOnly ? '' : `<button type="button" onclick="editMainParagraph(${index})">Editar parágrafo</button>`}
     </div>
   `).join('');
-  // Cada linha (cada Enter) do texto do bloco vira um paragrafo com o proprio
-  // botao de editar, para alterar so aquele trecho (ver editEntryParagraph).
-  const entryParagraphs = (value, entryIndex) => entryNoteParagraphs(value).map((part, paragraphIndex) => readOnly
-    ? `<p>${esc(part)}</p>`
-    : `<div class="editable-paragraph"><p>${esc(part)}</p><button type="button" onclick="editEntryParagraph(${entryIndex}, ${paragraphIndex})">Editar parágrafo</button></div>`).join('');
+  // Cada bloco tem um paragrafo (ver splitEntriesByParagraph) e os proprios
+  // botoes; data-entry-index permite voltar a revisao exatamente nesse bloco.
   const entries = wizardEntries().map((entry, index) => {
-    const note = entry.photoNote ? entryParagraphs(entry.photoNote, index) : '';
+    const note = entry.photoNote ? entryNoteParagraphs(entry.photoNote).map(part => `<p>${esc(part)}</p>`).join('') : '';
     const photos = entry.photos?.length ? `<div class="activity-photos">${entry.photos.map(src => `<img src="${src}" alt="Foto da vivência">`).join('')}</div>` : '';
     return `
-      <section class="document-entry editable-entry">
+      <section class="document-entry editable-entry" data-entry-index="${index}">
         ${note}${photos}
         ${readOnly ? '' : `<div class="entry-actions">
           <button type="button" onclick="editEntry(${index})">Editar texto/imagens</button>
@@ -352,53 +386,6 @@ function documentDraftHtml() {
   return `${paragraphs || '<p class="muted">Nenhum texto principal informado.</p>'}${entries}${finalTextHtml()}`;
 }
 
-// Paragrafos do texto de um bloco de vivencia: cada linha nao vazia e um
-// paragrafo (o PDF e o Word tambem quebram o texto do bloco por linha).
-function entryNoteParagraphs(value) {
-  return String(value || '').split(/\r\n|\r|\n/u).map(part => part.trim()).filter(Boolean);
-}
-
-// Abre so um paragrafo de um bloco de vivencia para edicao.
-function editEntryParagraph(entryIndex, paragraphIndex) {
-  bufferStepTwo();
-  const entry = wizardEntries()[entryIndex];
-  if (!entry) return wizardReviewV2();
-  const paragraph = entryNoteParagraphs(entry.photoNote)[paragraphIndex] || '';
-  wizardOpen(`
-    <p class="wizard-step">EDIÇÃO DE VIVÊNCIA</p>
-    <h2 class="modal-title">Editar parágrafo</h2>
-    <p class="modal-subtitle">Altere somente este trecho do bloco. O restante do texto e as fotos continuam iguais.</p>
-    <div class="field">
-      <label>Parágrafo ${paragraphIndex + 1}</label>
-      <textarea id="editParagraphText" rows="8">${esc(paragraph)}</textarea>
-      <button class="ai-adjust" type="button" onclick="adjustInlineParagraph()">✦ Ajustar texto com IA</button>
-      <small class="muted">Se apertar Enter, o trecho vira mais de um parágrafo.</small>
-    </div>
-    <div class="form-actions">
-      <button class="secondary" type="button" onclick="wizardReviewV2()">Cancelar</button>
-      <button class="primary" type="button" onclick="saveEntryParagraph(${entryIndex}, ${paragraphIndex})">Salvar parágrafo</button>
-    </div>
-  `);
-}
-
-// Grava o paragrafo editado de volta no texto do bloco. Se ficar vazio, o
-// paragrafo e removido.
-function saveEntryParagraph(entryIndex, paragraphIndex) {
-  const field = $('#editParagraphText');
-  if (!field) return;
-  const entries = wizardEntries();
-  const entry = entries[entryIndex];
-  if (!entry) return wizardReviewV2();
-  const paragraphs = entryNoteParagraphs(entry.photoNote);
-  paragraphs[paragraphIndex] = field.value.trim();
-  entry.photoNote = paragraphs.filter(Boolean).join('\n');
-  wizard.entries = entries;
-  clearActiveWizardEntry();
-  persistWizard();
-  wizardReviewV2();
-}
-window.editEntryParagraph = editEntryParagraph;
-window.saveEntryParagraph = saveEntryParagraph;
 
 function configuredFinalText() {
   try {
@@ -676,6 +663,16 @@ async function wizardReviewV2(options = {}) {
       <button class="primary" type="button" onclick="wizardFinalizeV3()">Finalizar documento</button>
     </div>
   `);
+  // Voltando de "Salvar e voltar": rola ate o bloco editado e destaca por instantes.
+  if (Number.isInteger(wizard.focusEntryIndex)) {
+    const target = document.querySelector(`#modal .document-entry[data-entry-index="${wizard.focusEntryIndex}"]`);
+    delete wizard.focusEntryIndex;
+    if (target) {
+      requestAnimationFrame(() => target.scrollIntoView({block: 'center'}));
+      target.classList.add('entry-focus');
+      setTimeout(() => target.classList.remove('entry-focus'), 2500);
+    }
+  }
 }
 
 function applyNameTag(text, studentName) {

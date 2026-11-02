@@ -396,7 +396,8 @@ $documentFontSizePt = min(16, max(10, (int) ($_POST['documentFontSize'] ?? 12)))
 $documentFontSize = $documentFontSizePt * 2;
 $detailColor = sanitizeHexColor((string) ($_POST['detailColor'] ?? '253C31'));
 $GLOBALS['documentFont'] = $documentFont;
-if ($name === '' || $class === '' || $text === '') {
+// O texto principal e opcional quando ha blocos de vivencia.
+if ($name === '' || $class === '' || ($text === '' && empty($entries))) {
     http_response_code(422);
     exit('Dados insuficientes para gerar o parecer.');
 }
@@ -460,7 +461,8 @@ foreach ($entries as $entry) {
     if ($note !== '') appendTextParagraphs($body, $document, $note, ['align' => 'both', 'indent' => true, 'after' => 120, 'size' => $documentFontSize]);
     $row = [];
     foreach (($entry['photos'] ?? []) as $photo) if (($image = addImageToDocx($zip, (string) $photo, $imageCounter))) {
-        $scale = min(1651000 / $image['cx'], 2600000 / $image['cy']);
+        // Tamanho maximo de cada foto de vivencia no Word (+10% em relacao ao original 1651000 x 2600000 EMU).
+        $scale = min(1816100 / $image['cx'], 2860000 / $image['cy']);
         $row[] = ['rid'=>$image['rid'],'id'=>$imageCounter++,'cx'=>(int)($image['cx']*$scale),'cy'=>(int)($image['cy']*$scale)];
         if (count($row) === 2) { $body->appendChild(imageRowParagraph($document, $row)); $row=[]; }
     }

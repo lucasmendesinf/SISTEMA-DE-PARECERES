@@ -19,6 +19,9 @@ async function loadExperienceFields(){
 
 function activityFormV2(){
   activityFiles=[];
+  // Atividade nova: esquece o id de um envio anterior que tenha parado no meio
+  // (ver addActivitySaveV2 em app.js e activity-upload.js).
+  window.pendingActivityId=null;
   window.currentImageEditorMode='none';
   const draft = typeof activityDraft === 'function' ? activityDraft() : {};
   const options = experienceOptions(draft.area || '');

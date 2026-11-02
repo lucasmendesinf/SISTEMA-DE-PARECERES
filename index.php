@@ -206,15 +206,16 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <dialog id="modal"><form method="dialog" id="modalForm" novalidate><button class="close" type="button" formnovalidate aria-label="Fechar" onclick="window.PortalCloseMainModal?.();return false;">×</button><div id="modalContent"></div></form></dialog>
   <script>window.PortalBootstrapUser = <?= json_encode($bootstrapUser, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;</script>
   <script src="save-feedback.js?v=20260717-save-feedback-front-1"></script>
-  <script src="app.js?v=20261102-fotos-50-1"></script>
+  <script src="app.js?v=20261102-fotos-lotes-1"></script>
   <script src="document-type.js?v=20260917-nome-tag-1"></script>
   <script src="mobile-menu.js"></script>
   <script src="draft-delete.js?v=20260812-safe-report-id-1"></script>
   <script src="periods.js"></script>
   <script src="activity-pagination.js"></script>
   <script src="classes-student-edit.js?v=20260812-student-birth-mask-1"></script>
-  <script src="activities-edit.js?v=20261102-fotos-50-1"></script>
-  <script src="experience-fields.js?v=20261102-fotos-50-1"></script>
+  <script src="activity-upload.js?v=20261102-fotos-lotes-1"></script>
+  <script src="activities-edit.js?v=20261102-fotos-lotes-1"></script>
+  <script src="experience-fields.js?v=20261102-fotos-lotes-1"></script>
   <script src="modal-controls.js?v=20260812-close-x-fix-1"></script>
   <script src="report-type-badge.js"></script>
   <script src="report-editor.js?v=20260917-nome-tag-1"></script>
@@ -241,6 +242,6 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>
   <script src="image-editor-flow.js?v=20260911-keep-photo-on-editor-close-1"></script>
   <script src="document-image-zoom.js?v=20260702-document-image-zoom-front-1"></script>
-  <script src="pwa.js?v=20261102-fotos-50-1"></script>
+  <script src="pwa.js?v=20261102-fotos-lotes-1"></script>
 </body>
 </html>

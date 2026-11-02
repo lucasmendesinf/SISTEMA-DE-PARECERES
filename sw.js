@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'ai-prof-pwa-20261102-fotos-lotes-1';
+const CACHE_VERSION = 'ai-prof-pwa-20261102-fotos-413-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
   './manifest.json?v=20260908-mobile-image-editor-1',
-  './pwa.js?v=20261102-fotos-lotes-1',
+  './pwa.js?v=20261102-fotos-413-1',
   './login.css?v=20260908-mobile-image-editor-1',
   './style.css?v=20260804-mobile-no-input-zoom-1',
   './mobile-menu.css?v=20260809-mobile-menu-readable-1',
@@ -29,7 +29,7 @@ const STATIC_ASSETS = [
   './pwa-install.css?v=20260908-mobile-image-editor-1',
   './save-feedback.js?v=20260717-save-feedback-front-1',
   './onboarding.js?v=20260908-mobile-image-editor-1',
-  './activity-upload.js?v=20261102-fotos-lotes-1',
+  './activity-upload.js?v=20261102-fotos-413-1',
   './activities-edit.js?v=20261102-fotos-lotes-1',
   './experience-fields.js?v=20261102-fotos-lotes-1',
   './modal-controls.js?v=20260715-onboarding-draft-1',

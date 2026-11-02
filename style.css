@@ -59,3 +59,8 @@
 .image-previews .photo-new{position:relative;display:inline-block}
 .image-previews .photo-new img{border-color:#9cc9b5}
 .image-previews .photo-remove{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:#b3261e;color:#fff;font:700 14px/22px sans-serif;padding:0;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+
+/* Campo "Observacoes da professora" maior nas telas Registrar/Editar atividade. */
+.activity-note-field{min-height:260px;resize:vertical;line-height:1.5}
+/* Botao "Escolher outras fotos desta atividade" no bloco em edicao (etapa 2). */
+.linked-activity .linked-activity-photos{display:block;margin-top:6px;padding:0;text-align:left}

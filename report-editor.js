@@ -163,7 +163,11 @@ async function wizardPhotoCheck(input) {
 
 function wizardActivitiesV2() {
   if ($('#wizardText')) bufferStepOne();
-  if (!wizard.text?.trim()) return wizardStart();
+  // O texto principal (etapa 1) e opcional: so e preciso escolher o aluno.
+  if (!wizard.studentId) {
+    alert('Selecione um aluno para continuar.');
+    return wizardStart();
+  }
   const editing = Number.isInteger(wizard.editingEntryIndex);
   const selectedActivityIds = (wizard.activityIds || []).map(String);
   const hasActiveSelection = selectedActivityIds.length > 0;
@@ -171,7 +175,7 @@ function wizardActivitiesV2() {
   const activities = data.activities.map(activity => `
     <label class="linked-activity ${addedIds.has(String(activity.id)) || (hasActiveSelection && !selectedActivityIds.includes(String(activity.id))) ? 'is-disabled' : ''}">
       <input class="wizard-activity" type="checkbox" value="${activity.id}" ${selectedActivityIds.includes(String(activity.id)) ? 'checked' : ''} ${addedIds.has(String(activity.id)) || (hasActiveSelection && !selectedActivityIds.includes(String(activity.id))) ? 'disabled' : ''} data-already-added="${addedIds.has(String(activity.id)) ? '1' : '0'}" onchange="selectRegisteredActivityForDocument(this)">
-      <span><strong>${esc(activity.title)}</strong><small>${esc(activity.date)} · ${esc(activity.area)}</small></span>
+      <span><strong>${esc(activity.title)}</strong><small>${esc(activity.date)} · ${esc(activity.area)}</small>${editing && selectedActivityIds.includes(String(activity.id)) ? `<button class="ai-adjust linked-activity-photos" type="button" onclick="event.preventDefault();event.stopPropagation();rechooseActivityPhotos('${activity.id}')">Escolher outras fotos desta atividade</button>` : ''}</span>
       ${activity.photos?.[0] ? `<img src="${activity.photos[0]}" alt="Foto">` : ''}
     </label>
   `).join('') || '<p class="muted">Nenhuma atividade cadastrada.</p>';
@@ -318,15 +322,19 @@ function openDraftWithSavedImages() {
 
 function documentDraftHtml() {
   const readOnly = !!wizard.readOnly;
-  const textParagraphs = value => String(value || '').split(/\r\n|\r|\n/u).map(part => part.trim()).filter(Boolean).map(part => `<p>${esc(part)}</p>`).join('');
   const paragraphs = mainParagraphs().map((part, index) => `
     <div class="editable-paragraph">
       <p>${esc(part)}</p>
       ${readOnly ? '' : `<button type="button" onclick="editMainParagraph(${index})">Editar parágrafo</button>`}
     </div>
   `).join('');
+  // Cada linha (cada Enter) do texto do bloco vira um paragrafo com o proprio
+  // botao de editar, para alterar so aquele trecho (ver editEntryParagraph).
+  const entryParagraphs = (value, entryIndex) => entryNoteParagraphs(value).map((part, paragraphIndex) => readOnly
+    ? `<p>${esc(part)}</p>`
+    : `<div class="editable-paragraph"><p>${esc(part)}</p><button type="button" onclick="editEntryParagraph(${entryIndex}, ${paragraphIndex})">Editar parágrafo</button></div>`).join('');
   const entries = wizardEntries().map((entry, index) => {
-    const note = entry.photoNote ? textParagraphs(entry.photoNote) : '';
+    const note = entry.photoNote ? entryParagraphs(entry.photoNote, index) : '';
     const photos = entry.photos?.length ? `<div class="activity-photos">${entry.photos.map(src => `<img src="${src}" alt="Foto da vivência">`).join('')}</div>` : '';
     return `
       <section class="document-entry editable-entry">
@@ -340,6 +348,54 @@ function documentDraftHtml() {
   }).join('');
   return `${paragraphs || '<p class="muted">Nenhum texto principal informado.</p>'}${entries}${finalTextHtml()}`;
 }
+
+// Paragrafos do texto de um bloco de vivencia: cada linha nao vazia e um
+// paragrafo (o PDF e o Word tambem quebram o texto do bloco por linha).
+function entryNoteParagraphs(value) {
+  return String(value || '').split(/\r\n|\r|\n/u).map(part => part.trim()).filter(Boolean);
+}
+
+// Abre so um paragrafo de um bloco de vivencia para edicao.
+function editEntryParagraph(entryIndex, paragraphIndex) {
+  bufferStepTwo();
+  const entry = wizardEntries()[entryIndex];
+  if (!entry) return wizardReviewV2();
+  const paragraph = entryNoteParagraphs(entry.photoNote)[paragraphIndex] || '';
+  wizardOpen(`
+    <p class="wizard-step">EDIÇÃO DE VIVÊNCIA</p>
+    <h2 class="modal-title">Editar parágrafo</h2>
+    <p class="modal-subtitle">Altere somente este trecho do bloco. O restante do texto e as fotos continuam iguais.</p>
+    <div class="field">
+      <label>Parágrafo ${paragraphIndex + 1}</label>
+      <textarea id="editParagraphText" rows="8">${esc(paragraph)}</textarea>
+      <button class="ai-adjust" type="button" onclick="adjustInlineParagraph()">✦ Ajustar texto com IA</button>
+      <small class="muted">Se apertar Enter, o trecho vira mais de um parágrafo.</small>
+    </div>
+    <div class="form-actions">
+      <button class="secondary" type="button" onclick="wizardReviewV2()">Cancelar</button>
+      <button class="primary" type="button" onclick="saveEntryParagraph(${entryIndex}, ${paragraphIndex})">Salvar parágrafo</button>
+    </div>
+  `);
+}
+
+// Grava o paragrafo editado de volta no texto do bloco. Se ficar vazio, o
+// paragrafo e removido.
+function saveEntryParagraph(entryIndex, paragraphIndex) {
+  const field = $('#editParagraphText');
+  if (!field) return;
+  const entries = wizardEntries();
+  const entry = entries[entryIndex];
+  if (!entry) return wizardReviewV2();
+  const paragraphs = entryNoteParagraphs(entry.photoNote);
+  paragraphs[paragraphIndex] = field.value.trim();
+  entry.photoNote = paragraphs.filter(Boolean).join('\n');
+  wizard.entries = entries;
+  clearActiveWizardEntry();
+  persistWizard();
+  wizardReviewV2();
+}
+window.editEntryParagraph = editEntryParagraph;
+window.saveEntryParagraph = saveEntryParagraph;
 
 function configuredFinalText() {
   try {
@@ -502,7 +558,51 @@ function chooseRegisteredActivityPhotos(activity, photos = []) {
   });
 }
 
+// Abre de novo as fotos de uma atividade para escolher outras imagens para o
+// bloco que esta sendo editado. As fotos escolhidas sao ACRESCENTADAS as que o
+// bloco ja tem (as antigas podem ser removidas pelo x) e o texto e mantido.
+// A atividade fica vinculada ao bloco.
+async function rechooseActivityPhotos(activityId) {
+  if (wizard.isProcessingPhotos) return alert('Aguarde o carregamento das imagens terminar.');
+  bufferStepTwo();
+  await refreshSelectedRegisteredActivities([activityId]);
+  const activity = (data.activities || []).find(item => String(item.id) === String(activityId));
+  if (!activity) return alert('Nao foi possivel localizar esta atividade.');
+  const chosen = await chooseRegisteredActivityPhotos(activity, Array.isArray(activity.photos) ? activity.photos : []);
+  if (!chosen || !chosen.length) return;
+  try {
+    setWizardPhotoProcessing(true, 'Abrindo imagens para edicao...');
+    let edited = chosen;
+    if (window.PortalImageEditors?.processDataUrls) {
+      const result = await window.PortalImageEditors.processDataUrls(chosen, chosen.length, {reviewEach: true});
+      edited = result.photos;
+      wizard.imageEditorMode = result.mode;
+    }
+    wizard.photos = [...(wizard.photos || []), ...edited];
+    const ids = (wizard.activityIds || []).map(String);
+    if (!ids.includes(String(activity.id))) wizard.activityIds = [...(wizard.activityIds || []), activity.id];
+    if (Number.isInteger(wizard.editingEntryIndex)) {
+      wizard.entries = wizard.entries || [];
+      wizard.entries[wizard.editingEntryIndex] = currentWizardEntry();
+    }
+    persistWizard();
+  } catch (error) {
+    alert(error.message || 'Nao foi possivel carregar as fotos da atividade.');
+  } finally {
+    setWizardPhotoProcessing(false);
+  }
+  wizardActivitiesV2();
+}
+window.rechooseActivityPhotos = rechooseActivityPhotos;
+
 async function selectRegisteredActivityForDocument(input) {
+  // Editando um bloco: marcar uma atividade (inclusive a que ja estava vinculada
+  // e foi desmarcada) abre as fotos dela para escolher imagens para ESTE bloco,
+  // em vez de criar um bloco novo.
+  if (input?.checked && Number.isInteger(wizard.editingEntryIndex)) {
+    input.checked = false;
+    return rechooseActivityPhotos(input.value);
+  }
   if (!input?.checked) {
     bufferStepTwo();
     setRegisteredActivitySelectionLock(input, false);

@@ -113,7 +113,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="manifest" href="manifest.json?v=20260908-mobile-image-editor-1">
   <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=20261102-fotos-editar-1">
+  <link rel="stylesheet" href="style.css?v=20261102-blocos-1">
   <link rel="stylesheet" href="mobile-menu.css?v=20260809-mobile-menu-readable-1">
   <link rel="stylesheet" href="activity-pagination.css">
   <link rel="stylesheet" href="report-type-badge.css">
@@ -128,7 +128,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <link rel="stylesheet" href="finance-admin.css?v=20260703-finance-due-filter-1">
   <link rel="stylesheet" href="ai-usage-admin.css?v=20260716-ai-usage-1">
   <link rel="stylesheet" href="image-editors.css?v=20260908-mobile-image-editor-1">
-  <link rel="stylesheet" href="document-style.css?v=20261102-fotos-editar-1">
+  <link rel="stylesheet" href="document-style.css?v=20261102-blocos-1">
   <link rel="stylesheet" href="tutorial-videos.css?v=20260706-video-before-onboarding-2">
   <link rel="stylesheet" href="document-image-zoom.css?v=20260702-document-image-zoom-front-1">
   <link rel="stylesheet" href="onboarding.css?v=20260826-onboarding-mobile-layout-1">
@@ -206,7 +206,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <dialog id="modal"><form method="dialog" id="modalForm" novalidate><button class="close" type="button" formnovalidate aria-label="Fechar" onclick="window.PortalCloseMainModal?.();return false;">×</button><div id="modalContent"></div></form></dialog>
   <script>window.PortalBootstrapUser = <?= json_encode($bootstrapUser, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;</script>
   <script src="save-feedback.js?v=20260717-save-feedback-front-1"></script>
-  <script src="app.js?v=20261102-fotos-editar-1"></script>
+  <script src="app.js?v=20261102-blocos-1"></script>
   <script src="document-type.js?v=20260917-nome-tag-1"></script>
   <script src="mobile-menu.js"></script>
   <script src="draft-delete.js?v=20260812-safe-report-id-1"></script>
@@ -214,11 +214,11 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="activity-pagination.js"></script>
   <script src="classes-student-edit.js?v=20260812-student-birth-mask-1"></script>
   <script src="activity-upload.js?v=20261102-fotos-editar-1"></script>
-  <script src="activities-edit.js?v=20261102-fotos-editar-1"></script>
-  <script src="experience-fields.js?v=20261102-fotos-editar-1"></script>
+  <script src="activities-edit.js?v=20261102-blocos-1"></script>
+  <script src="experience-fields.js?v=20261102-blocos-1"></script>
   <script src="modal-controls.js?v=20260812-close-x-fix-1"></script>
   <script src="report-type-badge.js"></script>
-  <script src="report-editor.js?v=20260917-nome-tag-1"></script>
+  <script src="report-editor.js?v=20261102-blocos-1"></script>
   <script src="performance-optimizations.js?v=20260812-local-draft-open-1"></script>
   <script src="document-style-settings.js?v=20260716-force-docx-font-1"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
@@ -242,6 +242,6 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>
   <script src="image-editor-flow.js?v=20260911-keep-photo-on-editor-close-1"></script>
   <script src="document-image-zoom.js?v=20260702-document-image-zoom-front-1"></script>
-  <script src="pwa.js?v=20261102-fotos-editar-1"></script>
+  <script src="pwa.js?v=20261102-blocos-1"></script>
 </body>
 </html>

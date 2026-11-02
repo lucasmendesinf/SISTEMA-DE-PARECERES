@@ -41,6 +41,36 @@ register_shutdown_function(static function (): void {
 // Arquivos temporarios das imagens (apagados depois que o .docx e fechado).
 $GLOBALS['docxTempFiles'] = [];
 
+// -----------------------------------------------------------------------------
+// Leitura/escrita das partes XML do .docx.
+// Algumas versoes da biblioteca zip do servidor devolvem VAZIO ao ler de novo
+// (getFromName) uma parte ja alterada com addFromString na mesma sessao. Em
+// producao isso quebrava o Word: "DOMDocument::loadXML(): Argument #1 ($source)
+// must not be empty" ao registrar os tipos de imagem em [Content_Types].xml.
+// Por isso cada parte alterada fica guardada em memoria (docxParts): as leituras
+// seguintes usam essa copia e tudo e gravado no zip uma unica vez, antes de
+// fechar (docxFlushParts).
+// -----------------------------------------------------------------------------
+$GLOBALS['docxParts'] = [];
+
+function docxRead(ZipArchive $zip, string $name)
+{
+    if (array_key_exists($name, $GLOBALS['docxParts'])) return $GLOBALS['docxParts'][$name];
+    $content = $zip->getFromName($name);
+    return ($content === false || $content === '') ? false : $content;
+}
+
+function docxWrite(ZipArchive $zip, string $name, string $content): void
+{
+    $GLOBALS['docxParts'][$name] = $content;
+}
+
+function docxFlushParts(ZipArchive $zip): void
+{
+    foreach ($GLOBALS['docxParts'] as $name => $content) $zip->addFromString($name, $content);
+    $GLOBALS['docxParts'] = [];
+}
+
 function xmlText(DOMDocument $document, string $value): DOMElement
 {
     $text = $document->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:t');
@@ -189,7 +219,7 @@ function imageRowParagraph(DOMDocument $document, array $images): DOMElement
 
 function ensureImageContentType(ZipArchive $zip, string $extension, string $contentType): void
 {
-    $xml = $zip->getFromName('[Content_Types].xml');
+    $xml = docxRead($zip, '[Content_Types].xml');
     if ($xml === false) return;
     $document = new DOMDocument('1.0', 'UTF-8');
     $document->preserveWhiteSpace = false;
@@ -202,7 +232,7 @@ function ensureImageContentType(ZipArchive $zip, string $extension, string $cont
     $default->setAttribute('Extension', $extension);
     $default->setAttribute('ContentType', $contentType);
     $document->documentElement?->appendChild($default);
-    $zip->addFromString('[Content_Types].xml', $document->saveXML());
+    docxWrite($zip, '[Content_Types].xml', $document->saveXML());
 }
 
 function identificationTable(DOMDocument $document, array $lines, ?DOMNode $photo, int $fontSize = 20, ?string $color = null): DOMElement
@@ -241,7 +271,7 @@ function addImageToDocx(ZipArchive $zip, string $dataUrl, int $imageId): ?array
     unset($binary);
     if ($rels === null) {
         $rels = new DOMDocument();
-        $relsXml = $zip->getFromName('word/_rels/document.xml.rels');
+        $relsXml = docxRead($zip, 'word/_rels/document.xml.rels');
         if ($relsXml === false) {
             $rels->loadXML('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>');
         } else {
@@ -250,7 +280,7 @@ function addImageToDocx(ZipArchive $zip, string $dataUrl, int $imageId): ?array
     }
     $rel = $rels->createElementNS('http://schemas.openxmlformats.org/package/2006/relationships', 'Relationship');
     $rid = 'rIdParecer'.$imageId; $rel->setAttribute('Id', $rid); $rel->setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'); $rel->setAttribute('Target', 'media/parecer-'.$imageId.'.'.$ext);
-    $rels->documentElement->appendChild($rel); $zip->addFromString('word/_rels/document.xml.rels', $rels->saveXML());
+    $rels->documentElement->appendChild($rel); docxWrite($zip, 'word/_rels/document.xml.rels', $rels->saveXML());
     return ['rid' => $rid, 'cx' => $cx, 'cy' => $cy];
 }
 
@@ -259,7 +289,7 @@ function forceFontInDocxPackage(ZipArchive $zip, string $fontName): void
 {
     $wordNs = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
     foreach (['word/styles.xml', 'word/stylesWithEffects.xml'] as $stylesPartName) {
-        $stylesXml = $zip->getFromName($stylesPartName);
+        $stylesXml = docxRead($zip, $stylesPartName);
         if ($stylesXml === false) continue;
         $styles = new DOMDocument('1.0', 'UTF-8');
         $styles->preserveWhiteSpace = false;
@@ -299,12 +329,12 @@ function forceFontInDocxPackage(ZipArchive $zip, string $fontName): void
                 '//w:styleLockQFSet',
                 '//w:styleLockTheme',
             ]);
-            $zip->addFromString($stylesPartName, $styles->saveXML());
+            docxWrite($zip, $stylesPartName, $styles->saveXML());
         }
     }
 
     // Evita que fontes major/minor do tema substituam a fonte dos estilos.
-    $themeXml = $zip->getFromName('word/theme/theme1.xml');
+    $themeXml = docxRead($zip, 'word/theme/theme1.xml');
     if ($themeXml !== false) {
         $theme = new DOMDocument('1.0', 'UTF-8');
         $theme->preserveWhiteSpace = false;
@@ -314,12 +344,12 @@ function forceFontInDocxPackage(ZipArchive $zip, string $fontName): void
             foreach ($xpath->query('//a:majorFont/a:latin | //a:minorFont/a:latin') as $latinFont) {
                 $latinFont->setAttribute('typeface', $fontName);
             }
-            $zip->addFromString('word/theme/theme1.xml', $theme->saveXML());
+            docxWrite($zip, 'word/theme/theme1.xml', $theme->saveXML());
         }
     }
 
     // Alguns editores usam a tabela de fontes como fallback do modelo.
-    $fontTableXml = $zip->getFromName('word/fontTable.xml');
+    $fontTableXml = docxRead($zip, 'word/fontTable.xml');
     if ($fontTableXml !== false) {
         $fontTable = new DOMDocument('1.0', 'UTF-8');
         $fontTable->preserveWhiteSpace = false;
@@ -331,7 +361,7 @@ function forceFontInDocxPackage(ZipArchive $zip, string $fontName): void
                 $font->setAttributeNS($wordNs, 'w:name', $fontName);
                 $fontTable->documentElement?->appendChild($font);
             }
-            $zip->addFromString('word/fontTable.xml', $fontTable->saveXML());
+            docxWrite($zip, 'word/fontTable.xml', $fontTable->saveXML());
         }
     }
 
@@ -343,14 +373,14 @@ function forceFontInDocxPackage(ZipArchive $zip, string $fontName): void
         }
     }
     foreach ($partNames as $partName) {
-        $partXml = $zip->getFromName($partName);
+        $partXml = docxRead($zip, $partName);
         if ($partXml === false) continue;
         $part = new DOMDocument('1.0', 'UTF-8');
         $part->preserveWhiteSpace = false;
         if (!$part->loadXML($partXml)) continue;
         removeWordProtectionFromDocumentPart($part);
         forceFontInDocumentPart($part, $fontName);
-        $zip->addFromString($partName, $part->saveXML());
+        docxWrite($zip, $partName, $part->saveXML());
     }
 }
 
@@ -358,7 +388,7 @@ function removeWordProtectionFromPackage(ZipArchive $zip): void
 {
     $wordNs = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
     foreach (['word/settings.xml'] as $partName) {
-        $xml = $zip->getFromName($partName);
+        $xml = docxRead($zip, $partName);
         if ($xml === false) continue;
         $document = new DOMDocument('1.0', 'UTF-8');
         $document->preserveWhiteSpace = false;
@@ -379,7 +409,7 @@ function removeWordProtectionFromPackage(ZipArchive $zip): void
             '//w:trackRevisions',
             '//w:revisionView',
         ]);
-        $zip->addFromString($partName, $document->saveXML());
+        docxWrite($zip, $partName, $document->saveXML());
     }
 }
 
@@ -468,7 +498,7 @@ if ($zip->open($outPath) !== true) {
 removeWordProtectionFromPackage($zip);
 forceFontInDocxPackage($zip, $documentFont);
 
-$xml = $zip->getFromName('word/document.xml');
+$xml = docxRead($zip, 'word/document.xml');
 $document = new DOMDocument('1.0', 'UTF-8');
 $document->preserveWhiteSpace = false;
 $document->loadXML($xml);
@@ -543,7 +573,8 @@ if ($sectionCopy) {
 }
 removeWordProtectionFromDocumentPart($document);
 forceFontInDocumentPart($document, $documentFont);
-$zip->addFromString('word/document.xml', $document->saveXML());
+docxWrite($zip, 'word/document.xml', $document->saveXML());
+docxFlushParts($zip);
 if (!$zip->close()) throw new RuntimeException('Falha ao montar o arquivo .docx.');
 foreach ($GLOBALS['docxTempFiles'] as $tempImage) @unlink($tempImage);
 

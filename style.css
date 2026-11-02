@@ -52,3 +52,10 @@
     font-size:16px!important;
   }
 }
+
+/* Fotos da atividade: contador "X de 50 fotos" e botao x nas fotos novas
+   (telas Registrar/Editar atividade - ver activity-upload.js). */
+.photo-limit{display:block;margin-top:6px;font:600 12px 'DM Sans',sans-serif;color:#236b52}
+.image-previews .photo-new{position:relative;display:inline-block}
+.image-previews .photo-new img{border-color:#9cc9b5}
+.image-previews .photo-remove{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:#b3261e;color:#fff;font:700 14px/22px sans-serif;padding:0;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.3)}

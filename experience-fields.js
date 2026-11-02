@@ -25,7 +25,7 @@ function activityFormV2(){
   window.currentImageEditorMode='none';
   const draft = typeof activityDraft === 'function' ? activityDraft() : {};
   const options = experienceOptions(draft.area || '');
-  open(`<h2 class="modal-title">Registrar atividade</h2><p class="modal-subtitle">Conte o que a turma viveu e registre até 50 fotos da atividade.</p><div class="form-grid"><div class="field"><label>Título da atividade</label><input id="activityTitle" required autofocus placeholder="Ex.: Exploração do jardim" value="${esc(draft.title||'')}"></div><div class="field"><label>Campo de experiência <button type="button" class="manage-experience" onclick="openExperienceManager()">Gerenciar campos</button></label><select id="activityArea" onchange="handleExperienceChoice(this);saveActivityDraft()">${options}</select></div><div class="field"><label>Observações da professora</label><textarea id="activityNote" rows="4" placeholder="O que os alunos fizeram, disseram ou descobriram?">${esc(draft.note||'')}</textarea></div><div class="field"><label>Fotos da atividade <span class="muted">(até 50 imagens)</span></label><div class="activity-upload-actions"><label class="secondary activity-upload-button" for="activityPhotos">Escolher fotos</label><label class="secondary activity-upload-button activity-camera-button" for="activityCamera">Abrir camera</label></div><input id="activityPhotos" class="activity-file-input" type="file" accept="image/*" multiple onchange="selectActivityPhotos(this)"><input id="activityCamera" class="activity-file-input" type="file" accept="image/*" capture="environment" data-append="1" onchange="selectActivityPhotos(this)"><div id="imagePreviews" class="image-previews"></div><small class="muted">Escolha fotos da galeria ou use a camera no celular. Limite de 50 imagens.</small></div></div><div class="form-actions"><button class="secondary" type="button" onclick="document.querySelector('#modal').close()">Cancelar</button><button class="primary" type="button" onclick="addActivitySaveV2()">Registrar atividade</button></div>`);
+  open(`<h2 class="modal-title">Registrar atividade</h2><p class="modal-subtitle">Conte o que a turma viveu e registre até 50 fotos da atividade.</p><div class="form-grid"><div class="field"><label>Título da atividade</label><input id="activityTitle" required autofocus placeholder="Ex.: Exploração do jardim" value="${esc(draft.title||'')}"></div><div class="field"><label>Campo de experiência <button type="button" class="manage-experience" onclick="openExperienceManager()">Gerenciar campos</button></label><select id="activityArea" onchange="handleExperienceChoice(this);saveActivityDraft()">${options}</select></div><div class="field"><label>Observações da professora</label><textarea id="activityNote" rows="4" placeholder="O que os alunos fizeram, disseram ou descobriram?">${esc(draft.note||'')}</textarea></div><div class="field"><label>Fotos da atividade <span class="muted">(até 50 imagens)</span></label><div class="activity-upload-actions"><label class="secondary activity-upload-button" for="activityPhotos">Escolher fotos</label><label class="secondary activity-upload-button activity-camera-button" for="activityCamera">Abrir camera</label></div><input id="activityPhotos" class="activity-file-input" type="file" accept="image/*" multiple data-append="1" onchange="selectActivityPhotos(this)"><input id="activityCamera" class="activity-file-input" type="file" accept="image/*" capture="environment" data-append="1" onchange="selectActivityPhotos(this)"><div id="imagePreviews" class="image-previews"></div><small class="muted">Escolha fotos da galeria ou use a camera no celular.</small><small id="activityPhotoLimit" class="photo-limit">${window.PortalActivityPhotos ? window.PortalActivityPhotos.limitText(0) : '0 de 50 fotos.'}</small></div></div><div class="form-actions"><button class="secondary" type="button" onclick="document.querySelector('#modal').close()">Cancelar</button><button class="primary" type="button" onclick="addActivitySaveV2()">Registrar atividade</button></div>`);
 }
 
 function handleExperienceChoice(select){
@@ -108,3 +108,18 @@ window.editActivity = function editActivityWithExperienceFields(activityId){
 $('#addActivity').onclick = activityFormV2;
 $('#emptyAddActivity').onclick = activityFormV2;
 loadExperienceFields();
+
+// Tela "Registrar atividade": miniaturas das fotos escolhidas (cada uma com x
+// para remover antes de salvar) e contador "X de 50 fotos. Voce ainda pode
+// adicionar Y." (ver window.PortalActivityPhotos em activity-upload.js).
+// Chamado por selectActivityPhotos (app.js) sempre que a lista muda.
+function refreshNewActivityPhotos(){
+  if (window.PortalActivityPhotos) window.PortalActivityPhotos.render('#imagePreviews', '#activityPhotoLimit', [], activityFiles, 'removeNewActivityPhoto');
+  else renderActivityPreviews('#imagePreviews', activityFiles);
+}
+function removeNewActivityPhoto(index){
+  activityFiles.splice(index, 1);
+  refreshNewActivityPhotos();
+}
+window.refreshNewActivityPhotos = refreshNewActivityPhotos;
+window.removeNewActivityPhoto = removeNewActivityPhoto;

@@ -3587,7 +3587,20 @@ try {
         $exists = $pdo->prepare('SELECT id FROM atividades WHERE id=? AND usuario_id=?');
         $exists->execute([$activityId, $ownerId]);
         if (!$exists->fetchColumn()) throw new RuntimeException('Atividade não encontrada.');
-        $pdo->prepare('DELETE FROM atividade_fotos WHERE atividade_id=?')->execute([$activityId]);
+        // keepPhotos: edicao que so ACRESCENTA fotos (tela "Editar atividade").
+        // As fotos atuais ficam e as novas chegam depois pelo appendPhotos.
+        // Sem keepPhotos, as fotos da atividade sao substituidas (comportamento antigo,
+        // usado ao reenviar uma atividade nova cujo envio parou no meio).
+        if (empty($input['keepPhotos'])) {
+            $pdo->prepare('DELETE FROM atividade_fotos WHERE atividade_id=?')->execute([$activityId]);
+        } else {
+            $currentCount = $pdo->prepare('SELECT COUNT(*) FROM atividade_fotos WHERE atividade_id=?');
+            $currentCount->execute([$activityId]);
+            if ((int) $currentCount->fetchColumn() + count($photos) > 50) {
+                http_response_code(422);
+                throw new RuntimeException('A atividade pode ter no máximo 50 fotos.');
+            }
+        }
     } else {
         $classId=(int)($input['classId']??0);$classCheck=$pdo->prepare('SELECT id FROM turmas WHERE id=? AND usuario_id=?');$classCheck->execute([$classId,$ownerId]);if(!$classCheck->fetchColumn()){$classCheck=$pdo->prepare('SELECT id FROM turmas WHERE usuario_id=? ORDER BY id LIMIT 1');$classCheck->execute([$ownerId]);$classId=(int)$classCheck->fetchColumn();}if($classId<=0){$pdo->prepare("INSERT INTO turmas (usuario_id,nome,etapa,turno) VALUES (?,?,?,?)")->execute([$ownerId,'Turma inicial','Educacao Infantil','Integral']);$classId=(int)$pdo->lastInsertId();}
         $periodId=(int)($input['periodId']??0);$periodCheck=$pdo->prepare('SELECT id FROM periodos_avaliativos WHERE id=? AND usuario_id=?');$periodCheck->execute([$periodId,$ownerId]);if(!$periodCheck->fetchColumn()){$periodCheck=$pdo->prepare('SELECT id FROM periodos_avaliativos WHERE ativo=1 AND usuario_id=? ORDER BY id DESC LIMIT 1');$periodCheck->execute([$ownerId]);$periodId=(int)$periodCheck->fetchColumn();}if($periodId<=0){$pdo->prepare("INSERT INTO periodos_avaliativos (usuario_id,nome,data_inicio,data_fim,ativo) VALUES (?,?,?,?,1)")->execute([$ownerId,'Periodo inicial',date('Y-01-01'),date('Y-12-31')]);$periodId=(int)$pdo->lastInsertId();}
@@ -3606,6 +3619,11 @@ try {
         }
         $insertPhoto->execute([$activityId, $binary, $matches[1]]);
     }
+    // Total real de fotos gravadas (inclui as que ja existiam, no caso de keepPhotos).
+    // O front-end usa esse numero como ponto de partida (offset) dos proximos lotes.
+    $photoTotal = $pdo->prepare('SELECT COUNT(*) FROM atividade_fotos WHERE atividade_id=?');
+    $photoTotal->execute([$activityId]);
+    $savedPhotoCount = (int) $photoTotal->fetchColumn();
     $pdo->commit();
     $dateQuery = $pdo->prepare('SELECT DATE_FORMAT(data_atividade, "%d/%m/%Y") FROM atividades WHERE id=? AND usuario_id=?');
     $dateQuery->execute([$activityId, $ownerId]);
@@ -3619,7 +3637,7 @@ try {
             'note' => $note,
             'date' => (string) ($dateQuery->fetchColumn() ?: date('d/m/Y')),
             'photos' => [],
-            'photoCount' => count($photos),
+            'photoCount' => $savedPhotoCount,
         ],
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $error) {

@@ -64,3 +64,5 @@
 .activity-note-field{min-height:260px;resize:vertical;line-height:1.5}
 /* Botao "Escolher outras fotos desta atividade" no bloco em edicao (etapa 2). */
 .linked-activity .linked-activity-photos{display:block;margin-top:6px;padding:0;text-align:left}
+/* Bloco de vivencia destacado ao voltar de "Salvar e voltar" (revisao do documento). */
+.document-entry.entry-focus{outline:2px solid #2f8f6b;outline-offset:6px;border-radius:6px;transition:outline-color .4s}

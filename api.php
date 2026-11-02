@@ -3506,7 +3506,7 @@ try {
     $area = trim((string) ($input['area'] ?? ''));
     $note = trim((string) ($input['note'] ?? ''));
     $photos = $input['photos'] ?? [];
-    if ($title === '' || $area === '' || !is_array($photos) || count($photos) > 30) {
+    if ($title === '' || $area === '' || !is_array($photos) || count($photos) > 50) {
         http_response_code(422);
         throw new RuntimeException('Dados da atividade inválidos.');
     }

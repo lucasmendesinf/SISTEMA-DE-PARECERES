@@ -184,7 +184,7 @@ function addImageToDocx(ZipArchive $zip, string $dataUrl, int $imageId): ?array
     if (!preg_match('#^data:(image/(?:jpeg|jpg|png));base64,(.+)$#', $dataUrl, $matches)) return null;
     $binary = base64_decode($matches[2], true); if ($binary === false) return null;
     $size = @getimagesizefromstring($binary); if (!$size) return null;
-    [$width, $height] = $size; $scale = min(2179320 / $width, 3432000 / $height); $cx = (int)($width * $scale); $cy = (int)($height * $scale);
+    [$width, $height] = $size; $scale = min(2397252 / $width, 3775200 / $height); $cx = (int)($width * $scale); $cy = (int)($height * $scale);
     $ext = str_contains($matches[1], 'png') ? 'png' : 'jpg';
     ensureImageContentType($zip, 'png', 'image/png');
     ensureImageContentType($zip, 'jpg', 'image/jpeg');

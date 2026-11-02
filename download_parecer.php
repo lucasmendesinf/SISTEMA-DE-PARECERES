@@ -1,6 +1,46 @@
 <?php
 declare(strict_types=1);
 
+// -----------------------------------------------------------------------------
+// Geracao do Word (.docx) do parecer/portfolio.
+// Se algo der errado, em vez de uma pagina em branco "HTTP ERROR 500" a pessoa
+// ve o motivo (e ele fica registrado no error_log do servidor), para facilitar
+// o suporte. Tambem pede mais memoria/tempo, pois documentos com muitas fotos
+// precisam montar todas as imagens dentro do arquivo.
+// -----------------------------------------------------------------------------
+// function_exists: algumas hospedagens desativam ini_set/set_time_limit.
+if (function_exists('ini_set')) {
+    @ini_set('memory_limit', '256M');
+    @ini_set('display_errors', '0');
+}
+if (function_exists('set_time_limit')) @set_time_limit(120);
+
+function docxFailure(string $message, string $file = '', int $line = 0): void
+{
+    error_log('download_parecer.php: ' . $message . ($file !== '' ? " em {$file}:{$line}" : ''));
+    if (!headers_sent()) {
+        http_response_code(500);
+        header_remove('Content-Disposition');
+        header_remove('Content-Length');
+        header('Content-Type: text/plain; charset=utf-8');
+    }
+    echo "Nao foi possivel gerar o documento Word.\n\nMotivo: {$message}" . ($line ? " (linha {$line})" : '')
+        . "\nPHP " . PHP_VERSION . ' - limite de memoria ' . (function_exists('ini_get') ? ini_get('memory_limit') : '?')
+        . "\n\nEnvie esta mensagem ao suporte.";
+}
+set_exception_handler(static function (Throwable $error): void {
+    docxFailure($error->getMessage(), $error->getFile(), $error->getLine());
+});
+register_shutdown_function(static function (): void {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        docxFailure((string) $error['message'], (string) $error['file'], (int) $error['line']);
+    }
+});
+
+// Arquivos temporarios das imagens (apagados depois que o .docx e fechado).
+$GLOBALS['docxTempFiles'] = [];
+
 function xmlText(DOMDocument $document, string $value): DOMElement
 {
     $text = $document->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:t');
@@ -189,7 +229,16 @@ function addImageToDocx(ZipArchive $zip, string $dataUrl, int $imageId): ?array
     ensureImageContentType($zip, 'png', 'image/png');
     ensureImageContentType($zip, 'jpg', 'image/jpeg');
     ensureImageContentType($zip, 'jpeg', 'image/jpeg');
-    $zip->addFromString('word/media/parecer-'.$imageId.'.'.$ext, $binary);
+    // A imagem vai para um arquivo temporario e o ZipArchive le dele so ao fechar
+    // o .docx: assim as fotos nao ficam todas acumuladas na memoria ao mesmo tempo.
+    $tempImage = tempnam(sys_get_temp_dir(), 'parecer_img_');
+    if ($tempImage !== false && file_put_contents($tempImage, $binary) !== false) {
+        $GLOBALS['docxTempFiles'][] = $tempImage;
+        $zip->addFile($tempImage, 'word/media/parecer-'.$imageId.'.'.$ext);
+    } else {
+        $zip->addFromString('word/media/parecer-'.$imageId.'.'.$ext, $binary);
+    }
+    unset($binary);
     if ($rels === null) {
         $rels = new DOMDocument();
         $relsXml = $zip->getFromName('word/_rels/document.xml.rels');
@@ -386,6 +435,8 @@ $documentType = ($_POST['documentType'] ?? '') === 'portfolio' ? 'PORTFÓLIO' : 
 $text = trim((string) ($_POST['text'] ?? ''));
 $studentPhoto = (string) ($_POST['studentPhoto'] ?? '');
 $entries = json_decode((string) ($_POST['entries'] ?? '[]'), true) ?: [];
+// O texto JSON (com todas as fotos em base64) nao e mais necessario: libera memoria.
+unset($_POST['entries']);
 $headerNetwork = trim((string) ($_POST['headerNetwork'] ?? ''));
 $headerSchool = trim((string) ($_POST['headerSchool'] ?? ''));
 $headerContact = trim((string) ($_POST['headerContact'] ?? ''));
@@ -456,7 +507,9 @@ foreach (preg_split('/\R{2,}/u', $text) as $block) {
         $body->appendChild(paragraph($document, $block, ['align' => 'both', 'indent' => true, 'after' => 150, 'size' => $documentFontSize]));
     }
 }
-foreach ($entries as $entry) {
+foreach ($entries as $entryIndex => $entry) {
+    // Libera as fotos deste bloco do array original (a copia $entry ainda as tem).
+    $entries[$entryIndex]['photos'] = [];
     $note = trim((string) ($entry['photoNote'] ?? ''));
     if ($note !== '') appendTextParagraphs($body, $document, $note, ['align' => 'both', 'indent' => true, 'after' => 120, 'size' => $documentFontSize]);
     $row = [];
@@ -491,7 +544,8 @@ if ($sectionCopy) {
 removeWordProtectionFromDocumentPart($document);
 forceFontInDocumentPart($document, $documentFont);
 $zip->addFromString('word/document.xml', $document->saveXML());
-$zip->close();
+if (!$zip->close()) throw new RuntimeException('Falha ao montar o arquivo .docx.');
+foreach ($GLOBALS['docxTempFiles'] as $tempImage) @unlink($tempImage);
 
 $filename = 'parecer-' . preg_replace('/[^\pL\pN]+/u', '-', mb_strtolower($name, 'UTF-8')) . '.docx';
 header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');

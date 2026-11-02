@@ -162,7 +162,7 @@ final class PdfLayout {
         if (!$images) return;
         $prepared = [];
         foreach (array_slice($images, 0, 2) as $image) {
-            $scale = min(204.6 / $image['width'], 303.6 / $image['height']);
+            $scale = min(225.06 / $image['width'], 333.96 / $image['height']);
             $prepared[] = ['image' => $image, 'width' => $image['width'] * $scale, 'height' => $image['height'] * $scale];
         }
         $rowHeight = max(array_column($prepared, 'height'));

@@ -172,10 +172,13 @@ function wizardActivitiesV2() {
   const selectedActivityIds = (wizard.activityIds || []).map(String);
   const hasActiveSelection = selectedActivityIds.length > 0;
   const addedIds = addedActivityIdsOutsideCurrentEntry();
+  // Bloco aberto que ja tem texto ou fotos (editando, ou parecer reaberto com um
+  // bloco so): a atividade vinculada mostra o botao para escolher outras fotos.
+  const activeBlockHasContent = !!(String(wizard.photoNote || '').trim() || (wizard.photos || []).length);
   const activities = data.activities.map(activity => `
     <label class="linked-activity ${addedIds.has(String(activity.id)) || (hasActiveSelection && !selectedActivityIds.includes(String(activity.id))) ? 'is-disabled' : ''}">
       <input class="wizard-activity" type="checkbox" value="${activity.id}" ${selectedActivityIds.includes(String(activity.id)) ? 'checked' : ''} ${addedIds.has(String(activity.id)) || (hasActiveSelection && !selectedActivityIds.includes(String(activity.id))) ? 'disabled' : ''} data-already-added="${addedIds.has(String(activity.id)) ? '1' : '0'}" onchange="selectRegisteredActivityForDocument(this)">
-      <span><strong>${esc(activity.title)}</strong><small>${esc(activity.date)} · ${esc(activity.area)}</small>${editing && selectedActivityIds.includes(String(activity.id)) ? `<button class="ai-adjust linked-activity-photos" type="button" onclick="event.preventDefault();event.stopPropagation();rechooseActivityPhotos('${activity.id}')">Escolher outras fotos desta atividade</button>` : ''}</span>
+      <span><strong>${esc(activity.title)}</strong><small>${esc(activity.date)} · ${esc(activity.area)}</small>${(editing || activeBlockHasContent) && selectedActivityIds.includes(String(activity.id)) ? `<button class="ai-adjust linked-activity-photos" type="button" onclick="event.preventDefault();event.stopPropagation();rechooseActivityPhotos('${activity.id}')">Escolher outras fotos desta atividade</button>` : ''}</span>
       ${activity.photos?.[0] ? `<img src="${activity.photos[0]}" alt="Foto">` : ''}
     </label>
   `).join('') || '<p class="muted">Nenhuma atividade cadastrada.</p>';
@@ -596,10 +599,14 @@ async function rechooseActivityPhotos(activityId) {
 window.rechooseActivityPhotos = rechooseActivityPhotos;
 
 async function selectRegisteredActivityForDocument(input) {
-  // Editando um bloco: marcar uma atividade (inclusive a que ja estava vinculada
-  // e foi desmarcada) abre as fotos dela para escolher imagens para ESTE bloco,
-  // em vez de criar um bloco novo.
-  if (input?.checked && Number.isInteger(wizard.editingEntryIndex)) {
+  // Bloco aberto com conteudo (editando um bloco, ou parecer reaberto com um
+  // bloco so, que abre direto em "Vivencias realizadas"): marcar uma atividade,
+  // inclusive a que ja estava vinculada e foi desmarcada, abre as fotos dela
+  // para escolher imagens para ESTE bloco, em vez de tentar criar um bloco novo
+  // (o que era ignorado quando a atividade ja estava no proprio bloco).
+  const noteField = $('#wizardPhotoNote');
+  const blockHasContent = !!(String(noteField ? noteField.value : (wizard.photoNote || '')).trim() || (wizard.photos || []).length);
+  if (input?.checked && (Number.isInteger(wizard.editingEntryIndex) || blockHasContent)) {
     input.checked = false;
     return rechooseActivityPhotos(input.value);
   }

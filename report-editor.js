@@ -2,7 +2,9 @@ function normalizeWizardEntry(entry = {}) {
   return {
     activityIds: Array.isArray(entry.activityIds) ? entry.activityIds : [],
     photoNote: entry.photoNote || '',
-    photos: Array.isArray(entry.photos) ? entry.photos : []
+    photos: Array.isArray(entry.photos) ? entry.photos : [],
+    // Marca local: bloco que veio de "Informacoes sobre o aluno" (etapa 1).
+    ...(entry.fromMainText ? {fromMainText: true} : {})
   };
 }
 
@@ -10,7 +12,9 @@ function currentWizardEntry() {
   return normalizeWizardEntry({
     activityIds: wizard.activityIds || [],
     photoNote: wizard.photoNote || '',
-    photos: wizard.photos || []
+    photos: wizard.photos || [],
+    // Mantem a marca de bloco vindo de "Informacoes sobre o aluno" ao editar.
+    fromMainText: !!wizard.activeFromMainText
   });
 }
 
@@ -23,6 +27,7 @@ function setActiveWizardEntry(entry = {}) {
   wizard.activityIds = [...normalized.activityIds];
   wizard.photoNote = normalized.photoNote;
   wizard.photos = [...normalized.photos];
+  wizard.activeFromMainText = !!normalized.fromMainText;
 }
 
 function clearActiveWizardEntry() {
@@ -30,6 +35,7 @@ function clearActiveWizardEntry() {
   wizard.photoNote = '';
   wizard.photos = [];
   delete wizard.editingEntryIndex;
+  delete wizard.activeFromMainText;
 }
 
 function addedActivityIdsOutsideCurrentEntry() {
@@ -62,7 +68,8 @@ function splitEntriesByParagraph(entries) {
     return paragraphs.map((paragraph, index) => ({
       activityIds: [...(entry.activityIds || [])],
       photoNote: paragraph,
-      photos: index === paragraphs.length - 1 ? [...(entry.photos || [])] : []
+      photos: index === paragraphs.length - 1 ? [...(entry.photos || [])] : [],
+      ...(entry.fromMainText ? {fromMainText: true} : {})
     }));
   });
 }
@@ -72,6 +79,35 @@ function splitEntriesByParagraph(entries) {
 function entryNoteParagraphs(value) {
   return String(value || '').split(/\r\n|\r|\n/u).map(part => part.trim()).filter(Boolean);
 }
+
+// "Informacoes sobre o aluno" (etapa 1) funciona como o texto das vivencias:
+// cada linha (cada Enter) vira um bloco do documento, com "Editar texto/imagens"
+// e "Remover bloco", e pode receber fotos. O texto digitado na etapa 1 e movido
+// para blocos no inicio do documento (antes das vivencias ja existentes) e o
+// campo fica livre para acrescentar mais texto depois. No PDF/Word o resultado
+// e o mesmo lugar do documento: logo depois do cabecalho.
+function moveMainTextToEntries() {
+  const paragraphs = entryNoteParagraphs(wizard.text);
+  if (!paragraphs.length) {
+    wizard.text = '';
+    return 0;
+  }
+  // Blocos de texto principal ja convertidos ficam no inicio; os novos entram
+  // logo depois deles (antes das vivencias de atividades).
+  const entries = (wizard.entries || []).map(normalizeWizardEntry);
+  let insertAt = 0;
+  while (insertAt < entries.length && entries[insertAt].fromMainText) insertAt += 1;
+  const added = paragraphs.map(paragraph => ({activityIds: [], photoNote: paragraph, photos: [], fromMainText: true}));
+  entries.splice(insertAt, 0, ...added);
+  wizard.entries = entries;
+  wizard.text = '';
+  // Indices de bloco em edicao/destaque se deslocam com os blocos inseridos.
+  if (Number.isInteger(wizard.editingEntryIndex) && wizard.editingEntryIndex >= insertAt) wizard.editingEntryIndex += added.length;
+  if (Number.isInteger(wizard.focusEntryIndex) && wizard.focusEntryIndex >= insertAt) wizard.focusEntryIndex += added.length;
+  persistWizard();
+  return added.length;
+}
+window.moveMainTextToEntries = moveMainTextToEntries;
 
 function wizardEntries() {
   const entries = (wizard.entries || []).map(normalizeWizardEntry);
@@ -188,6 +224,7 @@ async function wizardPhotoCheck(input) {
 
 function wizardActivitiesV2() {
   if ($('#wizardText')) bufferStepOne();
+  moveMainTextToEntries();
   // O texto principal (etapa 1) e opcional: so e preciso escolher o aluno.
   if (!wizard.studentId) {
     alert('Selecione um aluno para continuar.');
@@ -302,8 +339,8 @@ function saveMainParagraph(index) {
 function editAllMainText() {
   wizardOpen(`
     <p class="wizard-step">ETAPA 1 DE 3 · TEXTO PRINCIPAL</p>
-    <h2 class="modal-title">Editar informações sobre o aluno</h2>
-    <p class="modal-subtitle">Aqui você pode alterar todo o texto principal do documento.</p>
+    <h2 class="modal-title">Adicionar informações sobre o aluno</h2>
+    <p class="modal-subtitle">O texto escrito aqui é acrescentado ao início do documento. Cada Enter vira um bloco, que pode ser editado, receber fotos ou ser removido na revisão.</p>
     <div class="field">
       <label>Informações sobre o aluno</label>
       <textarea id="wizardText" oninput="bufferStepOne()" placeholder="Descreva as informações do aluno...">${esc(wizard.text || '')}</textarea>
@@ -331,7 +368,7 @@ function editEntry(index) {
 }
 
 function removeEntry(index) {
-  if (!confirm('Remover este bloco de vivência do documento?')) return;
+  if (!confirm('Remover este bloco do documento?')) return;
   const entries = wizardEntries();
   entries.splice(index, 1);
   wizard.entries = entries;
@@ -341,6 +378,8 @@ function removeEntry(index) {
 }
 
 function openDraftWithSavedImages() {
+  // Texto principal de pareceres antigos vira blocos, como o das vivencias.
+  moveMainTextToEntries();
   // Blocos salvos com varios paragrafos sao divididos (um bloco por paragrafo).
   const entries = splitEntriesByParagraph((wizard.entries || []).map(normalizeWizardEntry).filter(hasWizardEntryContent));
   wizard.entries = entries;
@@ -383,7 +422,7 @@ function documentDraftHtml() {
       </section>
     `;
   }).join('');
-  return `${paragraphs || '<p class="muted">Nenhum texto principal informado.</p>'}${entries}${finalTextHtml()}`;
+  return `${paragraphs || (entries ? '' : '<p class="muted">Nenhum texto informado.</p>')}${entries}${finalTextHtml()}`;
 }
 
 
@@ -642,6 +681,8 @@ async function useRegisteredActivities() {
 async function wizardReviewV2(options = {}) {
   if (wizard.isProcessingPhotos) return alert('Aguarde a edicao das imagens terminar antes de avancar.');
   if (!options.skipBuffer) bufferStepTwo();
+  if ($('#wizardText')) bufferStepOne();
+  moveMainTextToEntries();
   const current = currentWizardEntry();
   if (current.activityIds.length && !current.photoNote && !current.photos.length) await importSelectedRegisteredActivities();
   persistWizard();
@@ -652,7 +693,7 @@ async function wizardReviewV2(options = {}) {
     <h2 class="modal-title">Rascunho do documento</h2>
     <p class="modal-subtitle">Clique em um parágrafo ou bloco para editar exatamente o trecho desejado.</p>
     <div class="review-toolbar">
-      <button class="secondary" type="button" onclick="editAllMainText()">Editar texto principal</button>
+      <button class="secondary" type="button" onclick="editAllMainText()">+ Adicionar texto sobre o aluno</button>
       <button class="primary review-add-entry" type="button" onclick="wizardAddMore()">+ Adicionar nova vivência</button>
       ${finalTextOptionHtml()}
     </div>
@@ -897,7 +938,7 @@ function ensureLocalWizardDraft() {
   try {
     if (!wizard || wizard.readOnly) return null;
     const studentId = wizard.studentId;
-    if (!studentId || !String(wizard.text || '').trim()) return null;
+    if (!studentId || (!String(wizard.text || '').trim() && !wizardEntries().length)) return null;
     const entries = wizardEntries();
     const activityIds = [...new Set(entries.flatMap(entry => entry.activityIds || []))];
     let report = currentWizardReport();
@@ -1088,7 +1129,7 @@ document.addEventListener('blur', event => {
 }, true);
 
 document.querySelector('#modal')?.addEventListener('close', () => {
-  if (!wizard || wizard.readOnly || !String(wizard.text || '').trim()) return;
+  if (!wizard || wizard.readOnly || (!String(wizard.text || '').trim() && !wizardEntries().length)) return;
   ensureLocalWizardDraft();
   persistWizard();
   if (typeof render === 'function') render();

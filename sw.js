@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'ai-prof-pwa-20261102-bloco-paragrafo-1';
+const CACHE_VERSION = 'ai-prof-pwa-20261102-texto-blocos-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
   './manifest.json?v=20260908-mobile-image-editor-1',
-  './pwa.js?v=20261102-bloco-paragrafo-1',
+  './pwa.js?v=20261102-texto-blocos-1',
   './login.css?v=20260908-mobile-image-editor-1',
   './style.css?v=20261102-bloco-paragrafo-1',
   './mobile-menu.css?v=20260809-mobile-menu-readable-1',
@@ -34,8 +34,8 @@ const STATIC_ASSETS = [
   './experience-fields.js?v=20261102-blocos-1',
   './modal-controls.js?v=20260715-onboarding-draft-1',
   './app.js?v=20261102-blocos-1',
-  './document-type.js?v=20260910-student-period-guard-1',
-  './report-editor.js?v=20261102-bloco-paragrafo-1',
+  './document-type.js?v=20261102-texto-blocos-1',
+  './report-editor.js?v=20261102-texto-blocos-1',
   './document-style-settings.js?v=20260716-force-docx-font-1',
   './text-ai-review.js?v=20260908-mobile-image-editor-1',
   './document-button-fix.js?v=20260717-require-student-1',

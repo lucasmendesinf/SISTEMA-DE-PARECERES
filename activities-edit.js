@@ -174,6 +174,9 @@ async function saveActivityEdit(activityId) {
       button.textContent = 'Salvando...';
     }
     const activePeriod = data.periods.find(item => item.active) || data.periods[0];
+    // Salva via activity-upload.js: as fotos vao em lotes de 5, com progresso
+    // e novas tentativas automaticas. Com id, as fotos antigas sao substituidas.
+    // Se o envio parar no meio, basta salvar de novo (o id e o mesmo).
     const status = $('#editActivityPhotoStatus');
     const result = await window.PortalActivityUpload.saveActivity({
       id: activityId,

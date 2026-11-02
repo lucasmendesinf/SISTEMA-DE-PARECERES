@@ -3378,7 +3378,8 @@ try {
         $classId = (int) ($student['classId'] ?? 1);
         $text = trim((string) ($input['text'] ?? ''));
         $documentType = ($input['documentType'] ?? '') === 'portfolio' ? 'portfolio' : 'parecer';
-        if ($name === '' || ($text === '' && empty($input['draft']))) throw new RuntimeException('Dados do parecer inválidos.');
+        // O texto principal e opcional quando o documento tem blocos de vivencia.
+        if ($name === '' || ($text === '' && empty($input['draft']) && empty($input['entries']))) throw new RuntimeException('Dados do parecer inválidos.');
         $pdo->beginTransaction();
         $classCheck = $pdo->prepare('SELECT id FROM turmas WHERE id = ? AND usuario_id=?'); $classCheck->execute([$classId,$ownerId]);
         if (!$classCheck->fetchColumn()) { $classCheck=$pdo->prepare('SELECT id FROM turmas WHERE usuario_id=? ORDER BY id LIMIT 1');$classCheck->execute([$ownerId]);$classId=(int)$classCheck->fetchColumn(); }

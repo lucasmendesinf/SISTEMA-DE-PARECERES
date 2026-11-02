@@ -3497,6 +3497,60 @@ try {
     }
 
     $input = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+
+    // Envio das fotos em lotes: a atividade e salva com o primeiro lote e as
+    // demais fotos chegam aqui em requisicoes pequenas, para nao esbarrar no
+    // limite de tamanho do servidor nem em conexoes lentas.
+    if (($input['action'] ?? '') === 'appendPhotos') {
+        $activityId = (int) ($input['id'] ?? 0);
+        $offset = (int) ($input['offset'] ?? -1);
+        $photos = $input['photos'] ?? [];
+        if ($activityId <= 0 || $offset < 0 || !is_array($photos) || count($photos) === 0 || count($photos) > 10) {
+            http_response_code(422);
+            throw new RuntimeException('Lote de fotos inválido.');
+        }
+        $pdo->beginTransaction();
+        $owner = $pdo->prepare('SELECT id FROM atividades WHERE id=? AND usuario_id=? FOR UPDATE');
+        $owner->execute([$activityId, $ownerId]);
+        if (!$owner->fetchColumn()) {
+            http_response_code(404);
+            throw new RuntimeException('Atividade não encontrada.');
+        }
+        $countQuery = $pdo->prepare('SELECT COUNT(*) FROM atividade_fotos WHERE atividade_id=?');
+        $countQuery->execute([$activityId]);
+        $existing = (int) $countQuery->fetchColumn();
+        if ($existing === $offset + count($photos)) {
+            // Este lote ja foi gravado (nova tentativa apos falha de conexao).
+            $pdo->commit();
+            echo json_encode(['id' => $activityId, 'photoCount' => $existing], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($existing !== $offset) {
+            http_response_code(409);
+            throw new RuntimeException('As fotos da atividade mudaram durante o envio. Salve a atividade novamente.');
+        }
+        if ($existing + count($photos) > 50) {
+            http_response_code(422);
+            throw new RuntimeException('A atividade pode ter no máximo 50 fotos.');
+        }
+        $insertPhoto = $pdo->prepare('INSERT INTO atividade_fotos (atividade_id, arquivo, mime_type) VALUES (?, ?, ?)');
+        foreach ($photos as $dataUrl) {
+            if (!is_string($dataUrl) || !preg_match('#^data:([\w/+.-]+);base64,(.+)$#', $dataUrl, $matches)) {
+                http_response_code(422);
+                throw new RuntimeException('Formato de imagem inválido.');
+            }
+            $binary = base64_decode($matches[2], true);
+            if ($binary === false || strlen($binary) > 5 * 1024 * 1024) {
+                http_response_code(422);
+                throw new RuntimeException('A imagem deve ter até 5 MB.');
+            }
+            $insertPhoto->execute([$activityId, $binary, $matches[1]]);
+        }
+        $pdo->commit();
+        echo json_encode(['id' => $activityId, 'photoCount' => $existing + count($photos)], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     $editorMode = (string) ($input['imageEditorMode'] ?? 'none');
     if (!in_array($editorMode, ['none', 'manual', 'ai'], true) || !$canUseEditor($editorMode, $loadCurrentUser())) {
         http_response_code(403);

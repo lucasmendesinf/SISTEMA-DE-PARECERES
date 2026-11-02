@@ -19,6 +19,7 @@ async function loadExperienceFields(){
 
 function activityFormV2(){
   activityFiles=[];
+  window.pendingActivityId=null;
   window.currentImageEditorMode='none';
   const draft = typeof activityDraft === 'function' ? activityDraft() : {};
   const options = experienceOptions(draft.area || '');

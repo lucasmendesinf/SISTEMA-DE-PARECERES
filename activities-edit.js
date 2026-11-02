@@ -174,22 +174,17 @@ async function saveActivityEdit(activityId) {
       button.textContent = 'Salvando...';
     }
     const activePeriod = data.periods.find(item => item.active) || data.periods[0];
-    const response = await fetch('api.php?resource=activities', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        id: activityId,
-        title,
-        area: $('#editActivityArea').value,
-        note: $('#editActivityNote').value.trim() || 'Registro de vivencia da turma.',
-        photos: editingActivityPhotos.filter(photo => String(photo).startsWith('data:image/')),
-        classId: 1,
-        periodId: activePeriod?.id || 1,
-        imageEditorMode: editingActivityPhotos.length ? editingActivityImageEditorMode : 'none'
-      })
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || 'Nao foi possivel salvar a atividade.');
+    const status = $('#editActivityPhotoStatus');
+    const result = await window.PortalActivityUpload.saveActivity({
+      id: activityId,
+      title,
+      area: $('#editActivityArea').value,
+      note: $('#editActivityNote').value.trim() || 'Registro de vivencia da turma.',
+      photos: editingActivityPhotos.filter(photo => String(photo).startsWith('data:image/')),
+      classId: 1,
+      periodId: activePeriod?.id || 1,
+      imageEditorMode: editingActivityPhotos.length ? editingActivityImageEditorMode : 'none'
+    }, (sent, total) => { if (status && total) status.textContent = `Enviando fotos: ${sent} de ${total}...`; });
     if (result.activity) {
       result.activity.photos = result.activity.photos?.length ? result.activity.photos : editingActivityPhotos;
       data.activities = data.activities.map(item => String(item.id) === String(result.activity.id) ? result.activity : item);

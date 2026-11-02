@@ -22,7 +22,14 @@
 //      duplica fotos.
 //   5. Lotes que falham por conexao ou erro temporario sao reenviados ate 3 vezes.
 //   6. Se mesmo assim falhar, o erro devolve o id da atividade (activityId) para
-//      que o proximo "salvar" atualize a mesma atividade em vez de criar outra.
+//      que o proximo "salvar" atualize a mesma atividade em vez de criar outra,
+//      e quantas fotos novas ja foram gravadas (sentCount).
+//   7. Na edicao (keepPhotos: true) as fotos que a atividade ja tem sao mantidas
+//      e as novas sao ACRESCENTADAS depois delas.
+//
+// Tambem expoe window.PortalActivityPhotos, usado pelas telas de registrar e
+// editar atividade para mostrar "X de 50 fotos. Voce ainda pode adicionar Y."
+// e as miniaturas (as fotos novas tem um botao x para remover antes de salvar).
 //
 // Usado por: addActivitySaveV2 (app.js) e saveActivityEdit (activities-edit.js).
 // =============================================================================
@@ -36,6 +43,8 @@
   const MAX_ATTEMPTS = 3;
   // Quantas vezes uma foto sozinha pode ser reduzida quando ainda da erro 413.
   const MAX_SHRINKS = 3;
+  // Maximo de fotos por atividade (o mesmo validado no api.php).
+  const MAX_PHOTOS = 50;
 
   // Pausa entre tentativas (cresce a cada tentativa: 1,5 s, 3 s...).
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -125,8 +134,11 @@
 
   // Envia todas as fotos para a atividade ja salva, adaptando o tamanho dos
   // lotes ao limite do servidor. "photos" pode ser alterado (fotos reduzidas).
-  async function sendPhotos(activityId, photos, onProgress) {
+  // startOffset: quantas fotos a atividade ja tem no servidor (edicao que
+  // acrescenta fotos); as novas sao gravadas a partir dessa posicao.
+  async function sendPhotos(activityId, photos, onProgress, startOffset = 0) {
     const total = photos.length;
+    // offset aqui e a posicao dentro das fotos NOVAS; no servidor e startOffset + offset.
     let offset = 0;
     // Limite de fotos por lote; cai pela metade a cada erro 413.
     let maxCount = BATCH_SIZE;
@@ -142,7 +154,7 @@
       const count = batchLength(photos, offset, maxCount);
       const chunk = photos.slice(offset, offset + count);
       try {
-        await postJson({action: 'appendPhotos', id: activityId, offset, photos: chunk}, true);
+        await postJson({action: 'appendPhotos', id: activityId, offset: startOffset + offset, photos: chunk}, true);
       } catch (error) {
         if (error.status === 413) {
           // Envio grande demais: tenta de novo com menos fotos no lote...
@@ -159,6 +171,9 @@
         // A atividade ja existe no banco: o chamador guarda este id para que o
         // proximo clique em "salvar" complete a mesma atividade.
         partial.activityId = activityId;
+        // Quantas fotos novas ja foram gravadas: a tela de edicao tira essas da
+        // lista para que, ao salvar de novo, so as que faltam sejam enviadas.
+        partial.sentCount = offset;
         throw partial;
       }
       offset += count;
@@ -201,24 +216,55 @@
     //    chegam logo em seguida.
     let result;
     try {
-      result = await postJson({...payload, photos: []}, Boolean(payload.id));
+      // keepPhotos so faz sentido em edicao (com id): mantem as fotos atuais.
+      result = await postJson({...payload, photos: [], keepPhotos: Boolean(payload.id && payload.keepPhotos)}, Boolean(payload.id));
     } catch (error) {
       error.message = `Nao foi possivel salvar a atividade. ${error.message}`;
       throw error;
     }
     const activityId = result.id || result.activity?.id;
     if (total && !activityId) throw new Error('Nao foi possivel salvar as fotos: o servidor nao retornou a atividade.');
+    // Na edicao que acrescenta fotos, o servidor informa quantas a atividade ja tem.
+    const existing = payload.keepPhotos ? Number(result.activity?.photoCount || 0) : 0;
+    if (existing + total > MAX_PHOTOS) {
+      const error = new Error(`A atividade ja tem ${existing} foto(s). Voce pode adicionar so mais ${Math.max(0, MAX_PHOTOS - existing)}.`);
+      error.activityId = activityId;
+      error.sentCount = 0;
+      throw error;
+    }
 
     // 2) Envia as fotos em lotes que se ajustam ao limite do servidor.
-    if (total) await sendPhotos(activityId, photos, onProgress);
+    if (total) await sendPhotos(activityId, photos, onProgress, existing);
     if (result.activity) {
-      result.activity.photoCount = total;
-      // Fotos como foram gravadas (algumas podem ter sido reduzidas).
+      result.activity.photoCount = existing + total;
+      // Fotos novas como foram gravadas (algumas podem ter sido reduzidas).
       result.activity.photos = photos;
     }
     return {...result, id: activityId};
   }
 
-  // Exposto globalmente para app.js e activities-edit.js.
+  // Texto do contador mostrado abaixo das fotos.
+  function limitText(count) {
+    const left = Math.max(0, MAX_PHOTOS - count);
+    if (left === 0) return `${count} de ${MAX_PHOTOS} fotos. Limite atingido.`;
+    return `${count} de ${MAX_PHOTOS} fotos. Voce ainda pode adicionar ${left}.`;
+  }
+
+  // Desenha as miniaturas: primeiro as fotos ja salvas (sem botao) e depois as
+  // novas, cada uma com um x que chama window[removeHandler](indice).
+  // Tambem atualiza o contador (elemento limitSelector).
+  function render(previewSelector, limitSelector, saved, added, removeHandler) {
+    const target = document.querySelector(previewSelector);
+    if (target) {
+      const savedHtml = (saved || []).map(src => `<img src="${src}" alt="Foto da atividade">`).join('');
+      const addedHtml = (added || []).map((src, index) => `<span class="photo-new"><img src="${src}" alt="Foto nova"><button type="button" class="photo-remove" aria-label="Remover foto" onclick="${removeHandler}(${index})">&times;</button></span>`).join('');
+      target.innerHTML = savedHtml + addedHtml;
+    }
+    const limit = document.querySelector(limitSelector);
+    if (limit) limit.textContent = limitText((saved || []).length + (added || []).length);
+  }
+
+  // Exposto globalmente para app.js, activities-edit.js e experience-fields.js.
   window.PortalActivityUpload = {saveActivity, BATCH_SIZE};
+  window.PortalActivityPhotos = {MAX_PHOTOS, limitText, render};
 })();

@@ -130,12 +130,39 @@ const activitiesList = document.querySelector('#activitiesList');
 if (activitiesList) new MutationObserver(addActivityEditButtons).observe(activitiesList, {childList: true, subtree: true});
 addActivityEditButtons();
 
+// -----------------------------------------------------------------------------
+// Tela "Editar atividade" (versao atual - substitui as definicoes acima).
+// As fotos que a atividade ja tem sao MANTIDAS: as fotos escolhidas aqui sao
+// acrescentadas depois delas (keepPhotos no api.php). Isso permite, por exemplo,
+// completar uma atividade cujo envio parou no meio.
+//   editingSavedPhotos -> fotos ja gravadas (so exibidas, nao sao reenviadas)
+//   editingActivityPhotos -> fotos NOVAS escolhidas nesta edicao
+// O contador mostra "X de 50 fotos. Voce ainda pode adicionar Y."
+// -----------------------------------------------------------------------------
+let editingSavedPhotos = [];
+
+function refreshEditActivityPhotos() {
+  if (window.PortalActivityPhotos) {
+    window.PortalActivityPhotos.render('#editActivityPreviews', '#editActivityPhotoLimit', editingSavedPhotos, editingActivityPhotos, 'removeEditActivityPhoto');
+  } else {
+    window.PortalActivityImages?.renderPreviews('#editActivityPreviews', [...editingSavedPhotos, ...editingActivityPhotos]);
+  }
+}
+
+// Remove uma foto NOVA (ainda nao salva) da lista.
+function removeEditActivityPhoto(index) {
+  editingActivityPhotos.splice(index, 1);
+  refreshEditActivityPhotos();
+}
+
 function editActivity(activityId) {
   const activity = data.activities.find(item => String(item.id) === String(activityId));
   if (!activity) return;
-  editingActivityPhotos = [...(activity.photos || [])];
+  editingSavedPhotos = [...(activity.photos || [])];
+  editingActivityPhotos = [];
   editingActivityImageEditorMode = 'none';
-  open(`<h2 class="modal-title">Editar atividade</h2><p class="modal-subtitle">Atualize as informacoes e, se necessario, substitua as fotos da atividade.</p><div class="form-grid"><div class="field"><label>Titulo da atividade</label><input id="editActivityTitle" required value="${esc(activity.title)}"></div><div class="field"><label>Campo de experiencia</label><select id="editActivityArea"><option ${activity.area === 'O eu, o outro e o nos' ? 'selected' : ''}>O eu, o outro e o nos</option><option ${activity.area === 'Corpo, gestos e movimentos' ? 'selected' : ''}>Corpo, gestos e movimentos</option><option ${activity.area === 'Tracos, sons, cores e formas' ? 'selected' : ''}>Tracos, sons, cores e formas</option><option ${activity.area === 'Escuta, fala, pensamento e imaginacao' ? 'selected' : ''}>Escuta, fala, pensamento e imaginacao</option><option ${activity.area === 'Espacos, tempos, quantidades, relacoes e transformacoes' ? 'selected' : ''}>Espacos, tempos, quantidades, relacoes e transformacoes</option></select></div><div class="field"><label>Observacoes da professora</label><textarea id="editActivityNote" rows="4">${esc(activity.note)}</textarea><small class="muted">Dica: escreva [NOME] para que apareça o nome do aluno quando esta atividade for usada em um parecer/portfólio.</small></div><div class="field"><label>Fotos da atividade <span class="muted">(ate 50 imagens)</span></label><div id="editActivityPreviews" class="image-previews">${editingActivityPhotos.map(photo => `<img src="${photo}" alt="Foto da atividade">`).join('')}</div><div class="activity-upload-actions"><label class="secondary activity-upload-button" for="editActivityPhotos">Escolher fotos</label><label class="secondary activity-upload-button activity-camera-button" for="editActivityCamera">Abrir camera</label></div><input id="editActivityPhotos" class="activity-file-input" type="file" accept="image/*" multiple onchange="selectEditActivityPhotos(this)"><input id="editActivityCamera" class="activity-file-input" type="file" accept="image/*" capture="environment" data-append="1" onchange="selectEditActivityPhotos(this)"><small id="editActivityPhotoStatus" class="muted">As fotos serao otimizadas antes de salvar. Limite de 50 imagens.</small></div></div><div class="form-actions"><button class="secondary" type="button" onclick="document.querySelector('#modal').close()">Cancelar</button><button class="primary" id="saveEditActivityButton" type="button" onclick="saveActivityEdit('${activity.id}')">Salvar atividade</button></div>`);
+  open(`<h2 class="modal-title">Editar atividade</h2><p class="modal-subtitle">Atualize as informacoes e acrescente novas fotos. As fotos que a atividade ja tem sao mantidas.</p><div class="form-grid"><div class="field"><label>Titulo da atividade</label><input id="editActivityTitle" required value="${esc(activity.title)}"></div><div class="field"><label>Campo de experiencia</label><select id="editActivityArea"><option ${activity.area === 'O eu, o outro e o nos' ? 'selected' : ''}>O eu, o outro e o nos</option><option ${activity.area === 'Corpo, gestos e movimentos' ? 'selected' : ''}>Corpo, gestos e movimentos</option><option ${activity.area === 'Tracos, sons, cores e formas' ? 'selected' : ''}>Tracos, sons, cores e formas</option><option ${activity.area === 'Escuta, fala, pensamento e imaginacao' ? 'selected' : ''}>Escuta, fala, pensamento e imaginacao</option><option ${activity.area === 'Espacos, tempos, quantidades, relacoes e transformacoes' ? 'selected' : ''}>Espacos, tempos, quantidades, relacoes e transformacoes</option></select></div><div class="field"><label>Observacoes da professora</label><textarea id="editActivityNote" rows="4">${esc(activity.note)}</textarea><small class="muted">Dica: escreva [NOME] para que apareça o nome do aluno quando esta atividade for usada em um parecer/portfólio.</small></div><div class="field"><label>Fotos da atividade <span class="muted">(ate 50 imagens)</span></label><div id="editActivityPreviews" class="image-previews"></div><div class="activity-upload-actions"><label class="secondary activity-upload-button" for="editActivityPhotos">Escolher fotos</label><label class="secondary activity-upload-button activity-camera-button" for="editActivityCamera">Abrir camera</label></div><input id="editActivityPhotos" class="activity-file-input" type="file" accept="image/*" multiple data-append="1" onchange="selectEditActivityPhotos(this)"><input id="editActivityCamera" class="activity-file-input" type="file" accept="image/*" capture="environment" data-append="1" onchange="selectEditActivityPhotos(this)"><small id="editActivityPhotoStatus" class="muted">As fotos novas serao otimizadas antes de salvar.</small><small id="editActivityPhotoLimit" class="photo-limit"></small></div></div><div class="form-actions"><button class="secondary" type="button" onclick="document.querySelector('#modal').close()">Cancelar</button><button class="primary" id="saveEditActivityButton" type="button" onclick="saveActivityEdit('${activity.id}')">Salvar atividade</button></div>`);
+  refreshEditActivityPhotos();
 }
 
 async function selectEditActivityPhotos(input) {
@@ -143,19 +170,19 @@ async function selectEditActivityPhotos(input) {
   try {
     const files = [...input.files];
     if (!files.length) return;
-    if ((input.dataset.append ? editingActivityPhotos.length : 0) + files.length > 50) throw new Error('Selecione no maximo 50 imagens.');
+    // Limite conta as fotos ja salvas + as novas ja escolhidas + as que chegaram agora.
+    const left = 50 - editingSavedPhotos.length - editingActivityPhotos.length;
+    if (files.length > left) throw new Error(left > 0 ? `O limite e 50 fotos por atividade. Voce ainda pode adicionar ${left}.` : 'Esta atividade ja tem 50 fotos, o limite maximo.');
     window.PortalSaveFeedback?.showLoading('Preparando fotos...');
     const loaded = window.PortalActivityImages
       ? await window.PortalActivityImages.compressFiles(files, '#editActivityPhotoStatus')
       : await Promise.all(files.map(file => window.PortalImageEditors.fileAsDataUrl(file)));
-    editingActivityPhotos = input.dataset.append ? [...editingActivityPhotos, ...loaded] : loaded;
+    editingActivityPhotos = [...editingActivityPhotos, ...loaded];
     editingActivityImageEditorMode = 'none';
-    window.PortalActivityImages?.renderPreviews('#editActivityPreviews', editingActivityPhotos);
+    refreshEditActivityPhotos();
   } catch (error) {
     editingActivityPhotos = previous;
-    window.PortalActivityImages?.renderPreviews('#editActivityPreviews', editingActivityPhotos);
-    const status = document.querySelector('#editActivityPhotoStatus');
-    if (status) status.textContent = editingActivityPhotos.length ? `${editingActivityPhotos.length} foto(s) pronta(s) para salvar.` : '';
+    refreshEditActivityPhotos();
     alert(error.message || 'Nao foi possivel editar as imagens.');
   } finally {
     window.PortalSaveFeedback?.hideLoading();
@@ -174,12 +201,12 @@ async function saveActivityEdit(activityId) {
       button.textContent = 'Salvando...';
     }
     const activePeriod = data.periods.find(item => item.active) || data.periods[0];
-    // Salva via activity-upload.js: as fotos vao em lotes de 5, com progresso
-    // e novas tentativas automaticas. Com id, as fotos antigas sao substituidas.
-    // Se o envio parar no meio, basta salvar de novo (o id e o mesmo).
     const status = $('#editActivityPhotoStatus');
+    // keepPhotos: o servidor mantem as fotos atuais e so as NOVAS sao enviadas,
+    // em lotes, a partir da quantidade que a atividade ja tem.
     const result = await window.PortalActivityUpload.saveActivity({
       id: activityId,
+      keepPhotos: true,
       title,
       area: $('#editActivityArea').value,
       note: $('#editActivityNote').value.trim() || 'Registro de vivencia da turma.',
@@ -187,16 +214,26 @@ async function saveActivityEdit(activityId) {
       classId: 1,
       periodId: activePeriod?.id || 1,
       imageEditorMode: editingActivityPhotos.length ? editingActivityImageEditorMode : 'none'
-    }, (sent, total) => { if (status && total) status.textContent = `Enviando fotos: ${sent} de ${total}...`; });
+    }, (sent, total) => { if (status && total) status.textContent = `Enviando fotos novas: ${sent} de ${total}...`; });
     if (result.activity) {
-      result.activity.photos = result.activity.photos?.length ? result.activity.photos : editingActivityPhotos;
+      // Lista local = fotos que ja existiam + fotos novas gravadas agora.
+      result.activity.photos = [...editingSavedPhotos, ...(result.activity.photos || [])];
       data.activities = data.activities.map(item => String(item.id) === String(result.activity.id) ? result.activity : item);
       if (!data.activities.some(item => String(item.id) === String(result.activity.id))) data.activities.unshift(result.activity);
       render();
     }
     close();
-    if (!result.activity) await loadActivities();
+    loadActivities().catch(error => console.warn('Atividade salva, mas a lista completa nao foi recarregada.', error));
   } catch (error) {
+    // Se parte das fotos novas ja foi gravada, elas passam para "ja salvas" e
+    // saem da lista de novas: salvar de novo envia so as que faltam.
+    if (error.sentCount) {
+      editingSavedPhotos = [...editingSavedPhotos, ...editingActivityPhotos.slice(0, error.sentCount)];
+      editingActivityPhotos = editingActivityPhotos.slice(error.sentCount);
+      refreshEditActivityPhotos();
+    }
+    const statusAfterError = $('#editActivityPhotoStatus');
+    if (statusAfterError) statusAfterError.textContent = editingActivityPhotos.length ? `${editingActivityPhotos.length} foto(s) nova(s) ainda nao enviada(s).` : '';
     alert(error.message);
   } finally {
     if (button) {
@@ -209,3 +246,4 @@ async function saveActivityEdit(activityId) {
 window.editActivity = editActivity;
 window.saveActivityEdit = saveActivityEdit;
 window.selectEditActivityPhotos = selectEditActivityPhotos;
+window.removeEditActivityPhoto = removeEditActivityPhoto;

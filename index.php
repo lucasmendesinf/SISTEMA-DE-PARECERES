@@ -218,7 +218,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="experience-fields.js?v=20261102-blocos-1"></script>
   <script src="modal-controls.js?v=20260812-close-x-fix-1"></script>
   <script src="report-type-badge.js"></script>
-  <script src="report-editor.js?v=20261102-texto-blocos-1"></script>
+  <script src="report-editor.js?v=20261103-10-fotos-bloco-1"></script>
   <script src="performance-optimizations.js?v=20260812-local-draft-open-1"></script>
   <script src="document-style-settings.js?v=20260716-force-docx-font-1"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
@@ -242,6 +242,6 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>
   <script src="image-editor-flow.js?v=20260911-keep-photo-on-editor-close-1"></script>
   <script src="document-image-zoom.js?v=20260702-document-image-zoom-front-1"></script>
-  <script src="pwa.js?v=20261102-texto-blocos-1"></script>
+  <script src="pwa.js?v=20261103-10-fotos-bloco-1"></script>
 </body>
 </html>

@@ -1,3 +1,6 @@
+// Maximo de fotos por bloco do documento (vivencia ou texto do aluno).
+const WIZARD_BLOCK_PHOTO_LIMIT = 10;
+
 function normalizeWizardEntry(entry = {}) {
   return {
     activityIds: Array.isArray(entry.activityIds) ? entry.activityIds : [],
@@ -202,15 +205,20 @@ async function wizardPhotoCheck(input) {
   if (!input?.files?.length) return;
   try {
     const currentPhotos = Array.isArray(wizard.photos) ? wizard.photos : [];
-    const remainingSlots = Math.max(0, 3 - currentPhotos.length);
+    const remainingSlots = Math.max(0, WIZARD_BLOCK_PHOTO_LIMIT - currentPhotos.length);
     if (!remainingSlots) {
       input.value = '';
-      alert('Este bloco ja possui 3 imagens. Remova uma foto antes de adicionar outra.');
+      alert(`Este bloco ja possui ${WIZARD_BLOCK_PHOTO_LIMIT} imagens. Remova uma foto antes de adicionar outra.`);
+      return;
+    }
+    if (input.files.length > remainingSlots) {
+      input.value = '';
+      alert(`O limite e ${WIZARD_BLOCK_PHOTO_LIMIT} imagens por bloco. Voce ainda pode adicionar ${remainingSlots}.`);
       return;
     }
     setWizardPhotoProcessing(true, 'Carregando imagens no sistema...');
     const result = await window.PortalImageEditors.processFiles(input.files, remainingSlots);
-    wizard.photos = [...currentPhotos, ...(result.photos || [])].slice(0, 3);
+    wizard.photos = [...currentPhotos, ...(result.photos || [])].slice(0, WIZARD_BLOCK_PHOTO_LIMIT);
     wizard.imageEditorMode = result.mode;
     input.value = '';
     setWizardPhotoProcessing(false);
@@ -257,7 +265,7 @@ function wizardActivitiesV2() {
       <button class="ai-adjust" type="button" onclick="useRegisteredActivities()">+ Usar atividades selecionadas no documento</button>
     </div>
     <div class="field">
-      <label>Fotos da atividade <span class="muted">(até 3 imagens por bloco)</span></label>
+      <label>Fotos da atividade <span class="muted">(até ${WIZARD_BLOCK_PHOTO_LIMIT} imagens por bloco)</span></label>
       <label id="wizardDropzone" class="dropzone" ondragover="wizardDrag(event)" ondragleave="wizardLeave()" ondrop="wizardDrop(event)">
         <strong>${wizard.photos?.length ? 'Adicionar mais imagens' : 'Arraste as imagens aqui'}</strong>
         <span>${wizard.photos?.length ? 'As imagens ja editadas continuam abaixo; voce pode reeditar, remover ou acrescentar novas.' : 'ou clique para escolher arquivos'}</span>
@@ -536,7 +544,8 @@ async function registeredActivityEntry(activity) {
   return {activityIds: [activity.id], photoNote: activity.note || activity.title, photos: editedPhotos};
 }
 
-function chooseRegisteredActivityPhotos(activity, photos = []) {
+// maxCount: quantas fotos ainda cabem no bloco (limite de WIZARD_BLOCK_PHOTO_LIMIT).
+function chooseRegisteredActivityPhotos(activity, photos = [], maxCount = WIZARD_BLOCK_PHOTO_LIMIT) {
   if (!photos.length) return Promise.resolve([]);
   return new Promise(resolve => {
     const shell = document.createElement('dialog');
@@ -546,7 +555,7 @@ function chooseRegisteredActivityPhotos(activity, photos = []) {
         <button class="image-editor-close" type="button" data-photo-cancel aria-label="Fechar">x</button>
         <p class="wizard-step">SELECIONE AS FOTOS</p>
         <h2>${esc(activity.title || 'Atividade')}</h2>
-        <p class="modal-subtitle">Escolha as imagens que deseja usar neste documento. Depois disso, cada imagem escolhida abrira no editor.</p>
+        <p class="modal-subtitle">Escolha ate ${maxCount} imagem(ns) para este bloco. Depois disso, cada imagem escolhida abrira no editor.</p>
         <div class="activity-photo-mosaic">
           ${photos.map((photo, index) => `
             <label class="activity-photo-choice">
@@ -582,6 +591,10 @@ function chooseRegisteredActivityPhotos(activity, photos = []) {
         alert('Selecione pelo menos uma imagem ou escolha Adicionar sem imagens.');
         return;
       }
+      if (indexes.length > maxCount) {
+        alert(`Escolha no maximo ${maxCount} imagem(ns) para este bloco (limite de ${WIZARD_BLOCK_PHOTO_LIMIT} por bloco).`);
+        return;
+      }
       close(indexes.map(index => photos[index]).filter(Boolean));
     });
   });
@@ -597,7 +610,9 @@ async function rechooseActivityPhotos(activityId) {
   await refreshSelectedRegisteredActivities([activityId]);
   const activity = (data.activities || []).find(item => String(item.id) === String(activityId));
   if (!activity) return alert('Nao foi possivel localizar esta atividade.');
-  const chosen = await chooseRegisteredActivityPhotos(activity, Array.isArray(activity.photos) ? activity.photos : []);
+  const remainingSlots = WIZARD_BLOCK_PHOTO_LIMIT - (wizard.photos || []).length;
+  if (remainingSlots <= 0) return alert(`Este bloco ja possui ${WIZARD_BLOCK_PHOTO_LIMIT} imagens. Remova uma foto antes de adicionar outra.`);
+  const chosen = await chooseRegisteredActivityPhotos(activity, Array.isArray(activity.photos) ? activity.photos : [], remainingSlots);
   if (!chosen || !chosen.length) return;
   try {
     setWizardPhotoProcessing(true, 'Abrindo imagens para edicao...');

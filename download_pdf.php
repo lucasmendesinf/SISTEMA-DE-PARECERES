@@ -161,19 +161,21 @@ final class PdfLayout {
     public function imageRow(array $images): void {
         if (!$images) return;
         $prepared = [];
-        foreach (array_slice($images, 0, 2) as $image) {
-            $scale = min(225.06 / $image['width'], 333.96 / $image['height']);
+        // Fotos das vivencias em linhas de 3, ocupando a mesma largura que as
+        // linhas de 2 ocupavam (468 pt): cada foto ate 148 x 220 pt.
+        foreach (array_slice($images, 0, 3) as $image) {
+            $scale = min(148.0 / $image['width'], 219.6 / $image['height']);
             $prepared[] = ['image' => $image, 'width' => $image['width'] * $scale, 'height' => $image['height'] * $scale];
         }
         $rowHeight = max(array_column($prepared, 'height'));
         $this->ensure($rowHeight + 20);
-        $total = array_sum(array_column($prepared, 'width')) + (count($prepared) - 1) * 18;
+        $total = array_sum(array_column($prepared, 'width')) + (count($prepared) - 1) * 12;
         $x = (595 - $total) / 2; $y = $this->y() - $rowHeight;
         foreach ($prepared as $item) {
             $imageY = $y + ($rowHeight - $item['height']);
             $this->pages[$this->page]['content'] .= sprintf("q %.2F 0 0 %.2F %.2F %.2F cm /%s Do Q\n", $item['width'], $item['height'], $x, $imageY, $item['image']['name']);
             $this->pages[$this->page]['images'][$item['image']['name']] = true;
-            $x += $item['width'] + 18;
+            $x += $item['width'] + 12;
         }
         $this->setY($y - 18);
     }
@@ -283,7 +285,7 @@ foreach ($entryBlocks as $entry) {
             if ($noteBlock !== '') $layout->paragraph($noteBlock);
         }
     }
-    foreach (array_chunk($entry['images'], 2) as $row) $layout->imageRow($row);
+    foreach (array_chunk($entry['images'], 3) as $row) $layout->imageRow($row);
 }
 if ($finalText !== '') $layout->paragraph($finalText);
 $layout->setY($layout->y() - 8);

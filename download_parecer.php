@@ -544,10 +544,11 @@ foreach ($entries as $entryIndex => $entry) {
     if ($note !== '') appendTextParagraphs($body, $document, $note, ['align' => 'both', 'indent' => true, 'after' => 120, 'size' => $documentFontSize]);
     $row = [];
     foreach (($entry['photos'] ?? []) as $photo) if (($image = addImageToDocx($zip, (string) $photo, $imageCounter))) {
-        // Tamanho maximo de cada foto de vivencia no Word (+10% em relacao ao original 1651000 x 2600000 EMU).
-        $scale = min(1816100 / $image['cx'], 2860000 / $image['cy']);
+        // Fotos das vivencias em linhas de 3 (mesma largura total da antiga linha
+        // de 2 fotos de 1816100 EMU): cada foto ate 1134500 x 1786800 EMU.
+        $scale = min(1134500 / $image['cx'], 1786800 / $image['cy']);
         $row[] = ['rid'=>$image['rid'],'id'=>$imageCounter++,'cx'=>(int)($image['cx']*$scale),'cy'=>(int)($image['cy']*$scale)];
-        if (count($row) === 2) { $body->appendChild(imageRowParagraph($document, $row)); $row=[]; }
+        if (count($row) === 3) { $body->appendChild(imageRowParagraph($document, $row)); $row=[]; }
     }
     if ($row) $body->appendChild(imageRowParagraph($document, $row));
 }

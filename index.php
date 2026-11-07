@@ -116,7 +116,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <link rel="stylesheet" href="style.css?v=20261102-bloco-paragrafo-1">
   <link rel="stylesheet" href="mobile-menu.css?v=20260809-mobile-menu-readable-1">
   <link rel="stylesheet" href="activity-pagination.css">
-  <link rel="stylesheet" href="report-type-badge.css">
+  <link rel="stylesheet" href="report-type-badge.css?v=20261107-tipo-cor-2">
   <link rel="stylesheet" href="experience-fields.css">
   <link rel="stylesheet" href="brand-logo.css">
   <link rel="stylesheet" href="user-profile.css?v=20260716-ai-provider-select-1">
@@ -217,7 +217,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="activities-edit.js?v=20261102-blocos-1"></script>
   <script src="experience-fields.js?v=20261102-blocos-1"></script>
   <script src="modal-controls.js?v=20260812-close-x-fix-1"></script>
-  <script src="report-type-badge.js"></script>
+  <script src="report-type-badge.js?v=20261107-tipo-cor-2"></script>
   <script src="report-editor.js?v=20261103-10-fotos-bloco-1"></script>
   <script src="performance-optimizations.js?v=20260812-local-draft-open-1"></script>
   <script src="document-style-settings.js?v=20260716-force-docx-font-1"></script>

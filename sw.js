@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20261107-duplicar-1';
+const CACHE_VERSION = 'ai-prof-pwa-20261107-tipo-cor-2';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -8,7 +8,7 @@ const STATIC_ASSETS = [
   './style.css?v=20261102-bloco-paragrafo-1',
   './mobile-menu.css?v=20260809-mobile-menu-readable-1',
   './activity-pagination.css',
-  './report-type-badge.css',
+  './report-type-badge.css?v=20261107-tipo-cor-2',
   './experience-fields.css',
   './brand-logo.css',
   './user-profile.css?v=20260716-ai-provider-select-1',

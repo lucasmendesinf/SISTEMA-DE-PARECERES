@@ -1,0 +1,28 @@
+#pareceres .report-type-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px;overflow-x:auto}
+#pareceres .report-type-tab{display:flex;align-items:center;gap:8px;border:0;border-bottom:3px solid transparent;margin-bottom:-1px;background:none;padding:10px 14px;color:var(--muted);font:600 14px inherit;white-space:nowrap;cursor:pointer}
+#pareceres .report-type-tab .count,.report-group-head .count{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--line);color:var(--muted);font-variant-numeric:tabular-nums}
+#pareceres .report-type-tab.active{color:var(--ink);border-bottom-color:var(--ink)}
+#pareceres .report-type-tab.active .count{background:var(--ink);color:#fff}
+#pareceres .report-type-tab.active[data-report-type="parecer"]{color:#236b52;border-bottom-color:#236b52}
+#pareceres .report-type-tab.active[data-report-type="parecer"] .count{background:#e4f1e9;color:#236b52}
+#pareceres .report-type-tab.active[data-report-type="portfolio"]{color:#6553b7;border-bottom-color:#6553b7}
+#pareceres .report-type-tab.active[data-report-type="portfolio"] .count{background:#eeeafb;color:#6553b7}
+#pareceres .panel>.tabs{gap:6px!important;border:0;margin-bottom:14px;flex-wrap:wrap}
+#pareceres .panel>.tabs .tab{border:1px solid var(--line);border-radius:99px;padding:6px 12px;font-size:12px}
+#pareceres .panel>.tabs .tab.active{background:#236b52;border-color:#236b52;color:#fff}
+#reportsList .report-group{display:block;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+#reportsList .report-group+.report-group{margin-top:18px}
+#reportsList .report-group-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line)}
+#reportsList .report-group.parecer .report-group-head{background:#e4f1e9}
+#reportsList .report-group.portfolio .report-group-head{background:#eeeafb}
+#reportsList .report-group-head h3{margin:0;font-size:15px}
+#reportsList .report-group.parecer .report-group-head h3,#reportsList .report-group.parecer .report-group-head .count{color:#236b52}
+#reportsList .report-group.portfolio .report-group-head h3,#reportsList .report-group.portfolio .report-group-head .count{color:#6553b7}
+#reportsList .report-group-head .count{background:#fff}
+#reportsList .report-group-new{margin-left:auto}
+#reportsList .report-group.portfolio .report-group-new{color:#6553b7}
+#reportsList .report-group-list{display:grid;gap:10px;padding:12px}
+#reportsList .report-group-list .report-row{border-bottom:1px solid var(--line)}
+#reportsList .report-group-empty{margin:4px 2px}
+#reportsList .report-type-badge{display:none}
+@media(max-width:800px){#pareceres .report-type-tabs{gap:0}#pareceres .report-type-tab{padding:10px 9px;font-size:13px;gap:6px}#reportsList .report-group-list{padding:10px}#reportsList .report-group-new{margin-left:0;width:100%}}

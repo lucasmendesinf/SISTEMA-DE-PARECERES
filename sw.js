@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20261107-tipo-cor-2';
+const CACHE_VERSION = 'ai-prof-pwa-20261108-abas-tipo-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -9,6 +9,7 @@ const STATIC_ASSETS = [
   './mobile-menu.css?v=20260809-mobile-menu-readable-1',
   './activity-pagination.css',
   './report-type-badge.css?v=20261107-tipo-cor-2',
+  './report-groups.css?v=20261108-abas-tipo-1',
   './experience-fields.css',
   './brand-logo.css',
   './user-profile.css?v=20260716-ai-provider-select-1',
@@ -33,7 +34,8 @@ const STATIC_ASSETS = [
   './activities-edit.js?v=20261102-blocos-1',
   './experience-fields.js?v=20261102-blocos-1',
   './modal-controls.js?v=20260715-onboarding-draft-1',
-  './app.js?v=20261102-blocos-1',
+  './report-groups.js?v=20261108-abas-tipo-1',
+  './app.js?v=20261108-abas-tipo-1',
   './document-type.js?v=20261102-texto-blocos-1',
   './report-editor.js?v=20261103-10-fotos-bloco-1',
   './document-style-settings.js?v=20260716-force-docx-font-1',

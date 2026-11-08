@@ -302,13 +302,13 @@
       studentPhoto: student.photo || '',
       entries: JSON.stringify(fullReport.entries || []),
       finalText: fullReport.useFinalText ? (fullReport.finalText || header.finalText || '') : '',
-      headerNetwork: (header.showHeader === false ? '' : (header.network || '')),
-      headerSchool: (header.showHeader === false ? '' : (header.school || '')),
-      headerContact: (header.showHeader === false ? '' : (header.contact || '')),
-      headerLogo: (header.showHeader === false ? '' : (header.logo || ''))
+      headerNetwork: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.network || '')),
+      headerSchool: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.school || '')),
+      headerContact: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.contact || '')),
+      headerLogo: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || ''))
     });
     const pdfEntries = await Promise.all((fullReport.entries || []).map(async entry => ({...entry, photos: (await Promise.all((entry.photos || []).map(src => typeof pdfJpeg === 'function' ? pdfJpeg(src) : src))).filter(Boolean)})));
-    const pdfFields = {...baseFields, studentPhoto: typeof pdfJpeg === 'function' ? await pdfJpeg(student.photo || '') : student.photo || '', headerLogo: typeof pdfJpeg === 'function' ? await pdfJpeg((header.showHeader === false ? '' : (header.logo || ''))) : (header.showHeader === false ? '' : (header.logo || '')), entries: JSON.stringify(pdfEntries)};
+    const pdfFields = {...baseFields, studentPhoto: typeof pdfJpeg === 'function' ? await pdfJpeg(student.photo || '') : student.photo || '', headerLogo: typeof pdfJpeg === 'function' ? await pdfJpeg((!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || ''))) : (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || '')), entries: JSON.stringify(pdfEntries)};
     const docx = await documentBlob('download_parecer.php', baseFields);
     const pdf = await documentBlob('download_pdf.php', pdfFields);
     return {student, className, header, label, docx, pdf, report: fullReport};

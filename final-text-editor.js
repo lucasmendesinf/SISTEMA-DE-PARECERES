@@ -51,6 +51,23 @@
       : `<p>${escapeHtml(block.text)}</p>`).join('');
   }
 
+  // Cabecalho do documento: valor proprio do documento (true/false) ou, se nao definido,
+  // a configuracao geral ("Exibir cabecalho nos documentos").
+  window.effectiveShowHeader = function effectiveShowHeader(value) {
+    if (value === true || value === false) return value;
+    try { return (JSON.parse(localStorage.getItem(HEADER_KEY) || '{}') || {}).showHeader !== false; } catch (_) { return true; }
+  };
+
+  window.wizardHeaderFieldHtml = function wizardHeaderFieldHtml() {
+    return `<div class="field"><label class="final-text-option"><input type="checkbox" id="wizardShowHeader" ${effectiveShowHeader(wizard.showHeader) ? 'checked' : ''} onchange="toggleWizardHeader(this)"> Exibir cabeçalho neste documento</label></div>`;
+  };
+
+  window.toggleWizardHeader = function toggleWizardHeader(input) {
+    wizard.showHeader = !!input.checked;
+    if (typeof persistWizard === 'function') persistWizard();
+    if (document.querySelector('#modal .review-box')) wizardReviewV2();
+  };
+
   window.finalTextHasContent = value => blocksFromValue(value).length > 0;
 
   window.finalTextToHtml = function finalTextToHtml(value) {

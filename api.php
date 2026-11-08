@@ -39,7 +39,7 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
 
-    $schemaVersion = '2026-08-26-groq-model-1';
+    $schemaVersion = '2026-11-08-exibir-cabecalho-1';
     $addColumnIfMissing = function (PDO $pdo, string $table, string $column, string $definition): void {
         $quotedTable = '`' . str_replace('`', '``', $table) . '`';
         $stmt = $pdo->prepare("SHOW COLUMNS FROM {$quotedTable} LIKE ?");
@@ -93,6 +93,7 @@ try {
     try {
         $addColumnIfMissing($pdo, 'pareceres', 'usar_texto_final', 'usar_texto_final TINYINT(1) NOT NULL DEFAULT 0 AFTER texto');
         $addColumnIfMissing($pdo, 'pareceres', 'texto_final', 'texto_final MEDIUMTEXT NULL AFTER usar_texto_final');
+        $addColumnIfMissing($pdo, 'pareceres', 'exibir_cabecalho', 'exibir_cabecalho TINYINT(1) NULL DEFAULT NULL AFTER texto_final');
         $indexRows = $pdo->query("SHOW INDEX FROM pareceres WHERE Non_unique=0")->fetchAll(PDO::FETCH_ASSOC);
         $uniqueIndexes = [];
         foreach ($indexRows as $indexRow) {
@@ -3123,7 +3124,7 @@ try {
         $detailId = (int) ($_GET['id'] ?? 0);
         $summary = !empty($_GET['summary']) && $detailId <= 0;
         if ($detailId > 0) {
-            $query = $pdo->prepare("SELECT p.id,p.crianca_id,p.periodo_id,c.nome,c.data_nascimento,c.turma_id,p.texto,p.usar_texto_final,p.texto_final,p.tipo_documento,p.status,p.updated_at FROM pareceres p JOIN criancas c ON c.id=p.crianca_id WHERE p.id=? AND c.usuario_id=? ORDER BY p.updated_at DESC");
+            $query = $pdo->prepare("SELECT p.id,p.crianca_id,p.periodo_id,c.nome,c.data_nascimento,c.turma_id,p.texto,p.usar_texto_final,p.texto_final,p.exibir_cabecalho,p.tipo_documento,p.status,p.updated_at FROM pareceres p JOIN criancas c ON c.id=p.crianca_id WHERE p.id=? AND c.usuario_id=? ORDER BY p.updated_at DESC");
             $query->execute([$detailId, $ownerId]);
             $rows = $query->fetchAll(PDO::FETCH_ASSOC);
         } elseif ($summary) {
@@ -3131,14 +3132,14 @@ try {
             $query->execute([$ownerId]);
             $rows = $query->fetchAll(PDO::FETCH_ASSOC);
         } else {
-            $query = $pdo->prepare("SELECT p.id,p.crianca_id,p.periodo_id,c.nome,c.data_nascimento,c.turma_id,p.texto,p.usar_texto_final,p.texto_final,p.tipo_documento,p.status,p.updated_at FROM pareceres p JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=? ORDER BY p.updated_at DESC");
+            $query = $pdo->prepare("SELECT p.id,p.crianca_id,p.periodo_id,c.nome,c.data_nascimento,c.turma_id,p.texto,p.usar_texto_final,p.texto_final,p.exibir_cabecalho,p.tipo_documento,p.status,p.updated_at FROM pareceres p JOIN criancas c ON c.id=p.crianca_id WHERE c.usuario_id=? ORDER BY p.updated_at DESC");
             $query->execute([$ownerId]);
             $rows = $query->fetchAll(PDO::FETCH_ASSOC);
         }
         $activityQuery=$pdo->prepare('SELECT atividade_id FROM parecer_atividades WHERE parecer_id=?');
         $blockQuery=$pdo->prepare('SELECT ordem,texto,activity_ids FROM parecer_blocos WHERE parecer_id=? ORDER BY ordem,id');
         $attachmentQuery=$summary?null:$pdo->prepare('SELECT ordem,contexto,arquivo,mime_type FROM parecer_anexos WHERE parecer_id=? ORDER BY ordem,id');
-        $result=[]; foreach($rows as $row){$activityIds=[];$entries=[];if($summary){$activityIds=array_fill(0,max(0,(int)($row['activity_count']??0)),0);}else{$activityQuery->execute([$row['id']]);$activityIds=array_map('intval',$activityQuery->fetchAll(PDO::FETCH_COLUMN));$blockQuery->execute([$row['id']]);foreach($blockQuery->fetchAll(PDO::FETCH_ASSOC) as $block){$ids=json_decode((string)($block['activity_ids']??'[]'),true);$entries[(int)$block['ordem']]=['activityIds'=>is_array($ids)?array_map('intval',$ids):[],'photoNote'=>(string)($block['texto']??''),'photos'=>[]];}if($attachmentQuery){$attachmentQuery->execute([$row['id']]);foreach($attachmentQuery->fetchAll(PDO::FETCH_ASSOC) as $file){$key=(int)($file['ordem']??0);if(!isset($entries[$key]))$entries[$key]=['activityIds'=>[],'photoNote'=>(string)($file['contexto']??''),'photos'=>[]];$entries[$key]['photos'][]='data:'.$file['mime_type'].';base64,'.base64_encode($file['arquivo']);}}}ksort($entries);$result[]=['id'=>(int)$row['id'],'databaseId'=>(int)$row['id'],'periodId'=>(int)$row['periodo_id'],'studentId'=>'db-'.$row['crianca_id'],'name'=>$row['nome'],'birthDate'=>$row['data_nascimento'],'classId'=>(int)$row['turma_id'],'text'=>$row['texto'],'useFinalText'=>(bool)($row['usar_texto_final']??0),'finalText'=>(string)($row['texto_final']??''),'documentType'=>$row['tipo_documento']==='portfolio'?'portfolio':'parecer','activityIds'=>$activityIds,'entries'=>array_values($entries),'hasFullData'=>!$summary,'status'=>$row['status']==='concluido'?'done':'draft','deliveredAt'=>$row['status']==='concluido'?$row['updated_at']:null];}
+        $result=[]; foreach($rows as $row){$activityIds=[];$entries=[];if($summary){$activityIds=array_fill(0,max(0,(int)($row['activity_count']??0)),0);}else{$activityQuery->execute([$row['id']]);$activityIds=array_map('intval',$activityQuery->fetchAll(PDO::FETCH_COLUMN));$blockQuery->execute([$row['id']]);foreach($blockQuery->fetchAll(PDO::FETCH_ASSOC) as $block){$ids=json_decode((string)($block['activity_ids']??'[]'),true);$entries[(int)$block['ordem']]=['activityIds'=>is_array($ids)?array_map('intval',$ids):[],'photoNote'=>(string)($block['texto']??''),'photos'=>[]];}if($attachmentQuery){$attachmentQuery->execute([$row['id']]);foreach($attachmentQuery->fetchAll(PDO::FETCH_ASSOC) as $file){$key=(int)($file['ordem']??0);if(!isset($entries[$key]))$entries[$key]=['activityIds'=>[],'photoNote'=>(string)($file['contexto']??''),'photos'=>[]];$entries[$key]['photos'][]='data:'.$file['mime_type'].';base64,'.base64_encode($file['arquivo']);}}}ksort($entries);$result[]=['id'=>(int)$row['id'],'databaseId'=>(int)$row['id'],'periodId'=>(int)$row['periodo_id'],'studentId'=>'db-'.$row['crianca_id'],'name'=>$row['nome'],'birthDate'=>$row['data_nascimento'],'classId'=>(int)$row['turma_id'],'text'=>$row['texto'],'useFinalText'=>(bool)($row['usar_texto_final']??0),'finalText'=>(string)($row['texto_final']??''),'showHeader'=>array_key_exists('exibir_cabecalho',$row)&&$row['exibir_cabecalho']!==null?((int)$row['exibir_cabecalho']===1):null,'documentType'=>$row['tipo_documento']==='portfolio'?'portfolio':'parecer','activityIds'=>$activityIds,'entries'=>array_values($entries),'hasFullData'=>!$summary,'status'=>$row['status']==='concluido'?'done':'draft','deliveredAt'=>$row['status']==='concluido'?$row['updated_at']:null];}
         echo json_encode($result, JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -3416,6 +3417,7 @@ try {
         $finalText = trim((string) ($input['finalText'] ?? ''));
         $upsert=$pdo->prepare("INSERT INTO pareceres (crianca_id,periodo_id,texto,usar_texto_final,texto_final,tipo_documento,status) VALUES (?,?,?,?,?,?,'rascunho') ON DUPLICATE KEY UPDATE texto=VALUES(texto),usar_texto_final=VALUES(usar_texto_final),texto_final=VALUES(texto_final),tipo_documento=VALUES(tipo_documento),status='rascunho'"); $upsert->execute([$childId,$periodId,$text,$useFinalText,$finalText,$documentType]);
         $reportId=(int)$pdo->lastInsertId(); if(!$reportId){$find=$pdo->prepare("SELECT id FROM pareceres WHERE crianca_id=? AND periodo_id=? AND tipo_documento=? AND status='rascunho' ORDER BY id DESC LIMIT 1");$find->execute([$childId,$periodId,$documentType]);$reportId=(int)$find->fetchColumn();}
+        if (array_key_exists('showHeader', $input) && $input['showHeader'] !== null) { $pdo->prepare('UPDATE pareceres SET exibir_cabecalho=? WHERE id=?')->execute([!empty($input['showHeader']) ? 1 : 0, $reportId]); }
         $ownedActivities=[];
         $activityOwnerCheck=$pdo->prepare('SELECT id FROM atividades WHERE id=? AND usuario_id=?');
         foreach(($input['activityIds']??[]) as $activityId){$activityId=(int)$activityId;$activityOwnerCheck->execute([$activityId,$ownerId]);if($activityOwnerCheck->fetchColumn())$ownedActivities[]=$activityId;}

@@ -102,6 +102,7 @@
         entries,
         useFinalText,
         finalText,
+        showHeader: source.showHeader,
         finalTextTouched: true
       };
       const current = wizard;

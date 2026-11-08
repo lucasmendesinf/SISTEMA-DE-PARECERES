@@ -449,7 +449,7 @@ function finalTextHtml() {
 }
 
 function finalTextOptionHtml() {
-  return `<label class="final-text-option"><input type="checkbox" ${wizard.useFinalText ? 'checked' : ''} onchange="toggleFinalText(this)"> Adicionar texto no final</label>${wizard.useFinalText ? '<button class="secondary" type="button" onclick="editFinalText()">Editar texto final</button>' : ''}`;
+  return `<label class="final-text-option"><input type="checkbox" ${effectiveShowHeader(wizard.showHeader) ? 'checked' : ''} onchange="toggleWizardHeader(this)"> Exibir cabeçalho</label><label class="final-text-option"><input type="checkbox" ${wizard.useFinalText ? 'checked' : ''} onchange="toggleFinalText(this)"> Adicionar texto no final</label>${wizard.useFinalText ? '<button class="secondary" type="button" onclick="editFinalText()">Editar texto final</button>' : ''}`;
 }
 
 function toggleFinalText(input) {
@@ -764,6 +764,7 @@ async function wizardFinalizeV3() {
         activityIds: report.activityIds,
         entries: report.entries,
         useFinalText: !!report.useFinalText,
+        showHeader: wizard.showHeader,
         finalText: report.finalText || '',
         imageEditorMode: wizard.imageEditorMode || 'none'
       })
@@ -814,6 +815,7 @@ async function editReport(id) {
         photos: [],
         entries: item.entries || [{activityIds: item.activityIds || [], photoNote: item.photoNote || '', photos: item.photos || []}],
         useFinalText: !!item.useFinalText,
+        showHeader: item.showHeader,
         finalText: item.finalText || '',
         readOnly: true
       };
@@ -872,6 +874,7 @@ async function editReport(id) {
     photos: [],
     entries: report.entries || [{activityIds: report.activityIds || [], photoNote: report.photoNote || '', photos: report.photos || []}],
     useFinalText: !!report.useFinalText,
+    showHeader: report.showHeader,
     finalText: report.finalText || '',
     readOnly: report.status === 'done'
   };
@@ -968,6 +971,7 @@ function ensureLocalWizardDraft() {
       activityIds,
       entries,
       useFinalText: !!wizard.useFinalText,
+      showHeader: wizard.showHeader,
       finalText: wizard.useFinalText ? (wizard.finalText || '') : '',
       photoNote: entries.map(entry => entry.photoNote).filter(Boolean).join('\n\n'),
       status: 'draft'
@@ -1010,6 +1014,7 @@ async function autosaveWizardDraft() {
         activityIds,
         entries,
         useFinalText: !!wizard.useFinalText,
+      showHeader: wizard.showHeader,
         finalText: wizard.useFinalText ? (wizard.finalText || finalText) : '',
         imageEditorMode: wizard.imageEditorMode || 'none'
       })
@@ -1073,6 +1078,7 @@ async function saveWizardDraftNow({notify = true, closeAfter = false} = {}) {
       activityIds,
       entries,
       useFinalText: !!wizard.useFinalText,
+      showHeader: wizard.showHeader,
       finalText: wizard.useFinalText ? (wizard.finalText || finalText) : '',
       imageEditorMode: wizard.imageEditorMode || 'none'
     })

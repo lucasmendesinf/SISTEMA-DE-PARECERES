@@ -124,10 +124,10 @@
       studentPhoto: student.photo || '',
       entries: JSON.stringify(report.entries || []),
       finalText: report.useFinalText ? (report.finalText || header.finalText || '') : '',
-      headerNetwork: (header.showHeader === false ? '' : (header.network || '')),
-      headerSchool: (header.showHeader === false ? '' : (header.school || '')),
-      headerContact: (header.showHeader === false ? '' : (header.contact || '')),
-      headerLogo: (header.showHeader === false ? '' : (header.logo || ''))
+      headerNetwork: (!effectiveShowHeader(report.showHeader) ? '' : (header.network || '')),
+      headerSchool: (!effectiveShowHeader(report.showHeader) ? '' : (header.school || '')),
+      headerContact: (!effectiveShowHeader(report.showHeader) ? '' : (header.contact || '')),
+      headerLogo: (!effectiveShowHeader(report.showHeader) ? '' : (header.logo || ''))
     });
     Object.entries(fields).forEach(([name, value]) => {
       const input = document.createElement('input');
@@ -165,10 +165,10 @@
       studentPhoto: await pdfJpeg(student.photo || ''),
       entries: JSON.stringify(entries),
       finalText: report.useFinalText ? (report.finalText || header.finalText || '') : '',
-      headerNetwork: (header.showHeader === false ? '' : (header.network || '')),
-      headerSchool: (header.showHeader === false ? '' : (header.school || '')),
-      headerContact: (header.showHeader === false ? '' : (header.contact || '')),
-      headerLogo: await pdfJpeg((header.showHeader === false ? '' : (header.logo || '')))
+      headerNetwork: (!effectiveShowHeader(report.showHeader) ? '' : (header.network || '')),
+      headerSchool: (!effectiveShowHeader(report.showHeader) ? '' : (header.school || '')),
+      headerContact: (!effectiveShowHeader(report.showHeader) ? '' : (header.contact || '')),
+      headerLogo: await pdfJpeg((!effectiveShowHeader(report.showHeader) ? '' : (header.logo || '')))
     });
     Object.entries(fields).forEach(([name, value]) => {
       const input = document.createElement('input');

@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/final_text_helper.php';
 
 // -----------------------------------------------------------------------------
 // Geracao do Word (.docx) do parecer/portfolio.
@@ -552,10 +553,12 @@ foreach ($entries as $entryIndex => $entry) {
     }
     if ($row) $body->appendChild(imageRowParagraph($document, $row));
 }
-foreach (preg_split('/\R{2,}/u', $finalText) as $block) {
-    $block = trim(preg_replace('/\s+/u', ' ', $block));
-    if ($block !== '') {
-        $body->appendChild(paragraph($document, $block, ['align' => 'both', 'indent' => true, 'after' => 150, 'size' => $documentFontSize]));
+foreach (finalTextBlocks($finalText) as $finalBlock) {
+    if ($finalBlock['type'] === 'text') {
+        $body->appendChild(paragraph($document, $finalBlock['text'], ['align' => 'both', 'indent' => true, 'after' => 150, 'size' => $documentFontSize]));
+    } elseif (($image = addImageToDocx($zip, $finalBlock['src'], $imageCounter))) {
+        $scale = min(2520000 / $image['cx'], 1080000 / $image['cy'], 1);
+        $body->appendChild(imageParagraph($document, $image['rid'], $imageCounter++, 'Imagem do texto final', (int)($image['cx']*$scale), (int)($image['cy']*$scale)));
     }
 }
 $months = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];

@@ -1,0 +1,10 @@
+.rich-field-wrap{display:grid;gap:8px}
+.rich-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rich-field{min-height:110px;max-height:340px;overflow:auto;padding:11px 12px;border:1px solid #d9e1dc;border-radius:7px;background:#fff;color:var(--ink,#26312d);font:14px inherit;line-height:1.55;outline:none}
+.rich-field:focus{border-color:#236b52;box-shadow:0 0 0 2px #236b5222}
+.rich-field:empty::before{content:attr(data-placeholder);color:#9aa7a1;pointer-events:none}
+.rich-field img{display:block;max-width:240px;max-height:130px;margin:6px 0;border-radius:4px}
+.final-text-option{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;margin-bottom:6px;cursor:pointer}
+.final-text-option input{width:auto}
+.final-text-entry .final-text-image{text-align:center;margin:10px 0}
+.final-text-entry .final-text-image img{max-width:260px;max-height:140px}

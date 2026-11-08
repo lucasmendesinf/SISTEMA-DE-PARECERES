@@ -118,6 +118,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <link rel="stylesheet" href="activity-pagination.css">
   <link rel="stylesheet" href="report-type-badge.css?v=20261107-tipo-cor-2">
   <link rel="stylesheet" href="report-groups.css?v=20261108-abas-tipo-1">
+  <link rel="stylesheet" href="final-text-editor.css?v=20261108-texto-final-2">
   <link rel="stylesheet" href="experience-fields.css">
   <link rel="stylesheet" href="brand-logo.css">
   <link rel="stylesheet" href="user-profile.css?v=20260716-ai-provider-select-1">
@@ -187,7 +188,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
 
     <section id="pareceres" class="view"><div class="page-title"><div><p class="eyebrow">1º SEMESTRE DE 2026</p><h1>Pareceres e Portfólios</h1><p>Crie, revise e compartilhe os registros da turma.</p></div><button class="primary" id="openGenerator">+ Novo documento</button></div><div class="notice"><span>✦</span><div><strong>Seu olhar é essencial</strong><p>Escreva livremente o parecer. Se desejar, use a opção discreta de IA para ajustar o texto que você produziu.</p></div></div><div class="panel"><div class="report-type-tabs" id="reportTypeTabs" role="tablist" aria-label="Tipo de documento"><button class="report-type-tab" type="button" role="tab" data-report-type="all">Todos <span class="count">0</span></button><button class="report-type-tab" type="button" role="tab" data-report-type="parecer">Pareceres <span class="count">0</span></button><button class="report-type-tab" type="button" role="tab" data-report-type="portfolio">Portfólios <span class="count">0</span></button></div><div class="tabs"><button class="tab active" data-filter="all">Todos</button><button class="tab" data-filter="draft">Em elaboração</button><button class="tab" data-filter="done">Concluídos</button></div><div id="reportsList" class="report-list"></div></div></section>
     <section id="tutoriais" class="view"><div class="page-title"><div><p class="eyebrow">CENTRAL DE AJUDA</p><h1>Tutoriais</h1><p>Pesquise por titulo e assista ao video que explica a duvida.</p></div></div><div id="tutorialAdminPanel"></div><div class="panel tutorial-search-panel"><div class="toolbar"><input id="tutorialSearch" type="search" placeholder="Pesquisar tutorial por titulo..."><span id="tutorialTotal"></span></div><div id="tutorialList" class="tutorial-grid"></div></div></section>
-    <section id="configuracoes" class="view"><div class="page-title"><div><p class="eyebrow">PERFIL DA PROFESSORA</p><h1>Configurações do Cabeçalho</h1><p>Personalize o cabeçalho exibido nos pareceres gerados.</p></div></div><div class="panel"><div class="form-grid"><div class="field"><label>Nome da rede ou secretaria</label><input id="headerNetwork" placeholder="Ex.: Secretaria Municipal de Educação"></div><div class="field"><label>Unidade escolar</label><input id="headerSchool" placeholder="Ex.: CMEI Nome da Unidade"></div><div class="field"><label>Endereço e contato</label><textarea id="headerContact" rows="3" placeholder="Endereço, telefone e e-mail"></textarea></div><div class="field"><label>Logo institucional</label><input id="headerLogo" type="file" accept="image/*"><div id="headerLogoPreview" class="image-previews"></div></div></div><div class="form-actions"><button class="primary" id="saveHeaderSettings">Salvar configurações</button></div></div><div class="panel mercado-pago-panel"><div class="profile-subtitle"><h3>Mercado Pago</h3><p>Cadastre as credenciais usadas para Pix e cartão recorrente.</p></div><div class="form-grid"><div class="field"><label>Access Token</label><input id="mpAccessToken" type="password" autocomplete="off" placeholder="Cole o Access Token"></div><div class="field"><label>Public Key</label><input id="mpPublicKey" autocomplete="off" placeholder="Cole a Public Key"></div><div class="field"><label>Webhook Secret</label><input id="mpWebhookSecret" type="password" autocomplete="off" placeholder="Opcional"></div><div class="field"><label>URL de sucesso</label><input id="mpSuccessUrl" placeholder="http://localhost/Pareceres/login.php?payment=success"></div><div class="field"><label>URL de falha</label><input id="mpFailureUrl" placeholder="http://localhost/Pareceres/login.php?payment=failure"></div></div><p id="mpSettingsStatus" class="profile-message"></p><div class="form-actions"><button class="primary" id="saveMercadoPagoSettings" type="button">Salvar Mercado Pago</button></div></div></section>
+    <section id="configuracoes" class="view"><div class="page-title"><div><p class="eyebrow">PERFIL DA PROFESSORA</p><h1>Configurações do Cabeçalho</h1><p>Personalize o cabeçalho exibido nos pareceres gerados.</p></div></div><div class="panel"><div class="form-grid"><div class="field"><label class="final-text-option"><input type="checkbox" id="headerShow" checked> Exibir cabeçalho nos documentos</label><small class="muted">Quando desmarcado, o cabeçalho (rede, unidade, endereço e logo) não aparece no parecer/portfólio.</small></div><div class="field"><label>Nome da rede ou secretaria</label><input id="headerNetwork" placeholder="Ex.: Secretaria Municipal de Educação"></div><div class="field"><label>Unidade escolar</label><input id="headerSchool" placeholder="Ex.: CMEI Nome da Unidade"></div><div class="field"><label>Endereço e contato</label><textarea id="headerContact" rows="3" placeholder="Endereço, telefone e e-mail"></textarea></div><div class="field"><label>Logo institucional</label><input id="headerLogo" type="file" accept="image/*"><div id="headerLogoPreview" class="image-previews"></div></div></div><div class="form-actions"><button class="primary" id="saveHeaderSettings">Salvar configurações</button></div></div><div class="panel mercado-pago-panel"><div class="profile-subtitle"><h3>Mercado Pago</h3><p>Cadastre as credenciais usadas para Pix e cartão recorrente.</p></div><div class="form-grid"><div class="field"><label>Access Token</label><input id="mpAccessToken" type="password" autocomplete="off" placeholder="Cole o Access Token"></div><div class="field"><label>Public Key</label><input id="mpPublicKey" autocomplete="off" placeholder="Cole a Public Key"></div><div class="field"><label>Webhook Secret</label><input id="mpWebhookSecret" type="password" autocomplete="off" placeholder="Opcional"></div><div class="field"><label>URL de sucesso</label><input id="mpSuccessUrl" placeholder="http://localhost/Pareceres/login.php?payment=success"></div><div class="field"><label>URL de falha</label><input id="mpFailureUrl" placeholder="http://localhost/Pareceres/login.php?payment=failure"></div></div><p id="mpSettingsStatus" class="profile-message"></p><div class="form-actions"><button class="primary" id="saveMercadoPagoSettings" type="button">Salvar Mercado Pago</button></div></div></section>
     <?php if ($isMaster): ?>
     <section id="pwaAdmin" class="view">
       <div class="page-title"><div><p class="eyebrow">LOGIN MASTER</p><h1>Atualizacao do PWA</h1><p>Publique a versao oficial do app instalado sem fazer deploy de arquivos.</p></div></div>
@@ -208,8 +209,8 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script>window.PortalBootstrapUser = <?= json_encode($bootstrapUser, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;</script>
   <script src="save-feedback.js?v=20260717-save-feedback-front-1"></script>
   <script src="report-groups.js?v=20261108-abas-tipo-1"></script>
-  <script src="app.js?v=20261108-abas-tipo-1"></script>
-  <script src="document-type.js?v=20261102-texto-blocos-1"></script>
+  <script src="app.js?v=20261108-texto-final-2"></script>
+  <script src="document-type.js?v=20261108-texto-final-2"></script>
   <script src="mobile-menu.js"></script>
   <script src="draft-delete.js?v=20260812-safe-report-id-1"></script>
   <script src="periods.js"></script>
@@ -220,19 +221,20 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="experience-fields.js?v=20261102-blocos-1"></script>
   <script src="modal-controls.js?v=20260812-close-x-fix-1"></script>
   <script src="report-type-badge.js?v=20261107-tipo-cor-2"></script>
-  <script src="report-editor.js?v=20261103-10-fotos-bloco-1"></script>
+  <script src="report-editor.js?v=20261108-texto-final-2"></script>
   <script src="performance-optimizations.js?v=20260812-local-draft-open-1"></script>
-  <script src="document-style-settings.js?v=20260716-force-docx-font-1"></script>
+  <script src="document-style-settings.js?v=20261108-texto-final-2"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
   <script src="billing-cycles.js?v=20260705-billing-cycles-1"></script>
   <script src="text-ai-review.js?v=20260908-mobile-image-editor-1"></script>
   <script src="document-button-fix.js?v=20260717-require-student-1"></script>
-  <script src="director-email.js?v=20260917-nome-tag-1"></script>
-  <script src="report-duplicate.js?v=20261108-duplicar-fotos-1"></script>
+  <script src="final-text-editor.js?v=20261108-texto-final-2"></script>
+  <script src="director-email.js?v=20261108-texto-final-2"></script>
+  <script src="report-duplicate.js?v=20261108-texto-final-2"></script>
   <script src="marketing-notice.js?v=20260717-menu-permissions-1"></script>
   <script src="terms-consent.js?v=20260716-terms-before-onboarding-1"></script>
   <script src="auth-profile.js?v=20260911-billing-exempt-1"></script>
-  <script src="google-drive-integration.js?v=20260717-drive-document-type-1"></script>
+  <script src="google-drive-integration.js?v=20261108-texto-final-2"></script>
   <script src="tutorial-videos.js?v=20260717-menu-permissions-1"></script>
   <script src="onboarding.js?v=20260911-per-user-cache-fix-1"></script>
   <script src="master-users.js?v=20260911-billing-exempt-1"></script>

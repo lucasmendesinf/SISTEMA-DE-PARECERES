@@ -445,19 +445,19 @@ function configuredFinalText() {
 function finalTextHtml() {
   const text = String(wizard.finalText || configuredFinalText()).trim();
   if (!wizard.useFinalText || !text) return '';
-  return `<section class="document-entry final-text-entry">${text.split(/\n{2,}/).filter(Boolean).map(part => `<p>${esc(part)}</p>`).join('')}</section>`;
+  return `<section class="document-entry final-text-entry">${finalTextToHtml(text)}</section>`;
 }
 
 function finalTextOptionHtml() {
-  const text = configuredFinalText();
-  if (!text) return '';
-  return `<label class="final-text-option"><input type="checkbox" ${wizard.useFinalText ? 'checked' : ''} onchange="toggleFinalText(this)"> Adicionar pessoas envolvidas</label>`;
+  return `<label class="final-text-option"><input type="checkbox" ${wizard.useFinalText ? 'checked' : ''} onchange="toggleFinalText(this)"> Adicionar texto no final</label>${wizard.useFinalText ? '<button class="secondary" type="button" onclick="editFinalText()">Editar texto final</button>' : ''}`;
 }
 
 function toggleFinalText(input) {
   wizard.useFinalText = !!input?.checked;
-  wizard.finalText = configuredFinalText();
+  wizard.finalTextTouched = true;
+  if (wizard.useFinalText && !finalTextHasContent(wizard.finalText)) wizard.finalText = configuredFinalText();
   persistWizard();
+  if (wizard.useFinalText && !finalTextHasContent(wizard.finalText)) return editFinalText();
   wizardReviewV2();
 }
 

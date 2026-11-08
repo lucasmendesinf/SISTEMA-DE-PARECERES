@@ -3069,6 +3069,7 @@ try {
                 'network' => trim((string) ($input['network'] ?? '')),
                 'school' => trim((string) ($input['school'] ?? '')),
                 'contact' => trim((string) ($input['contact'] ?? '')),
+                'showHeader' => array_key_exists('showHeader', $input) ? (bool) $input['showHeader'] : true,
                 'finalText' => trim((string) ($input['finalText'] ?? '')),
                 'documentFont' => in_array((string) ($input['documentFont'] ?? ''), ['Arial', 'Times New Roman', 'Calibri', 'Georgia', 'Verdana', 'Courier New'], true) ? (string) $input['documentFont'] : 'Arial',
                 'documentFontSize' => min(16, max(10, (int) ($input['documentFontSize'] ?? 12))),

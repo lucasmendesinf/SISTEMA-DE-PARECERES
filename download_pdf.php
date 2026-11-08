@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/final_text_helper.php';
 
 function iniBytes(string $value): int {
     $value = trim($value);
@@ -287,7 +288,13 @@ foreach ($entryBlocks as $entry) {
     }
     foreach (array_chunk($entry['images'], 3) as $row) $layout->imageRow($row);
 }
-if ($finalText !== '') $layout->paragraph($finalText);
+foreach (finalTextBlocks($finalText) as $finalBlock) {
+    if ($finalBlock['type'] === 'text') {
+        $layout->paragraph($finalBlock['text']);
+    } elseif (($finalImage = registerJpegImage($finalBlock['src'], $images))) {
+        $layout->image($finalImage, 36, 200, 85, true);
+    }
+}
 $layout->setY($layout->y() - 8);
 $months = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 $dateText = 'Curitiba, ' . date('d') . ' de ' . $months[(int) date('n') - 1] . ' de ' . date('Y') . '.';

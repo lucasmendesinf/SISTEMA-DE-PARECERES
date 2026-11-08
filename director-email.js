@@ -58,8 +58,8 @@
     contactField.insertAdjacentHTML('afterend', `
       <div class="field">
         <label>Texto final do parecer <span class="muted">(opcional)</span></label>
-        <textarea id="headerFinalText" rows="4" placeholder="Aqui você coloca os nomes das professoras envolvidas no parecer, esses nomes vão ficar no final do documento parecer/portifólio"></textarea>
-        <small class="muted">A professora escolhe em cada parecer se deseja usar este texto.</small>
+        ${richFieldHtml('headerFinalText', '', 'Aqui você coloca os nomes das professoras envolvidas no parecer, esses nomes vão ficar no final do documento parecer/portifólio. Também pode inserir uma imagem.')}
+        <small class="muted">Este texto vem marcado automaticamente nos portfólios e desmarcado nos pareceres. A professora pode mudar em cada documento.</small>
         <small class="muted">Dica: escreva [NOME] onde quiser que apareça o nome do aluno ao finalizar o documento.</small>
       </div>
     `);
@@ -70,7 +70,9 @@
     if (typeof originalLoadHeaderSettings === 'function') await originalLoadHeaderSettings();
     ensureFinalTextField();
     const settings = JSON.parse(localStorage.getItem(headerKey) || '{}');
-    $('#headerFinalText').value = settings.finalText || '';
+    setRichFieldValue('headerFinalText', settings.finalText || '');
+    const showHeader = $('#headerShow');
+    if (showHeader) showHeader.checked = settings.showHeader !== false;
   };
 
   function hookSaveHeaderSettings() {
@@ -90,7 +92,8 @@
         network: $('#headerNetwork')?.value.trim() || '',
         school: $('#headerSchool')?.value.trim() || '',
         contact: $('#headerContact')?.value.trim() || '',
-        finalText: $('#headerFinalText')?.value.trim() || '',
+        finalText: getRichFieldValue('headerFinalText'),
+        showHeader: $('#headerShow') ? $('#headerShow').checked : true,
         ...(window.collectDocumentStyleSettings?.() || {}),
         logo
       };
@@ -199,10 +202,10 @@
       studentPhoto: student.photo || '',
       entries: JSON.stringify(fullReport.entries || []),
       finalText: fullReport.useFinalText ? (fullReport.finalText || header.finalText || '') : '',
-      headerNetwork: header.network || '',
-      headerSchool: header.school || '',
-      headerContact: header.contact || '',
-      headerLogo: header.logo || ''
+      headerNetwork: (header.showHeader === false ? '' : (header.network || '')),
+      headerSchool: (header.showHeader === false ? '' : (header.school || '')),
+      headerContact: (header.showHeader === false ? '' : (header.contact || '')),
+      headerLogo: (header.showHeader === false ? '' : (header.logo || ''))
     });
     const pdfEntries = await Promise.all((fullReport.entries || []).map(async entry => ({
       ...entry,
@@ -211,7 +214,7 @@
     const pdfFields = {
       ...baseFields,
       studentPhoto: typeof pdfJpeg === 'function' ? await pdfJpeg(student.photo || '') : student.photo || '',
-      headerLogo: typeof pdfJpeg === 'function' ? await pdfJpeg(header.logo || '') : header.logo || '',
+      headerLogo: typeof pdfJpeg === 'function' ? await pdfJpeg((header.showHeader === false ? '' : (header.logo || ''))) : (header.showHeader === false ? '' : (header.logo || '')),
       entries: JSON.stringify(pdfEntries)
     };
     return {

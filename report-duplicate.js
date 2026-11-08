@@ -43,7 +43,7 @@
       <div class="form-grid">
         <div class="field">
           <button class="primary" type="button" data-duplicate-mode="student" style="width:100%">Duplicar para outra criança (${typeName(sourceType)})</button>
-          <small class="muted">Copia todo o conteúdo, inclusive as fotos. O nome da criança é trocado por [NOME] e preenchido ao finalizar.</small>
+          <small class="muted">Copia o texto principal, as vivências e as fotos. O nome da criança é trocado por [NOME] e preenchido ao finalizar.</small>
         </div>
         <div class="field">
           <button class="primary" type="button" data-duplicate-mode="type" style="width:100%">Duplicar como ${otherType} (mesma criança)</button>
@@ -69,7 +69,7 @@
       const source = await ensureReportDetail(id);
       if (!source) throw new Error('Documento não encontrado.');
       const sourceStudent = data.students.find(item => String(item.id) === String(source.studentId));
-      const keepName = mode === 'type';
+      const forOtherChild = mode === 'student';
       const rawEntries = Array.isArray(source.entries) && source.entries.length
         ? source.entries
         : [{activityIds: source.activityIds || [], photoNote: source.photoNote || '', photos: source.photos || []}];
@@ -77,26 +77,32 @@
         .map(normalizeWizardEntry)
         .map(entry => ({
           activityIds: entry.activityIds,
-          photoNote: keepName ? entry.photoNote : nameToTag(entry.photoNote, sourceStudent?.name),
+          photoNote: forOtherChild ? nameToTag(entry.photoNote, sourceStudent?.name) : entry.photoNote,
           photos: entry.photos
         }))
         .filter(hasWizardEntryContent);
-      const useFinalText = !!source.useFinalText;
-      const finalText = keepName ? (source.finalText || '') : nameToTag(source.finalText || '', sourceStudent?.name);
+      const targetType = targetTypeFor(source, mode);
+      const configuredFinal = typeof configuredFinalText === 'function' ? configuredFinalText() : '';
+      let finalText = source.finalText || '';
+      if (forOtherChild) finalText = nameToTag(finalText, sourceStudent?.name);
+      if (!finalTextHasContent(finalText) && targetType === 'portfolio') finalText = configuredFinal;
+      // Outra crianca: mantem a escolha do original. Mesma crianca com outro tipo: so portfolio vem marcado.
+      const useFinalText = forOtherChild ? !!source.useFinalText : (targetType === 'portfolio' && finalTextHasContent(finalText));
 
       wizardAvailabilityReports = null;
       wizard = {
         loadingAvailability: true,
-        documentType: targetTypeFor(source, mode),
+        documentType: targetType,
         periodId: activeWizardPeriodId(),
         studentId: mode === 'type' ? source.studentId : '',
-        text: keepName ? (source.text || '') : nameToTag(source.text || '', sourceStudent?.name),
+        text: forOtherChild ? nameToTag(source.text || '', sourceStudent?.name) : (source.text || ''),
         activityIds: [],
         photoNote: '',
         photos: [],
         entries,
         useFinalText,
-        finalText
+        finalText,
+        finalTextTouched: true
       };
       const current = wizard;
 

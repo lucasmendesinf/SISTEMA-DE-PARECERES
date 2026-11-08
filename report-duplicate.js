@@ -43,7 +43,7 @@
       <div class="form-grid">
         <div class="field">
           <button class="primary" type="button" data-duplicate-mode="student" style="width:100%">Duplicar para outra criança (${typeName(sourceType)})</button>
-          <small class="muted">Copia o texto principal e as vivências. O nome da criança é trocado por [NOME] e preenchido ao finalizar. As fotos não são copiadas.</small>
+          <small class="muted">Copia todo o conteúdo, inclusive as fotos. O nome da criança é trocado por [NOME] e preenchido ao finalizar.</small>
         </div>
         <div class="field">
           <button class="primary" type="button" data-duplicate-mode="type" style="width:100%">Duplicar como ${otherType} (mesma criança)</button>
@@ -69,7 +69,7 @@
       const source = await ensureReportDetail(id);
       if (!source) throw new Error('Documento não encontrado.');
       const sourceStudent = data.students.find(item => String(item.id) === String(source.studentId));
-      const keepPhotos = mode === 'type';
+      const keepName = mode === 'type';
       const rawEntries = Array.isArray(source.entries) && source.entries.length
         ? source.entries
         : [{activityIds: source.activityIds || [], photoNote: source.photoNote || '', photos: source.photos || []}];
@@ -77,12 +77,12 @@
         .map(normalizeWizardEntry)
         .map(entry => ({
           activityIds: entry.activityIds,
-          photoNote: keepPhotos ? entry.photoNote : nameToTag(entry.photoNote, sourceStudent?.name),
-          photos: keepPhotos ? entry.photos : []
+          photoNote: keepName ? entry.photoNote : nameToTag(entry.photoNote, sourceStudent?.name),
+          photos: entry.photos
         }))
         .filter(hasWizardEntryContent);
       const useFinalText = !!source.useFinalText;
-      const finalText = keepPhotos ? (source.finalText || '') : nameToTag(source.finalText || '', sourceStudent?.name);
+      const finalText = keepName ? (source.finalText || '') : nameToTag(source.finalText || '', sourceStudent?.name);
 
       wizardAvailabilityReports = null;
       wizard = {
@@ -90,7 +90,7 @@
         documentType: targetTypeFor(source, mode),
         periodId: activeWizardPeriodId(),
         studentId: mode === 'type' ? source.studentId : '',
-        text: keepPhotos ? (source.text || '') : nameToTag(source.text || '', sourceStudent?.name),
+        text: keepName ? (source.text || '') : nameToTag(source.text || '', sourceStudent?.name),
         activityIds: [],
         photoNote: '',
         photos: [],

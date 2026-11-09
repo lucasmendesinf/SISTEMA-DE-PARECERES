@@ -126,7 +126,7 @@
       finalText: report.useFinalText ? (report.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(report.showHeader) ? '' : (header.network || '')),
 
-      headerImage: (!effectiveShowHeader(report.showHeader) ? '' : (header.headerImage || '')),
+      headerImage: (!effectiveShowHeader(report.showHeader) ? '' : headerImageFor(header)),
       headerSchool: (!effectiveShowHeader(report.showHeader) ? '' : (header.school || '')),
       headerContact: (!effectiveShowHeader(report.showHeader) ? '' : (header.contact || '')),
       headerLogo: (!effectiveShowHeader(report.showHeader) ? '' : (header.logo || ''))
@@ -169,7 +169,7 @@
       finalText: report.useFinalText ? (report.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(report.showHeader) ? '' : (header.network || '')),
 
-      headerImage: (!effectiveShowHeader(report.showHeader) ? '' : (header.headerImage || '')),
+      headerImage: (!effectiveShowHeader(report.showHeader) ? '' : headerImageFor(header)),
       headerSchool: (!effectiveShowHeader(report.showHeader) ? '' : (header.school || '')),
       headerContact: (!effectiveShowHeader(report.showHeader) ? '' : (header.contact || '')),
       headerLogo: await pdfJpeg((!effectiveShowHeader(report.showHeader) ? '' : (header.logo || '')))

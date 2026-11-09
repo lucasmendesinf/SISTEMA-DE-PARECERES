@@ -68,6 +68,11 @@
     if (document.querySelector('#modal .review-box')) wizardReviewV2();
   };
 
+  window.headerImageFor = function headerImageFor(header) {
+    if (!header || header.headerMode === 'text') return '';
+    return header.headerImage || '';
+  };
+
   window.finalTextHasContent = value => blocksFromValue(value).length > 0;
 
   window.finalTextToHtml = function finalTextToHtml(value) {

@@ -61,7 +61,42 @@
     if (remove) remove.hidden = !src;
   }
 
+  const textHeaderSelectors = ['#headerNetwork', '#headerSchool', '#headerContact', '#headerLogo'];
+
+  function currentHeaderMode() {
+    return document.querySelector('input[name="headerMode"]:checked')?.value === 'image' ? 'image' : 'text';
+  }
+
+  function applyHeaderModeVisibility() {
+    const imageMode = currentHeaderMode() === 'image';
+    textHeaderSelectors.forEach(selector => {
+      const field = $(selector)?.closest('.field');
+      if (field) field.style.display = imageMode ? 'none' : '';
+    });
+    const imageField = $('#headerImageFile')?.closest('.field');
+    if (imageField) imageField.style.display = imageMode ? '' : 'none';
+  }
+
+  function ensureHeaderModeField() {
+    if (document.querySelector('input[name="headerMode"]')) return;
+    const networkField = $('#headerNetwork')?.closest('.field');
+    if (!networkField) return;
+    networkField.insertAdjacentHTML('beforebegin', `
+      <div class="field">
+        <label>Como o cabeçalho será montado</label>
+        <label class="final-text-option"><input type="radio" name="headerMode" value="text" checked> Texto escrito e logotipo</label>
+        <label class="final-text-option"><input type="radio" name="headerMode" value="image"> Imagem completa do cabeçalho</label>
+        <small class="muted">Você pode alternar quando quiser: o texto e a imagem ficam guardados.</small>
+      </div>
+    `);
+  }
+
+  document.addEventListener('change', event => {
+    if (event.target?.name === 'headerMode') applyHeaderModeVisibility();
+  });
+
   function ensureHeaderImageField() {
+    ensureHeaderModeField();
     if ($('#headerImageFile')) return;
     const logoField = $('#headerLogo')?.closest('.field');
     if (!logoField) return;
@@ -71,7 +106,7 @@
         <input id="headerImageFile" type="file" accept="image/png,image/jpeg,image/webp">
         <div id="headerImagePreview" class="image-previews"></div>
         <button class="secondary" id="headerImageRemove" type="button" hidden>Remover imagem do cabeçalho</button>
-        <small class="muted">Se você enviar uma imagem, ela substitui o cabeçalho de texto e o logotipo nos documentos. Use uma faixa larga (por exemplo, 1600 x 250 px).</small>
+        <small class="muted">Esta imagem substitui o texto e o logotipo nos documentos. Use uma faixa larga (por exemplo, 1600 x 250 px).</small>
       </div>
     `);
   }
@@ -144,6 +179,10 @@
     setRichFieldValue('headerFinalText', settings.finalText || '');
     pendingHeaderImage = undefined;
     renderHeaderImagePreview(settings.headerImage || '');
+    const savedMode = settings.headerMode || (settings.headerImage ? 'image' : 'text');
+    const modeRadio = document.querySelector(`input[name="headerMode"][value="${savedMode}"]`);
+    if (modeRadio) modeRadio.checked = true;
+    applyHeaderModeVisibility();
     const showHeader = $('#headerShow');
     if (showHeader) showHeader.checked = settings.showHeader !== false;
   };
@@ -167,6 +206,7 @@
         contact: $('#headerContact')?.value.trim() || '',
         finalText: getRichFieldValue('headerFinalText'),
         headerImage: pendingHeaderImage !== undefined ? pendingHeaderImage : (old.headerImage || ''),
+        headerMode: currentHeaderMode(),
         showHeader: $('#headerShow') ? $('#headerShow').checked : true,
         ...(window.collectDocumentStyleSettings?.() || {}),
         logo
@@ -278,7 +318,7 @@
       finalText: fullReport.useFinalText ? (fullReport.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.network || '')),
 
-      headerImage: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.headerImage || '')),
+      headerImage: (!effectiveShowHeader(fullReport.showHeader) ? '' : headerImageFor(header)),
       headerSchool: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.school || '')),
       headerContact: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.contact || '')),
       headerLogo: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || ''))

@@ -208,6 +208,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <dialog id="modal"><form method="dialog" id="modalForm" novalidate><button class="close" type="button" formnovalidate aria-label="Fechar" onclick="window.PortalCloseMainModal?.();return false;">×</button><div id="modalContent"></div></form></dialog>
   <script>window.PortalBootstrapUser = <?= json_encode($bootstrapUser, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;</script>
   <script src="save-feedback.js?v=20260717-save-feedback-front-1"></script>
+  <script src="photo-sync.js?v=20261109-fotos-leves-1"></script>
   <script src="report-groups.js?v=20261108-abas-tipo-1"></script>
   <script src="app.js?v=20261108-texto-final-3"></script>
   <script src="document-type.js?v=20261108-texto-final-3"></script>
@@ -221,7 +222,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="experience-fields.js?v=20261102-blocos-1"></script>
   <script src="modal-controls.js?v=20260812-close-x-fix-1"></script>
   <script src="report-type-badge.js?v=20261107-tipo-cor-2"></script>
-  <script src="report-editor.js?v=20261108-texto-final-3"></script>
+  <script src="report-editor.js?v=20261109-fotos-leves-1"></script>
   <script src="performance-optimizations.js?v=20260812-local-draft-open-1"></script>
   <script src="document-style-settings.js?v=20261108-texto-final-3"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
@@ -245,7 +246,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="image-editor-permissions.js?v=20260702-combined-image-editor-1"></script>
   <script src="manual-image-editor.js?v=20260908-mobile-image-editor-1"></script>
   <script src="ai-face-editor.js?v=20260702-combined-image-editor-1"></script>
-  <script src="image-editor-flow.js?v=20260911-keep-photo-on-editor-close-1"></script>
+  <script src="image-editor-flow.js?v=20261109-fotos-leves-1"></script>
   <script src="document-image-zoom.js?v=20260702-document-image-zoom-front-1"></script>
   <script src="pwa.js?v=20261103-10-fotos-bloco-1"></script>
 </body>

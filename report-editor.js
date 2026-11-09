@@ -753,10 +753,7 @@ async function wizardFinalizeV3() {
     const student = data.students.find(item => String(item.id) === String(wizard.studentId));
     applyNameTagToWizard(student?.name);
     const report = wizardReport();
-    const response = await fetch('api.php?resource=reports', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
+    const result = await PortalPhotoSync.saveReport({
         ...wizardPersistenceContext(),
         student: {name: student.name, birthDate: student.birthDate || '', classId: student.classId || 1},
         text: report.text,
@@ -767,10 +764,7 @@ async function wizardFinalizeV3() {
         showHeader: wizard.showHeader,
         finalText: report.finalText || '',
         imageEditorMode: wizard.imageEditorMode || 'none'
-      })
     });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Falha ao salvar no banco.');
     report.databaseId = result.id;
     wizard.databaseId = result.id;
     report.hasFullData = true;
@@ -1002,10 +996,7 @@ async function autosaveWizardDraft() {
   try {
     const activityIds = [...new Set(entries.flatMap(entry => entry.activityIds || []))];
     const finalText = typeof configuredFinalText === 'function' ? configuredFinalText() : '';
-    const response = await fetch('api.php?resource=reports', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
+    const result = await PortalPhotoSync.saveReport({
         draft: true,
         ...wizardPersistenceContext(),
         student: {name: student.name, birthDate: student.birthDate || '', classId: student.classId || 1},
@@ -1017,10 +1008,7 @@ async function autosaveWizardDraft() {
       showHeader: wizard.showHeader,
         finalText: wizard.useFinalText ? (wizard.finalText || finalText) : '',
         imageEditorMode: wizard.imageEditorMode || 'none'
-      })
     });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || 'Erro ao salvar rascunho automaticamente.');
     if (localReport) localReport.databaseId = result.id;
     persistReportDataSnapshot();
     // A delayed save must not bind another student/type to the previous document.
@@ -1066,10 +1054,7 @@ async function saveWizardDraftNow({notify = true, closeAfter = false} = {}) {
   const entries = wizardEntries();
   const activityIds = [...new Set(entries.flatMap(entry => entry.activityIds || []))];
   const finalText = typeof configuredFinalText === 'function' ? configuredFinalText() : '';
-  const response = await fetch('api.php?resource=reports', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
+  const result = await PortalPhotoSync.saveReport({
       draft: true,
       ...wizardPersistenceContext(),
       student: {name: student.name, birthDate: student.birthDate || '', classId: student.classId || 1},
@@ -1081,10 +1066,7 @@ async function saveWizardDraftNow({notify = true, closeAfter = false} = {}) {
       showHeader: wizard.showHeader,
       finalText: wizard.useFinalText ? (wizard.finalText || finalText) : '',
       imageEditorMode: wizard.imageEditorMode || 'none'
-    })
   });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error || 'Erro ao salvar o rascunho.');
   wizard.databaseId = result.id;
   if (localReport) {
     localReport.id = result.id;

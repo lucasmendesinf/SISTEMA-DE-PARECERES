@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20261108-texto-final-3';
+const CACHE_VERSION = 'ai-prof-pwa-20261109-fotos-leves-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -35,9 +35,10 @@ const STATIC_ASSETS = [
   './experience-fields.js?v=20261102-blocos-1',
   './modal-controls.js?v=20260715-onboarding-draft-1',
   './report-groups.js?v=20261108-abas-tipo-1',
+  './photo-sync.js?v=20261109-fotos-leves-1',
   './app.js?v=20261108-texto-final-3',
   './document-type.js?v=20261108-texto-final-3',
-  './report-editor.js?v=20261108-texto-final-3',
+  './report-editor.js?v=20261109-fotos-leves-1',
   './document-style-settings.js?v=20261108-texto-final-3',
   './text-ai-review.js?v=20260908-mobile-image-editor-1',
   './document-button-fix.js?v=20260717-require-student-1',
@@ -51,7 +52,7 @@ const STATIC_ASSETS = [
   './google-drive-integration.js?v=20261108-texto-final-3',
   './tutorial-videos.js?v=20260717-menu-permissions-1',
   './manual-image-editor.js?v=20260908-mobile-image-editor-1',
-  './image-editor-flow.js?v=20260908-mobile-image-editor-1',
+  './image-editor-flow.js?v=20261109-fotos-leves-1',
   './master-users.js?v=20260911-billing-exempt-1',
   './finance-admin.js?v=20260911-billing-exempt-1',
   './ai-usage-admin.js?v=20260908-mobile-image-editor-1',

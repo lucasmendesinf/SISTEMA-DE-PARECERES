@@ -3138,8 +3138,8 @@ try {
         }
         $activityQuery=$pdo->prepare('SELECT atividade_id FROM parecer_atividades WHERE parecer_id=?');
         $blockQuery=$pdo->prepare('SELECT ordem,texto,activity_ids FROM parecer_blocos WHERE parecer_id=? ORDER BY ordem,id');
-        $attachmentQuery=$summary?null:$pdo->prepare('SELECT ordem,contexto,arquivo,mime_type FROM parecer_anexos WHERE parecer_id=? ORDER BY ordem,id');
-        $result=[]; foreach($rows as $row){$activityIds=[];$entries=[];if($summary){$activityIds=array_fill(0,max(0,(int)($row['activity_count']??0)),0);}else{$activityQuery->execute([$row['id']]);$activityIds=array_map('intval',$activityQuery->fetchAll(PDO::FETCH_COLUMN));$blockQuery->execute([$row['id']]);foreach($blockQuery->fetchAll(PDO::FETCH_ASSOC) as $block){$ids=json_decode((string)($block['activity_ids']??'[]'),true);$entries[(int)$block['ordem']]=['activityIds'=>is_array($ids)?array_map('intval',$ids):[],'photoNote'=>(string)($block['texto']??''),'photos'=>[]];}if($attachmentQuery){$attachmentQuery->execute([$row['id']]);foreach($attachmentQuery->fetchAll(PDO::FETCH_ASSOC) as $file){$key=(int)($file['ordem']??0);if(!isset($entries[$key]))$entries[$key]=['activityIds'=>[],'photoNote'=>(string)($file['contexto']??''),'photos'=>[]];$entries[$key]['photos'][]='data:'.$file['mime_type'].';base64,'.base64_encode($file['arquivo']);}}}ksort($entries);$result[]=['id'=>(int)$row['id'],'databaseId'=>(int)$row['id'],'periodId'=>(int)$row['periodo_id'],'studentId'=>'db-'.$row['crianca_id'],'name'=>$row['nome'],'birthDate'=>$row['data_nascimento'],'classId'=>(int)$row['turma_id'],'text'=>$row['texto'],'useFinalText'=>(bool)($row['usar_texto_final']??0),'finalText'=>(string)($row['texto_final']??''),'showHeader'=>array_key_exists('exibir_cabecalho',$row)&&$row['exibir_cabecalho']!==null?((int)$row['exibir_cabecalho']===1):null,'documentType'=>$row['tipo_documento']==='portfolio'?'portfolio':'parecer','activityIds'=>$activityIds,'entries'=>array_values($entries),'hasFullData'=>!$summary,'status'=>$row['status']==='concluido'?'done':'draft','deliveredAt'=>$row['status']==='concluido'?$row['updated_at']:null];}
+        $attachmentQuery=$summary?null:$pdo->prepare('SELECT ordem,contexto,arquivo,mime_type,SHA2(arquivo,256) AS h FROM parecer_anexos WHERE parecer_id=? ORDER BY ordem,id');
+        $result=[]; foreach($rows as $row){$activityIds=[];$entries=[];if($summary){$activityIds=array_fill(0,max(0,(int)($row['activity_count']??0)),0);}else{$activityQuery->execute([$row['id']]);$activityIds=array_map('intval',$activityQuery->fetchAll(PDO::FETCH_COLUMN));$blockQuery->execute([$row['id']]);foreach($blockQuery->fetchAll(PDO::FETCH_ASSOC) as $block){$ids=json_decode((string)($block['activity_ids']??'[]'),true);$entries[(int)$block['ordem']]=['activityIds'=>is_array($ids)?array_map('intval',$ids):[],'photoNote'=>(string)($block['texto']??''),'photos'=>[],'photoHashes'=>[]];}if($attachmentQuery){$attachmentQuery->execute([$row['id']]);foreach($attachmentQuery->fetchAll(PDO::FETCH_ASSOC) as $file){$key=(int)($file['ordem']??0);if(!isset($entries[$key]))$entries[$key]=['activityIds'=>[],'photoNote'=>(string)($file['contexto']??''),'photos'=>[],'photoHashes'=>[]];$entries[$key]['photos'][]='data:'.$file['mime_type'].';base64,'.base64_encode($file['arquivo']);$entries[$key]['photoHashes'][]=(string)($file['h']??'');}}}ksort($entries);$result[]=['id'=>(int)$row['id'],'databaseId'=>(int)$row['id'],'periodId'=>(int)$row['periodo_id'],'studentId'=>'db-'.$row['crianca_id'],'name'=>$row['nome'],'birthDate'=>$row['data_nascimento'],'classId'=>(int)$row['turma_id'],'text'=>$row['texto'],'useFinalText'=>(bool)($row['usar_texto_final']??0),'finalText'=>(string)($row['texto_final']??''),'showHeader'=>array_key_exists('exibir_cabecalho',$row)&&$row['exibir_cabecalho']!==null?((int)$row['exibir_cabecalho']===1):null,'documentType'=>$row['tipo_documento']==='portfolio'?'portfolio':'parecer','activityIds'=>$activityIds,'entries'=>array_values($entries),'hasFullData'=>!$summary,'status'=>$row['status']==='concluido'?'done':'draft','deliveredAt'=>$row['status']==='concluido'?$row['updated_at']:null];}
         echo json_encode($result, JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -3426,10 +3426,27 @@ try {
         $pdo->prepare('DELETE FROM parecer_blocos WHERE parecer_id=?')->execute([$reportId]);
         $addBlock=$pdo->prepare('INSERT INTO parecer_blocos (parecer_id,ordem,texto,activity_ids) VALUES (?,?,?,?)');
         foreach(array_values($input['entries']??[]) as $index=>$entry){$ids=array_values(array_intersect(array_map('intval',$entry['activityIds']??[]),$ownedActivities));$addBlock->execute([$reportId,$index,(string)($entry['photoNote']??''),json_encode($ids)]);}
-        $pdo->prepare('DELETE FROM parecer_anexos WHERE parecer_id=?')->execute([$reportId]);
+        // Fotos ja gravadas (hash) sao copiadas no banco, sem trafegar de novo pela rede.
+        // As antigas so sao apagadas depois que as novas foram inseridas.
+        $existingPhotos=[]; $oldPhotoIds=[];
+        $existingQuery=$pdo->prepare('SELECT id,SHA2(arquivo,256) AS h FROM parecer_anexos WHERE parecer_id=?'); $existingQuery->execute([$reportId]);
+        foreach($existingQuery->fetchAll(PDO::FETCH_ASSOC) as $existingRow){$oldPhotoIds[]=(int)$existingRow['id'];if(!isset($existingPhotos[$existingRow['h']]))$existingPhotos[$existingRow['h']]=(int)$existingRow['id'];}
         $add=$pdo->prepare('INSERT INTO parecer_anexos (parecer_id,ordem,contexto,arquivo,mime_type) VALUES (?,?,?,?,?)');
-        foreach(array_values($input['entries']??[]) as $index=>$entry){foreach(($entry['photos']??[]) as $url){if(preg_match('#^data:([\w/+.-]+);base64,(.+)$#',$url,$m)){ $bin=base64_decode($m[2],true); if($bin!==false && strlen($bin)<=5*1024*1024)$add->execute([$reportId,$index,(string)($entry['photoNote']??''),$bin,$m[1]]); }}}
-        $pdo->commit(); echo json_encode(['id'=>$reportId,'periodId'=>$periodId],JSON_UNESCAPED_UNICODE); exit;
+        $copyPhoto=$pdo->prepare('INSERT INTO parecer_anexos (parecer_id,ordem,contexto,arquivo,mime_type) SELECT parecer_id,?,?,arquivo,mime_type FROM parecer_anexos WHERE id=?');
+        foreach(array_values($input['entries']??[]) as $index=>$entry){foreach(($entry['photos']??[]) as $photo){
+            if(is_array($photo)&&isset($photo['ref'])){
+                $sourceId=$existingPhotos[(string)$photo['ref']]??null;
+                if(!$sourceId){ if($pdo->inTransaction())$pdo->rollBack(); http_response_code(409); echo json_encode(['error'=>'Uma foto do documento nao foi encontrada no servidor. Tente salvar novamente.','code'=>'photo_ref_missing'],JSON_UNESCAPED_UNICODE); exit; }
+                $copyPhoto->execute([$index,(string)($entry['photoNote']??''),$sourceId]);
+            } elseif(is_string($photo)&&preg_match('#^data:([\w/+.-]+);base64,(.+)$#',$photo,$m)){
+                $bin=base64_decode($m[2],true);
+                if($bin!==false && strlen($bin)<=5*1024*1024)$add->execute([$reportId,$index,(string)($entry['photoNote']??''),$bin,$m[1]]);
+            }
+        }}
+        if($oldPhotoIds)$pdo->exec('DELETE FROM parecer_anexos WHERE id IN ('.implode(',',$oldPhotoIds).')');
+        $hashQuery=$pdo->prepare('SELECT DISTINCT SHA2(arquivo,256) FROM parecer_anexos WHERE parecer_id=?'); $hashQuery->execute([$reportId]);
+        $photoHashes=$hashQuery->fetchAll(PDO::FETCH_COLUMN);
+        $pdo->commit(); echo json_encode(['id'=>$reportId,'periodId'=>$periodId,'photoHashes'=>$photoHashes],JSON_UNESCAPED_UNICODE); exit;
     }
     if ($resource !== 'activities') {
         throw new RuntimeException('Recurso não encontrado.');

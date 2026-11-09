@@ -19,20 +19,27 @@
     });
   }
 
-  async function normalizeImageDataUrl(dataUrl, maxSide = 1800) {
+  // Reduz a foto para o documento: no maximo 1280 px no lado maior e JPEG qualidade 0.8.
+  // Fotos de celular chegam a varios MB; documentos com muitas fotos estouram o limite
+  // de envio do servidor se cada foto ficar grande. Imagens ja pequenas nao sao refeitas.
+  async function normalizeImageDataUrl(dataUrl, maxSide = 1280) {
     const img = await loadImage(dataUrl);
     const width = img.naturalWidth || img.width;
     const height = img.naturalHeight || img.height;
-    if (!width || !height || Math.max(width, height) <= maxSide) return dataUrl;
-    const scale = maxSide / Math.max(width, height);
+    if (!width || !height) return dataUrl;
+    if (Math.max(width, height) <= maxSide && dataUrl.length < 260000) return dataUrl;
+    const scale = Math.min(1, maxSide / Math.max(width, height));
     const canvas = document.createElement('canvas');
-    canvas.width = Math.round(width * scale);
-    canvas.height = Math.round(height * scale);
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
     const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', 0.88);
+    const compressed = canvas.toDataURL('image/jpeg', 0.8);
+    return compressed.length < dataUrl.length ? compressed : dataUrl;
   }
 
   function chooseMode(modes) {
@@ -76,7 +83,7 @@
   async function processFiles(files, limit = 3) {
     const list = [...files];
     if (list.length > limit) throw new Error(`Adicione no maximo ${limit} imagens.`);
-    if (list.some(file => file.size > 5 * 1024 * 1024)) throw new Error('Cada imagem deve ter no maximo 5 MB.');
+    if (list.some(file => file.size > 25 * 1024 * 1024)) throw new Error('Cada imagem deve ter no maximo 25 MB.');
     await window.PortalImageEditorPermissions?.init?.();
     const modes = window.PortalImageEditorPermissions?.availableModes?.() || [];
     // The selected mode is sent to the API so the backend can validate the user permission.
@@ -85,7 +92,7 @@
     const output = [];
     for (const file of list) {
       const dataUrl = await normalizeImageDataUrl(await fileAsDataUrl(file));
-      output.push(await editDataUrl(dataUrl, mode));
+      output.push(await normalizeImageDataUrl(await editDataUrl(dataUrl, mode)));
     }
     return {photos: output, mode};
   }
@@ -103,13 +110,13 @@
       const normalized = await normalizeImageDataUrl(dataUrl);
       if (options.reviewEach && mode === 'manual' && window.ManualImageEditor) {
         const result = await editDataUrl(normalized, mode, {queue: {index, total: list.length}});
-        if (typeof result === 'string') output.push(result);
-        else if (result?.action === 'save' && result.photo) output.push(result.photo);
+        if (typeof result === 'string') output.push(await normalizeImageDataUrl(result));
+        else if (result?.action === 'save' && result.photo) output.push(await normalizeImageDataUrl(result.photo));
         else if (result?.action === 'discard') { /* usuario pediu para descartar esta imagem */ }
         else output.push(normalized); // editor fechado (x) ou "proxima imagem" sem editar: mantem a foto original em vez de perde-la silenciosamente
         continue;
       }
-      output.push(await editDataUrl(normalized, mode));
+      output.push(await normalizeImageDataUrl(await editDataUrl(normalized, mode)));
     }
     return {photos: output, mode};
   }

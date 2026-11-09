@@ -303,6 +303,8 @@
       entries: JSON.stringify(fullReport.entries || []),
       finalText: fullReport.useFinalText ? (fullReport.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.network || '')),
+
+      headerImage: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.headerImage || '')),
       headerSchool: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.school || '')),
       headerContact: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.contact || '')),
       headerLogo: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || ''))

@@ -3076,6 +3076,7 @@ try {
                 'documentFontSize' => min(16, max(10, (int) ($input['documentFontSize'] ?? 12))),
                 'detailColor' => preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($input['detailColor'] ?? '')) ? (string) $input['detailColor'] : '#253c31',
                 'logo' => preg_match('#^data:image/[\w.+-]+;base64,#', (string) ($input['logo'] ?? '')) ? (string) $input['logo'] : '',
+                'headerImage' => preg_match('#^data:image/(?:jpeg|jpg|png);base64,#', (string) ($input['headerImage'] ?? '')) ? (string) $input['headerImage'] : '',
             ];
             $save = $pdo->prepare('INSERT INTO app_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
             $save->execute([$settingKey, json_encode($settings, JSON_UNESCAPED_UNICODE)]);

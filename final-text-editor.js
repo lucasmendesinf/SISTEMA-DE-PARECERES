@@ -83,14 +83,7 @@
   }
 
   window.richFieldHtml = function richFieldHtml(id, value, placeholder, extraAttributes = '') {
-    return `<div class="rich-field-wrap">
-      <div class="rich-toolbar">
-        <button class="secondary" type="button" data-rich-image="${id}">+ Inserir imagem</button>
-        <input type="file" accept="image/*" multiple hidden data-rich-file="${id}">
-        <small class="muted">Escreva o texto e insira imagens (ex.: assinatura). Elas aparecem no documento na mesma ordem.</small>
-      </div>
-      <div id="${id}" class="rich-field" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="${escapeHtml(placeholder || '')}" ${extraAttributes}>${editorHtml(value)}</div>
-    </div>`;
+    return `<div class="rich-field-wrap"><div id="${id}" class="rich-field" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="${escapeHtml(placeholder || '')}" ${extraAttributes}>${editorHtml(value)}</div></div>`;
   };
 
   window.getRichFieldValue = function getRichFieldValue(id) {
@@ -103,87 +96,12 @@
     if (field) field.innerHTML = editorHtml(value);
   };
 
-  function shrinkImage(file, maxSide = 900) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error('Nao foi possivel ler a imagem.'));
-      reader.onload = () => {
-        const image = new Image();
-        image.onerror = () => reject(new Error('Arquivo de imagem invalido.'));
-        image.onload = () => {
-          const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-          canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-          const context = canvas.getContext('2d');
-          context.fillStyle = '#fff';
-          context.fillRect(0, 0, canvas.width, canvas.height);
-          context.drawImage(image, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', 0.85));
-        };
-        image.src = String(reader.result);
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-
-  async function insertImages(id, files) {
-    const field = document.getElementById(id);
-    if (!field) return;
-    const images = [...files].filter(file => file.type.startsWith('image/'));
-    for (const file of images) {
-      try {
-        const src = await shrinkImage(file);
-        field.focus();
-        const selection = window.getSelection();
-        if (!selection.rangeCount || !field.contains(selection.anchorNode)) {
-          const range = document.createRange();
-          range.selectNodeContents(field);
-          range.collapse(false);
-          selection.removeAllRanges();
-          selection.addRange(range);
-        }
-        document.execCommand('insertHTML', false, `<div><img src="${src}"></div><div><br></div>`);
-      } catch (error) {
-        alert(error.message || 'Nao foi possivel inserir a imagem.');
-      }
-    }
-    field.dispatchEvent(new Event('input', {bubbles: true}));
-  }
-
-  document.addEventListener('click', event => {
-    const button = event.target.closest('[data-rich-image]');
-    if (!button) return;
-    document.querySelector(`[data-rich-file="${button.dataset.richImage}"]`)?.click();
-  });
-
-  document.addEventListener('change', event => {
-    const input = event.target.closest?.('[data-rich-file]');
-    if (!input) return;
-    insertImages(input.dataset.richFile, input.files);
-    input.value = '';
-  });
-
+  // O texto final e so texto: ao colar, entra apenas o texto simples.
   document.addEventListener('paste', event => {
     const field = event.target.closest?.('.rich-field');
     if (!field) return;
-    const files = [...(event.clipboardData?.files || [])].filter(file => file.type.startsWith('image/'));
     event.preventDefault();
-    if (files.length) return insertImages(field.id, files);
     document.execCommand('insertText', false, event.clipboardData?.getData('text/plain') || '');
-  });
-
-  document.addEventListener('dragover', event => {
-    if (event.target.closest?.('.rich-field')) event.preventDefault();
-  });
-
-  document.addEventListener('drop', event => {
-    const field = event.target.closest?.('.rich-field');
-    if (!field) return;
-    const files = [...(event.dataTransfer?.files || [])].filter(file => file.type.startsWith('image/'));
-    if (!files.length) return;
-    event.preventDefault();
-    insertImages(field.id, files);
   });
 
   // Texto final do documento no assistente (etapa 1).
@@ -217,7 +135,7 @@
     return `<div class="field final-text-field">
       <label class="final-text-option"><input type="checkbox" id="wizardUseFinalText" ${checked ? 'checked' : ''} onchange="toggleWizardFinalText(this)"> Adicionar texto no final do documento</label>
       <div id="wizardFinalTextBox" ${checked ? '' : 'hidden'}>
-        ${richFieldHtml('wizardFinalText', wizard.finalText || '', 'Texto que aparece no final do documento (pode incluir imagens)...', 'data-wizard-final="1"')}
+        ${richFieldHtml('wizardFinalText', wizard.finalText || '', 'Texto que aparece no final do documento...', 'data-wizard-final="1"')}
         <small class="muted">Dica: escreva [NOME] onde quiser que apareça o nome do aluno ao finalizar o documento.</small>
       </div>
     </div>`;

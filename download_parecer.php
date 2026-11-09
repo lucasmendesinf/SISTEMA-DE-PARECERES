@@ -472,6 +472,7 @@ $headerNetwork = trim((string) ($_POST['headerNetwork'] ?? ''));
 $headerSchool = trim((string) ($_POST['headerSchool'] ?? ''));
 $headerContact = trim((string) ($_POST['headerContact'] ?? ''));
 $headerLogo = (string) ($_POST['headerLogo'] ?? '');
+$headerImage = (string) ($_POST['headerImage'] ?? '');
 $finalText = trim((string) ($_POST['finalText'] ?? ''));
 $documentFont = sanitizeDocumentFont((string) ($_POST['documentFont'] ?? 'Arial'));
 $documentFontSizePt = min(16, max(10, (int) ($_POST['documentFontSize'] ?? 12)));
@@ -513,13 +514,25 @@ while ($body->firstChild) {
 }
 
 $imageCounter = 100;
+// Imagem do cabecalho: quando existe, substitui o cabecalho de texto e o logotipo.
+$headerImageParagraph = null;
+if ($headerImage !== '' && ($image = addImageToDocx($zip, $headerImage, $imageCounter))) {
+    $ratio = $image['cy'] / max(1, $image['cx']);
+    $bannerWidth = 5760000;
+    $bannerHeight = (int) ($bannerWidth * $ratio);
+    if ($bannerHeight > 1500000) { $bannerHeight = 1500000; $bannerWidth = (int) ($bannerHeight / max($ratio, 0.0001)); }
+    $headerImageParagraph = imageParagraph($document, $image['rid'], $imageCounter++, 'Cabeçalho', $bannerWidth, $bannerHeight);
+}
 $headerLogoParagraph = null;
-if ($headerLogo !== '' && ($image = addImageToDocx($zip, $headerLogo, $imageCounter))) {
+if (!$headerImageParagraph && $headerLogo !== '' && ($image = addImageToDocx($zip, $headerLogo, $imageCounter))) {
     $scale = min(900000 / $image['cx'], 700000 / $image['cy']);
     $headerLogoParagraph = imageParagraph($document, $image['rid'], $imageCounter++, 'Logo institucional', (int)($image['cx']*$scale), (int)($image['cy']*$scale));
 }
 $headerLines = array_values(array_filter(array_merge([$headerNetwork, $headerSchool], preg_split('/\R/u', $headerContact))));
-if ($headerLines || $headerLogoParagraph) {
+if ($headerImageParagraph) {
+    $body->appendChild($headerImageParagraph);
+    $body->appendChild(paragraph($document, '', ['after'=>180]));
+} elseif ($headerLines || $headerLogoParagraph) {
     $body->appendChild(identificationTable($document, $headerLines, $headerLogoParagraph, 14, $detailColor));
     $body->appendChild(paragraph($document, '', ['after'=>180]));
 }

@@ -237,7 +237,8 @@ $documentFontSize = min(16, max(10, (float) ($_POST['documentFontSize'] ?? 12)))
 $detailColor = sanitizeHexColorPdf((string) ($_POST['detailColor'] ?? '253C31'));
 $pdfFonts = sanitizePdfFont($documentFont);
 $images = [];
-$headerLogo = registerJpegImage((string) ($_POST['headerLogo'] ?? ''), $images);
+$headerImage = registerJpegImage((string) ($_POST['headerImage'] ?? ''), $images);
+$headerLogo = $headerImage ? null : registerJpegImage((string) ($_POST['headerLogo'] ?? ''), $images);
 $studentPhoto = registerJpegImage((string) ($_POST['studentPhoto'] ?? ''), $images);
 
 if ($name === 'Aluno' && $text === '' && empty($entries)) {
@@ -257,7 +258,11 @@ foreach ($entries as $entry) {
 }
 
 $layout = new PdfLayout($documentFontSize);
-if ($headerNetwork !== '' || $headerSchool !== '' || $headerContact !== '' || $headerLogo) {
+if ($headerImage) {
+    // Imagem do cabecalho substitui o cabecalho de texto e o logotipo.
+    $layout->image($headerImage, 36, 523, 120, true);
+    $layout->setY($layout->y() - 6);
+} elseif ($headerNetwork !== '' || $headerSchool !== '' || $headerContact !== '' || $headerLogo) {
     foreach (array_filter(array_merge([$headerNetwork, $headerSchool], preg_split('/\R/u', $headerContact) ?: [])) as $line) $layout->line($line, 36, 7, 'F2', 10, $detailColor);
     if ($headerLogo) {
         $savedY = $layout->y(); $layout->setY(796); $layout->image($headerLogo, 425, 120, 65); $layout->setY(min($savedY - 24, 690));

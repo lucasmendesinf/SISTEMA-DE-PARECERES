@@ -125,6 +125,8 @@
       entries: JSON.stringify(report.entries || []),
       finalText: report.useFinalText ? (report.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(report.showHeader) ? '' : (header.network || '')),
+
+      headerImage: (!effectiveShowHeader(report.showHeader) ? '' : (header.headerImage || '')),
       headerSchool: (!effectiveShowHeader(report.showHeader) ? '' : (header.school || '')),
       headerContact: (!effectiveShowHeader(report.showHeader) ? '' : (header.contact || '')),
       headerLogo: (!effectiveShowHeader(report.showHeader) ? '' : (header.logo || ''))
@@ -166,6 +168,8 @@
       entries: JSON.stringify(entries),
       finalText: report.useFinalText ? (report.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(report.showHeader) ? '' : (header.network || '')),
+
+      headerImage: (!effectiveShowHeader(report.showHeader) ? '' : (header.headerImage || '')),
       headerSchool: (!effectiveShowHeader(report.showHeader) ? '' : (header.school || '')),
       headerContact: (!effectiveShowHeader(report.showHeader) ? '' : (header.contact || '')),
       headerLogo: await pdfJpeg((!effectiveShowHeader(report.showHeader) ? '' : (header.logo || '')))

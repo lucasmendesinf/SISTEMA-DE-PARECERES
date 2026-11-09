@@ -51,14 +51,85 @@
     }
   }
 
+  // Imagem do cabecalho: quando enviada, substitui o cabecalho de texto e o logotipo.
+  let pendingHeaderImage; // undefined = sem mudanca; '' = removida; data URL = nova
+
+  function renderHeaderImagePreview(src) {
+    const preview = $('#headerImagePreview');
+    if (preview) preview.innerHTML = src ? `<img src="${src}" alt="Imagem do cabeçalho" style="max-width:100%;max-height:130px">` : '';
+    const remove = $('#headerImageRemove');
+    if (remove) remove.hidden = !src;
+  }
+
+  function ensureHeaderImageField() {
+    if ($('#headerImageFile')) return;
+    const logoField = $('#headerLogo')?.closest('.field');
+    if (!logoField) return;
+    logoField.insertAdjacentHTML('afterend', `
+      <div class="field">
+        <label>Imagem do cabeçalho <span class="muted">(opcional)</span></label>
+        <input id="headerImageFile" type="file" accept="image/png,image/jpeg,image/webp">
+        <div id="headerImagePreview" class="image-previews"></div>
+        <button class="secondary" id="headerImageRemove" type="button" hidden>Remover imagem do cabeçalho</button>
+        <small class="muted">Se você enviar uma imagem, ela substitui o cabeçalho de texto e o logotipo nos documentos. Use uma faixa larga (por exemplo, 1600 x 250 px).</small>
+      </div>
+    `);
+  }
+
+  function compressHeaderImage(file, maxWidth = 1600) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Nao foi possivel ler a imagem.'));
+      reader.onload = () => {
+        const image = new Image();
+        image.onerror = () => reject(new Error('Arquivo de imagem invalido.'));
+        image.onload = () => {
+          const scale = Math.min(1, maxWidth / image.naturalWidth);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+          const context = canvas.getContext('2d');
+          context.fillStyle = '#fff';
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.88));
+        };
+        image.src = String(reader.result);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  document.addEventListener('change', async event => {
+    if (event.target?.id !== 'headerImageFile') return;
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      pendingHeaderImage = await compressHeaderImage(file);
+      renderHeaderImagePreview(pendingHeaderImage);
+    } catch (error) {
+      alert(error.message || 'Nao foi possivel usar esta imagem.');
+      event.target.value = '';
+    }
+  });
+
+  document.addEventListener('click', event => {
+    if (event.target?.id !== 'headerImageRemove') return;
+    pendingHeaderImage = '';
+    const input = $('#headerImageFile');
+    if (input) input.value = '';
+    renderHeaderImagePreview('');
+  });
+
   function ensureFinalTextField() {
+    ensureHeaderImageField();
     if ($('#headerFinalText')) return;
     const contactField = $('#headerContact')?.closest('.field');
     if (!contactField) return;
     contactField.insertAdjacentHTML('afterend', `
       <div class="field">
         <label>Texto final do parecer <span class="muted">(opcional)</span></label>
-        ${richFieldHtml('headerFinalText', '', 'Aqui você coloca os nomes das professoras envolvidas no parecer, esses nomes vão ficar no final do documento parecer/portifólio. Também pode inserir uma imagem.')}
+        ${richFieldHtml('headerFinalText', '', 'Aqui você coloca os nomes das professoras envolvidas no parecer, esses nomes vão ficar no final do documento parecer/portifólio.')}
         <small class="muted">Este texto vem marcado automaticamente nos portfólios e desmarcado nos pareceres. A professora pode mudar em cada documento.</small>
         <small class="muted">Dica: escreva [NOME] onde quiser que apareça o nome do aluno ao finalizar o documento.</small>
       </div>
@@ -71,6 +142,8 @@
     ensureFinalTextField();
     const settings = JSON.parse(localStorage.getItem(headerKey) || '{}');
     setRichFieldValue('headerFinalText', settings.finalText || '');
+    pendingHeaderImage = undefined;
+    renderHeaderImagePreview(settings.headerImage || '');
     const showHeader = $('#headerShow');
     if (showHeader) showHeader.checked = settings.showHeader !== false;
   };
@@ -93,6 +166,7 @@
         school: $('#headerSchool')?.value.trim() || '',
         contact: $('#headerContact')?.value.trim() || '',
         finalText: getRichFieldValue('headerFinalText'),
+        headerImage: pendingHeaderImage !== undefined ? pendingHeaderImage : (old.headerImage || ''),
         showHeader: $('#headerShow') ? $('#headerShow').checked : true,
         ...(window.collectDocumentStyleSettings?.() || {}),
         logo
@@ -203,6 +277,8 @@
       entries: JSON.stringify(fullReport.entries || []),
       finalText: fullReport.useFinalText ? (fullReport.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.network || '')),
+
+      headerImage: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.headerImage || '')),
       headerSchool: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.school || '')),
       headerContact: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.contact || '')),
       headerLogo: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || ''))

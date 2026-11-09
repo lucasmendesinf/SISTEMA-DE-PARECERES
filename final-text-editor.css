@@ -8,3 +8,5 @@
 .final-text-option input{width:auto}
 .final-text-entry .final-text-image{text-align:center;margin:10px 0}
 .final-text-entry .final-text-image img{max-width:260px;max-height:140px}
+dialog.wizard .document-header.document-header-image,.document-header.document-header-image{display:block!important;grid-template-columns:none!important}
+dialog.wizard .document-header.document-header-image img,.document-header.document-header-image img{display:block!important;width:100%!important;max-width:100%!important;max-height:150px!important;margin:0 0 6px!important;object-fit:contain!important}

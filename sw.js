@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ai-prof-pwa-20261111-foto-aluno-2';
+const CACHE_VERSION = 'ai-prof-pwa-20261111-arquivos-v2-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_ASSETS = [
   './offline.html',
@@ -42,7 +42,7 @@ const STATIC_ASSETS = [
   './document-style-settings.js?v=20261111-foto-aluno-2',
   './text-ai-review.js?v=20260908-mobile-image-editor-1',
   './document-button-fix.js?v=20260717-require-student-1',
-  './director-email.js?v=20261111-foto-aluno-2',
+  './director-email.js?v=20261111-arquivos-v2-1',
   './report-duplicate.js?v=20261108-texto-final-3',
   './final-text-editor.js?v=20261109-img-cabecalho-3',
   './final-text-editor.css?v=20261109-img-cabecalho-3',

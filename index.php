@@ -230,7 +230,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="text-ai-review.js?v=20260908-mobile-image-editor-1"></script>
   <script src="document-button-fix.js?v=20260717-require-student-1"></script>
   <script src="final-text-editor.js?v=20261109-img-cabecalho-3"></script>
-  <script src="director-email.js?v=20261111-foto-aluno-2"></script>
+  <script src="director-email.js?v=20261111-arquivos-v2-1"></script>
   <script src="report-duplicate.js?v=20261108-texto-final-3"></script>
   <script src="marketing-notice.js?v=20260717-menu-permissions-1"></script>
   <script src="terms-consent.js?v=20260716-terms-before-onboarding-1"></script>

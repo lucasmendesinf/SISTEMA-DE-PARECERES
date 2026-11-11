@@ -39,7 +39,7 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
 
-    $schemaVersion = '2026-11-08-exibir-cabecalho-1';
+    $schemaVersion = '2026-11-11-versao-arquivos-1';
     $addColumnIfMissing = function (PDO $pdo, string $table, string $column, string $definition): void {
         $quotedTable = '`' . str_replace('`', '``', $table) . '`';
         $stmt = $pdo->prepare("SHOW COLUMNS FROM {$quotedTable} LIKE ?");
@@ -210,6 +210,7 @@ try {
         UNIQUE KEY uq_parecer_arquivo_tipo (parecer_id, tipo),
         INDEX idx_parecer_arquivos_usuario (usuario_id, parecer_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $addColumnIfMissing($pdo, 'parecer_arquivos', 'gerador_versao', 'gerador_versao SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER tamanho');
     $pdo->exec("CREATE TABLE IF NOT EXISTS ai_model_prices (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         provider VARCHAR(40) NOT NULL,
@@ -3163,7 +3164,7 @@ try {
             $reportId = (int) ($_GET['reportId'] ?? 0);
             $type = in_array((string) ($_GET['type'] ?? ''), ['docx', 'pdf'], true) ? (string) $_GET['type'] : '';
             if ($reportId <= 0 || $type === '') throw new RuntimeException('Arquivo invalido.');
-            $query = $pdo->prepare("SELECT pa.arquivo_nome,pa.mime_type,pa.arquivo,pa.tamanho FROM parecer_arquivos pa JOIN pareceres p ON p.id=pa.parecer_id JOIN criancas c ON c.id=p.crianca_id WHERE pa.parecer_id=? AND pa.tipo=? AND c.usuario_id=? LIMIT 1");
+            $query = $pdo->prepare("SELECT pa.arquivo_nome,pa.mime_type,pa.arquivo,pa.tamanho,pa.gerador_versao FROM parecer_arquivos pa JOIN pareceres p ON p.id=pa.parecer_id JOIN criancas c ON c.id=p.crianca_id WHERE pa.parecer_id=? AND pa.tipo=? AND c.usuario_id=? LIMIT 1");
             $query->execute([$reportId, $type, $ownerId]);
             $file = $query->fetch(PDO::FETCH_ASSOC);
             if (isset($_GET['check'])) {
@@ -3172,6 +3173,7 @@ try {
                     'exists' => (bool) $file,
                     'name' => $file ? (string) ($file['arquivo_nome'] ?? '') : '',
                     'size' => $file ? (int) ($file['tamanho'] ?? 0) : 0,
+                    'version' => $file ? (int) ($file['gerador_versao'] ?? 0) : 0,
                 ], JSON_UNESCAPED_UNICODE);
                 exit;
             }
@@ -3198,7 +3200,7 @@ try {
             $fallbackName = $cleanFileName('Parecer - ' . (string) ($reportRow['nome'] ?? 'Aluno')) . '.' . $type;
             $name = $cleanFileName((string) ($_FILES['file']['name'] ?? $fallbackName));
             if (!str_ends_with(strtolower($name), '.' . $type)) $name .= '.' . $type;
-            $stmt = $pdo->prepare("INSERT INTO parecer_arquivos (parecer_id,usuario_id,tipo,arquivo_nome,mime_type,arquivo,tamanho) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE usuario_id=VALUES(usuario_id),arquivo_nome=VALUES(arquivo_nome),mime_type=VALUES(mime_type),arquivo=VALUES(arquivo),tamanho=VALUES(tamanho),updated_at=NOW()");
+            $stmt = $pdo->prepare("INSERT INTO parecer_arquivos (parecer_id,usuario_id,tipo,arquivo_nome,mime_type,arquivo,tamanho,gerador_versao) VALUES (?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE usuario_id=VALUES(usuario_id),arquivo_nome=VALUES(arquivo_nome),mime_type=VALUES(mime_type),arquivo=VALUES(arquivo),tamanho=VALUES(tamanho),gerador_versao=VALUES(gerador_versao),updated_at=NOW()");
             $stmt->bindValue(1, $reportId, PDO::PARAM_INT);
             $stmt->bindValue(2, $ownerId, PDO::PARAM_INT);
             $stmt->bindValue(3, $type);
@@ -3206,6 +3208,7 @@ try {
             $stmt->bindValue(5, $mime);
             $stmt->bindValue(6, $binary, PDO::PARAM_LOB);
             $stmt->bindValue(7, strlen($binary), PDO::PARAM_INT);
+            $stmt->bindValue(8, max(0, min(65000, (int) ($_POST['generatorVersion'] ?? 0))), PDO::PARAM_INT);
             $stmt->execute();
             echo json_encode(['ok' => true, 'type' => $type, 'name' => $name, 'size' => strlen($binary)], JSON_UNESCAPED_UNICODE);
             exit;

@@ -341,8 +341,13 @@
     };
   }
 
+  // Versao do gerador dos arquivos finais. Aumente quando o Word/PDF mudar de forma que
+  // arquivos ja guardados na entrega precisem ser refeitos (ex.: foto do aluno).
+  const OFFICIAL_FILES_VERSION = 2;
+
   async function saveOfficialFile(reportId, type, blob, fileName) {
     const form = new FormData();
+    form.append('generatorVersion', String(OFFICIAL_FILES_VERSION));
     form.append('reportId', reportId);
     form.append('type', type);
     form.append('file', blob, fileName);
@@ -382,6 +387,21 @@
     link.remove();
   }
 
+  // Refaz os arquivos guardados que foram gerados por uma versao antiga do gerador.
+  async function refreshStaleOfficialFiles(reportId) {
+    const report = data.reports.find(item => String(item.id) === String(reportId) || String(item.databaseId) === String(reportId));
+    if (!report || report.status !== 'done') return;
+    let stale = false;
+    for (const type of ['docx', 'pdf']) {
+      const response = await fetch(`api.php?resource=report-files&reportId=${encodeURIComponent(reportId)}&type=${type}&check=1`, {headers: {'Accept': 'application/json'}, cache: 'no-store'});
+      const check = await response.json().catch(() => ({}));
+      if (response.ok && check.exists && Number(check.version || 0) < OFFICIAL_FILES_VERSION) stale = true;
+    }
+    if (!stale) return;
+    const fullReport = await ensureFullReport(report);
+    if (fullReport) await window.saveOfficialReportFiles(fullReport);
+  }
+
   async function downloadStoredFile(report, type, fallback) {
     const reportId = report?.databaseId || report?.id;
     if (!reportId || report?.status !== 'done') {
@@ -395,7 +415,7 @@
         cache: 'no-store'
       });
       const check = await checkResponse.json().catch(() => ({}));
-      if (!checkResponse.ok || !check.exists) {
+      if (!checkResponse.ok || !check.exists || Number(check.version || 0) < OFFICIAL_FILES_VERSION) {
         const fullReport = await ensureFullReport(report);
         if (!fullReport) throw new Error('Documento nao encontrado para gerar o arquivo.');
         await window.saveOfficialReportFiles(fullReport);
@@ -495,6 +515,7 @@
     }
     try {
       if (status) status.innerHTML = '<span class="email-send-spinner" aria-hidden="true"></span> Verificando arquivos finais e links do Drive...';
+      try { await refreshStaleOfficialFiles(reportId); } catch (refreshError) { console.warn('Nao foi possivel atualizar os arquivos antigos.', refreshError); }
       const sendRequest = async () => {
         const response = await fetch('api.php?resource=send-report-email', {
           method: 'POST',

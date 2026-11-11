@@ -121,7 +121,7 @@
       period: period?.name || 'Período avaliativo',
       text: report.text || '',
       documentType: normalizeDocumentType(report.documentType),
-      studentPhoto: student.photo || '',
+      studentPhoto: await documentImageForFile(student.photo || ''),
       entries: JSON.stringify(report.entries || []),
       finalText: report.useFinalText ? (report.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(report.showHeader) ? '' : (header.network || '')),
@@ -129,7 +129,7 @@
       headerImage: (!effectiveShowHeader(report.showHeader) ? '' : headerImageFor(header)),
       headerSchool: (!effectiveShowHeader(report.showHeader) ? '' : (header.school || '')),
       headerContact: (!effectiveShowHeader(report.showHeader) ? '' : (header.contact || '')),
-      headerLogo: (!effectiveShowHeader(report.showHeader) ? '' : (header.logo || ''))
+      headerLogo: await documentImageForFile((!effectiveShowHeader(report.showHeader) ? '' : (header.logo || '')), 700)
     });
     Object.entries(fields).forEach(([name, value]) => {
       const input = document.createElement('input');

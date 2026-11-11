@@ -313,7 +313,7 @@
       period: period?.name || 'Periodo avaliativo',
       text: fullReport.text || '',
       documentType: type,
-      studentPhoto: student.photo || '',
+      studentPhoto: await documentImageForFile(student.photo || ''),
       entries: JSON.stringify(fullReport.entries || []),
       finalText: fullReport.useFinalText ? (fullReport.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.network || '')),
@@ -321,7 +321,7 @@
       headerImage: (!effectiveShowHeader(fullReport.showHeader) ? '' : headerImageFor(header)),
       headerSchool: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.school || '')),
       headerContact: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.contact || '')),
-      headerLogo: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || ''))
+      headerLogo: await documentImageForFile((!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || '')), 700)
     });
     const pdfEntries = await Promise.all((fullReport.entries || []).map(async entry => ({
       ...entry,

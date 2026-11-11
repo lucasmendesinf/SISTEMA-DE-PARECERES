@@ -299,7 +299,7 @@
       period: period?.name || 'Período avaliativo',
       text: fullReport.text || '',
       documentType: normalizeType(fullReport.documentType),
-      studentPhoto: student.photo || '',
+      studentPhoto: await documentImageForFile(student.photo || ''),
       entries: JSON.stringify(fullReport.entries || []),
       finalText: fullReport.useFinalText ? (fullReport.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.network || '')),
@@ -307,7 +307,7 @@
       headerImage: (!effectiveShowHeader(fullReport.showHeader) ? '' : headerImageFor(header)),
       headerSchool: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.school || '')),
       headerContact: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.contact || '')),
-      headerLogo: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || ''))
+      headerLogo: await documentImageForFile((!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || '')), 700)
     });
     const pdfEntries = await Promise.all((fullReport.entries || []).map(async entry => ({...entry, photos: (await Promise.all((entry.photos || []).map(src => typeof pdfJpeg === 'function' ? pdfJpeg(src) : src))).filter(Boolean)})));
     const pdfFields = {...baseFields, studentPhoto: typeof pdfJpeg === 'function' ? await pdfJpeg(student.photo || '') : student.photo || '', headerLogo: typeof pdfJpeg === 'function' ? await pdfJpeg((!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || ''))) : (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || '')), entries: JSON.stringify(pdfEntries)};

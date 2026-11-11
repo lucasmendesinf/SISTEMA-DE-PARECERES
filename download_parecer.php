@@ -252,9 +252,25 @@ function identificationTable(DOMDocument $document, array $lines, ?DOMNode $phot
 function addImageToDocx(ZipArchive $zip, string $dataUrl, int $imageId): ?array
 {
     static $rels = null;
-    if (!preg_match('#^data:(image/(?:jpeg|jpg|png));base64,(.+)$#', $dataUrl, $matches)) return null;
+    if (!preg_match('#^data:([\w/+.-]+);base64,(.+)$#', $dataUrl, $matches)) return null;
     $binary = base64_decode($matches[2], true); if ($binary === false) return null;
     $size = @getimagesizefromstring($binary); if (!$size) return null;
+    // O tipo real vem do conteudo (a foto pode chegar como webp, gif ou sem tipo definido).
+    $realType = (int) ($size[2] ?? 0);
+    if ($realType === IMAGETYPE_PNG) { $matches[1] = 'image/png'; }
+    elseif ($realType === IMAGETYPE_JPEG) { $matches[1] = 'image/jpeg'; }
+    else {
+        // Formato que o Word nao aceita direto: converte para JPEG quando o PHP tiver GD.
+        if (!function_exists('imagecreatefromstring') || !function_exists('imagejpeg')) return null;
+        $source = @imagecreatefromstring($binary); if (!$source) return null;
+        $canvas = imagecreatetruecolor(imagesx($source), imagesy($source));
+        imagefilledrectangle($canvas, 0, 0, imagesx($source), imagesy($source), imagecolorallocate($canvas, 255, 255, 255));
+        imagecopy($canvas, $source, 0, 0, 0, 0, imagesx($source), imagesy($source));
+        ob_start(); imagejpeg($canvas, null, 88); $converted = ob_get_clean();
+        imagedestroy($source); imagedestroy($canvas);
+        if (!is_string($converted) || $converted === '') return null;
+        $binary = $converted; $matches[1] = 'image/jpeg'; $size = @getimagesizefromstring($binary); if (!$size) return null;
+    }
     [$width, $height] = $size; $scale = min(2397252 / $width, 3775200 / $height); $cx = (int)($width * $scale); $cy = (int)($height * $scale);
     $ext = str_contains($matches[1], 'png') ? 'png' : 'jpg';
     ensureImageContentType($zip, 'png', 'image/png');

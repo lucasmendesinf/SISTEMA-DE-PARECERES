@@ -73,6 +73,56 @@
     return {response, result, text};
   }
 
+  // Converte qualquer imagem que o navegador consiga ler para JPEG (fundo branco), com no
+  // maximo maxSide pixels. Devolve '' se o navegador nao conseguir ler a imagem.
+  function toJpegDataUrl(source, maxSide = 900, quality = 0.88) {
+    return new Promise(resolve => {
+      const image = new Image();
+      image.onerror = () => resolve('');
+      image.onload = () => {
+        try {
+          const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+          const context = canvas.getContext('2d');
+          context.fillStyle = '#fff';
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } catch (_) { resolve(''); }
+      };
+      image.src = source;
+    });
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Nao foi possivel ler o arquivo.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Foto do aluno ao cadastrar/editar: sempre JPEG leve, para aparecer no Word e no PDF.
+  window.studentPhotoFromFile = async function studentPhotoFromFile(file) {
+    if (!file) return '';
+    const jpeg = await toJpegDataUrl(await readFileAsDataUrl(file), 1000, 0.88);
+    if (!jpeg) throw new Error('Nao foi possivel ler esta foto. Use uma imagem JPEG ou PNG (no iPhone: Ajustes > Camera > Formatos > Mais compativel).');
+    return jpeg;
+  };
+
+  // Foto/logo para os arquivos Word e PDF: converte para JPEG; se o navegador nao conseguir
+  // ler a imagem, devolve a original quando ela ja e JPEG ou PNG, senao vazio.
+  window.documentImageForFile = async function documentImageForFile(dataUrl, maxSide = 900) {
+    const value = String(dataUrl || '');
+    if (!value.startsWith('data:')) return '';
+    const jpeg = await toJpegDataUrl(value, maxSide, 0.88);
+    if (jpeg) return jpeg;
+    return /^data:image\/(?:jpeg|jpg|png);base64,/i.test(value) ? value : '';
+  };
+
   // Envia o documento. Fotos ja gravadas no servidor viram referencias.
   window.PortalPhotoSync = {
     remember,

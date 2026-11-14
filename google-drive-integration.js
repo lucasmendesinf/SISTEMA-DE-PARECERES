@@ -300,7 +300,8 @@
       text: fullReport.text || '',
       documentType: normalizeType(fullReport.documentType),
       studentPhoto: await documentImageForFile(student.photo || ''),
-      entries: JSON.stringify(fullReport.entries || []),
+      reportId: String(fullReport.databaseId || fullReport.id),
+      entries: JSON.stringify(await PortalPhotoSync_entriesForDownload(fullReport.databaseId || fullReport.id, fullReport.entries || [])),
       finalText: fullReport.useFinalText ? (fullReport.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.network || '')),
 
@@ -309,7 +310,7 @@
       headerContact: (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.contact || '')),
       headerLogo: await documentImageForFile((!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || '')), 700)
     });
-    const pdfEntries = await Promise.all((fullReport.entries || []).map(async entry => ({...entry, photos: (await Promise.all((entry.photos || []).map(src => typeof pdfJpeg === 'function' ? pdfJpeg(src) : src))).filter(Boolean)})));
+    const pdfEntries = await PortalPhotoSync_entriesForDownload(fullReport.databaseId || fullReport.id, fullReport.entries || [], src => typeof pdfJpeg === 'function' ? pdfJpeg(src) : src);
     const pdfFields = {...baseFields, studentPhoto: typeof pdfJpeg === 'function' ? await pdfJpeg(student.photo || '') : student.photo || '', headerLogo: typeof pdfJpeg === 'function' ? await pdfJpeg((!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || ''))) : (!effectiveShowHeader(fullReport.showHeader) ? '' : (header.logo || '')), entries: JSON.stringify(pdfEntries)};
     const docx = await documentBlob('download_parecer.php', baseFields);
     const pdf = await documentBlob('download_pdf.php', pdfFields);

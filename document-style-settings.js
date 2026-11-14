@@ -122,7 +122,8 @@
       text: report.text || '',
       documentType: normalizeDocumentType(report.documentType),
       studentPhoto: await documentImageForFile(student.photo || ''),
-      entries: JSON.stringify(report.entries || []),
+      reportId: String(report.databaseId || report.id),
+      entries: JSON.stringify(await PortalPhotoSync_entriesForDownload(report.databaseId || report.id, report.entries || [])),
       finalText: report.useFinalText ? (report.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(report.showHeader) ? '' : (header.network || '')),
 
@@ -152,7 +153,7 @@
     let period = data.periods.find(item => item.active) || data.periods[0];
     let className = student.className || data.classes.find(item => String(item.id) === String(student.classId))?.name || 'Turma não informada';
     let header = getHeaderSettings();
-    let entries = await Promise.all((report.entries || []).map(async entry => ({...entry, photos: (await Promise.all((entry.photos || []).map(pdfJpeg))).filter(Boolean)})));
+    let entries = await PortalPhotoSync_entriesForDownload(report.databaseId || report.id, report.entries || [], pdfJpeg);
     let form = document.createElement('form');
     form.method = 'post';
     form.action = 'download_pdf.php';
@@ -165,6 +166,7 @@
       text: report.text || '',
       documentType: normalizeDocumentType(report.documentType),
       studentPhoto: await pdfJpeg(student.photo || ''),
+      reportId: String(report.databaseId || report.id),
       entries: JSON.stringify(entries),
       finalText: report.useFinalText ? (report.finalText || header.finalText || '') : '',
       headerNetwork: (!effectiveShowHeader(report.showHeader) ? '' : (header.network || '')),

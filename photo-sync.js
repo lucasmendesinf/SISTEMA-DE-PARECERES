@@ -123,6 +123,26 @@
     return /^data:image\/(?:jpeg|jpg|png);base64,/i.test(value) ? value : '';
   };
 
+  // Entradas para baixar Word/PDF: fotos que o servidor ja guarda vao como {ref}; as
+  // demais vao inline (convertidas por "convert", se informado). Os hashes tambem
+  // chegam junto dos blocos do documento, por isso nao dependemos da resposta clonada
+  // do fetch terminar antes de a pessoa clicar em baixar.
+  window.PortalPhotoSync_entriesForDownload = async function entriesForDownload(reportId, entries, convert) {
+    const entryHashes = (entries || []).flatMap(entry => entry.photoHashes || []).filter(Boolean);
+    if (entryHashes.length) remember(reportId, entryHashes);
+    const serverPhotos = known.get(String(reportId || ''));
+    return Promise.all((entries || []).map(async entry => ({
+      ...entry,
+      photos: (await Promise.all((entry.photos || []).map(async photo => {
+        if (typeof photo === 'string' && serverPhotos?.size && /^data:image\/[^;]+;base64,/i.test(photo)) {
+          const hash = await sha256(photo);
+          if (hash && serverPhotos.has(hash)) return {ref: hash};
+        }
+        return convert ? convert(photo) : photo;
+      }))).filter(Boolean)
+    })));
+  };
+
   // Envia o documento. Fotos ja gravadas no servidor viram referencias.
   window.PortalPhotoSync = {
     remember,

@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/final_text_helper.php';
+require_once __DIR__ . '/download_photo_refs.php';
 
 // -----------------------------------------------------------------------------
 // Geracao do Word (.docx) do parecer/portfolio.
@@ -482,6 +483,7 @@ $documentType = ($_POST['documentType'] ?? '') === 'portfolio' ? 'PORTFÓLIO' : 
 $text = trim((string) ($_POST['text'] ?? ''));
 $studentPhoto = (string) ($_POST['studentPhoto'] ?? '');
 $entries = json_decode((string) ($_POST['entries'] ?? '[]'), true) ?: [];
+$entries = resolveDownloadPhotoRefs($entries, (int) ($_POST['reportId'] ?? 0));
 // O texto JSON (com todas as fotos em base64) nao e mais necessario: libera memoria.
 unset($_POST['entries']);
 $headerNetwork = trim((string) ($_POST['headerNetwork'] ?? ''));

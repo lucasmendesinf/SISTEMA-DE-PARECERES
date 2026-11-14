@@ -208,7 +208,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <dialog id="modal"><form method="dialog" id="modalForm" novalidate><button class="close" type="button" formnovalidate aria-label="Fechar" onclick="window.PortalCloseMainModal?.();return false;">×</button><div id="modalContent"></div></form></dialog>
   <script>window.PortalBootstrapUser = <?= json_encode($bootstrapUser, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;</script>
   <script src="save-feedback.js?v=20260717-save-feedback-front-1"></script>
-  <script src="photo-sync.js?v=20261111-foto-aluno-2"></script>
+  <script src="photo-sync.js?v=20261113-baixar-leve-2"></script>
   <script src="report-groups.js?v=20261108-abas-tipo-1"></script>
   <script src="app.js?v=20261111-foto-aluno-2"></script>
   <script src="document-type.js?v=20261108-texto-final-3"></script>
@@ -224,18 +224,18 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
   <script src="report-type-badge.js?v=20261107-tipo-cor-2"></script>
   <script src="report-editor.js?v=20261109-fotos-leves-1"></script>
   <script src="performance-optimizations.js?v=20260812-local-draft-open-1"></script>
-  <script src="document-style-settings.js?v=20261111-foto-aluno-2"></script>
+  <script src="document-style-settings.js?v=20261113-baixar-leve-1"></script>
   <script src="mercado-pago-settings.js?v=20260702-initial-setup-1"></script>
   <script src="billing-cycles.js?v=20260705-billing-cycles-1"></script>
   <script src="text-ai-review.js?v=20260908-mobile-image-editor-1"></script>
   <script src="document-button-fix.js?v=20260717-require-student-1"></script>
   <script src="final-text-editor.js?v=20261109-img-cabecalho-3"></script>
-  <script src="director-email.js?v=20261111-arquivos-v2-1"></script>
+  <script src="director-email.js?v=20261113-baixar-leve-1"></script>
   <script src="report-duplicate.js?v=20261108-texto-final-3"></script>
   <script src="marketing-notice.js?v=20260717-menu-permissions-1"></script>
   <script src="terms-consent.js?v=20260716-terms-before-onboarding-1"></script>
   <script src="auth-profile.js?v=20260911-billing-exempt-1"></script>
-  <script src="google-drive-integration.js?v=20261111-foto-aluno-2"></script>
+  <script src="google-drive-integration.js?v=20261113-baixar-leve-1"></script>
   <script src="tutorial-videos.js?v=20260717-menu-permissions-1"></script>
   <script src="onboarding.js?v=20260911-per-user-cache-fix-1"></script>
   <script src="master-users.js?v=20260911-billing-exempt-1"></script>
